@@ -1,23 +1,45 @@
 import express from 'express';
 import cors from 'cors';
 import { errorHandler } from './shared/errors/error-handler.js';
+import { createAppError } from './shared/errors/app-error.js';
+import { createAuthRouter } from './modules/auth/auth.routes.js';
+import { loadAuthHttpPolicy } from './modules/auth/auth.constants.js';
 
-const app = express();
+/**
+ * Compone Express con AUTH y dependencias sustituibles sin inicializar MySQL o SMTP al importar.
+ * @param {object} options Entorno y contexto AUTH opcional para pruebas aisladas.
+ * @returns {object} Aplicación sin listener; server.js conserva su responsabilidad de arranque.
+ * @throws {Error} Si el origen HTTP configurado no cumple la política del entorno.
+ */
+export function createApp({ env = process.env, authContext } = {}) {
+  const app = express();
+  const httpPolicy = loadAuthHttpPolicy(env);
 
-app.use(cors({
-  origin: 'http://localhost:5173',
-}));
+  app.use(cors({
+    /** Permite únicamente el origen exacto; solicitudes sin Origin no reciben permiso CORS. */
+    origin(origin, callback) {
+      if (!origin) return callback(null, false);
+      if (origin === httpPolicy.origin) return callback(null, httpPolicy.origin);
+      return callback(createAppError('ORIGIN_NOT_ALLOWED', 'El origen de la solicitud no está permitido.', 403));
+    },
+    credentials: true, methods: ['GET', 'POST', 'PATCH', 'OPTIONS'], allowedHeaders: ['Content-Type'],
+  }));
 
-app.use(express.json());
+  app.use(express.json());
 
-app.get('/api/health', (req, res) => {
-  res.status(200).json({
-    status: 'ok',
-    application: 'MATISTA',
-    service: 'backend',
+  /** Conserva el contrato de salud; no comprueba servicios ni requiere secretos AUTH. */
+  app.get('/api/health', (req, res) => {
+    res.status(200).json({
+      status: 'ok',
+      application: 'MATISTA',
+      service: 'backend',
+    });
   });
-});
 
-app.use(errorHandler);
+  app.use('/api/auth', createAuthRouter({ env, httpPolicy, context: authContext }));
+  app.use(errorHandler);
+  return app;
+}
 
+const app = createApp();
 export default app;

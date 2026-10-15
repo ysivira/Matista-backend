@@ -18,16 +18,18 @@ Implementado:
 - Infraestructura compartida AUTH: contraseñas bcrypt, JWT con jose y tokens temporales.
 - Transporte SMTP sustituible, errores uniformes, adaptador de validación y rate limiting.
 - Pruebas aisladas de etapa B, incluida regresión del endpoint de salud.
+- Backend funcional AUTH (etapa C): registro/verificación, login/logout, sesión revocable,
+  recuperación y gestión propia de perfil/contraseña/correo, con cookies y Origin restringidos.
+- Pruebas unitarias/HTTP de C y suite MySQL separada validada: 8/8 aprobadas en matista_test, con limpieza comprobada.
 
 Reservado, pero no implementado:
 
-- Modulos `auth`, `admin` y `asesor`.
+- Módulos `admin` y `asesor`.
 - Dominio comercial de tarifas, aportes, descuentos y cotizacion.
-- Middleware de autenticación, consulta de sesión y autorización por rol/estado.
-- Infraestructura de PDF y plantillas funcionales de correo.
-- Repositorios, servicios y casos de uso sobre las tablas AUTH.
+- Infraestructura de PDF y frontend AUTH.
+- Operaciones administrativas de aprobación, activación/desactivación y promoción de cuentas.
 
-Los directorios reservados contienen unicamente archivos `.gitkeep`. No exponen
+Los directorios aún reservados contienen unicamente archivos `.gitkeep`. No exponen
 rutas ni incluyen controladores, servicios, repositorios, validadores, reglas de
 negocio, migraciones o pruebas ejecutables.
 
@@ -141,8 +143,8 @@ Respuesta esperada:
 
 ```text
 src/
-|-- modules/                     # Reservado
-|   |-- auth/
+|-- modules/
+|   |-- auth/                    # Backend funcional AUTH
 |   |-- admin/
 |   `-- asesor/
 |-- domain/comercial/            # Reservado
@@ -151,7 +153,7 @@ src/
 |   |-- descuentos/
 |   `-- cotizacion/
 |-- shared/
-|   |-- middleware/              # Limitadores AUTH sin montar
+|   |-- middleware/              # Sesión, roles, Origin y limitadores AUTH
 |   |-- validators/              # Adaptador de express-validator
 |   `-- errors/                  # Contrato y manejador centralizado
 |-- infrastructure/
@@ -166,8 +168,36 @@ tests/                           # Pruebas unitarias y MySQL opt-in
 ```
 
 Las reglas comerciales futuras deben residir en el dominio backend y no deben
-duplicarse en React. Los casos de uso de autenticación y administración de cuentas
-siguen pendientes; la infraestructura compartida no constituye autenticación operativa.
+duplicarse en React. La administración de cuentas sigue pendiente. AUTH funcional
+está implementado y su integración MySQL autorizada aprobó 8/8 con limpieza verificada.
+
+## Backend funcional AUTH — etapa C
+
+Contrato completo, entradas, errores, sesiones, cookies y controles de pruebas:
+[`docs/auth-contract.md`](docs/auth-contract.md).
+
+- Reutiliza infraestructura A/B intacta; no cambia migraciones ni `server.js`.
+- `FRONTEND_ORIGIN` define un origen exacto sin barra final. Producción exige HTTPS;
+  HTTP se limita a loopback en desarrollo/pruebas. Las operaciones mutables requieren Origin.
+- Cookie `matista_session`: HttpOnly, SameSite=Strict, Path=/api, Secure en producción,
+  sin Domain y con duración limitada por el JWT. CORS solo admite el origen configurado.
+- Incluye `POST /api/auth/confirm-email-change`; el correo anterior permanece operativo
+  hasta consumir el token correcto, confirmar y revocar sesiones.
+- El envío es posterior al commit; no se almacenan tokens crudos. No hay ADMIN ni frontend.
+- `createApp({ env, authContext })` permite inyectar dobles; por defecto las dependencias
+  reales se resuelven al primer acceso AUTH, no al importar ni consultar health.
+
+Pruebas aisladas, sin bases de datos ni SMTP:
+
+```bash
+npm run test:auth
+npm run test:auth-infra
+git diff --check
+```
+
+La suite `test:auth:db` se ejecutó exclusivamente en `matista_test`, sin migraciones:
+8/8 aprobadas y las cinco tablas AUTH nuevamente vacías al finalizar. **Nuevas ejecuciones
+requieren autorización expresa.** Véanse guardas, comando y evidencia de cierre en el contrato.
 
 ## Contratos compartidos AUTH — etapa B
 
@@ -262,8 +292,8 @@ ser constantes públicas del servidor, sin interpolar datos sensibles recibidos.
 causas ni objetos originales. Con `headersSent` se delega mediante `next(error)`.
 
 `handleValidationResult` adapta cadenas reales de express-validator, excluye valores
-recibidos y continúa si son válidas. Las futuras cadenas deben definir mensajes
-públicos comprensibles; sus reglas funcionales se implementarán en etapa C.
+recibidos y continúa si son válidas. Las cadenas funcionales de C usan mensajes
+públicos marcados mediante `publicValidationMessage()`; otras excepciones son genéricas.
 
 `createAuthRateLimiter(operation, { windowMs?, limit?, store? })` crea instancias
 independientes. Políticas aprobadas centralizadas en `security/config.js`:
@@ -279,4 +309,4 @@ instancia, adecuado al proceso actual. Un despliegue multiproceso requerirá un
 almacén compartido configurado explícitamente. No se modifica `trust proxy` de la
 aplicación. Se emiten cabeceras estándar draft-7 y `Retry-After`, sin cabeceras legacy.
 Al exceder se entrega `RATE_LIMIT_EXCEEDED`/429 al manejador centralizado.
-Los limitadores aún no están montados en endpoints funcionales.
+La etapa C monta estos limitadores en login, recuperación y reenvío, respectivamente.

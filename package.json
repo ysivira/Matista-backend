@@ -10,7 +10,9 @@
     "db:migrate": "node scripts/migrate.js",
     "test": "node --test --test-concurrency=1 tests/infrastructure/database/*.test.js",
     "test:db": "RUN_DB_TESTS=1 node --test --test-concurrency=1 tests/infrastructure/database/schema.integration.test.js",
-    "test:auth-infra": "node --test --test-concurrency=1 tests/infrastructure/security/*.test.js tests/infrastructure/email/*.test.js tests/shared/errors/*.test.js tests/shared/validators/*.test.js tests/shared/middleware/*.test.js tests/health.test.js"
+    "test:auth-infra": "node --test --test-concurrency=1 tests/infrastructure/security/*.test.js tests/infrastructure/email/*.test.js tests/shared/errors/*.test.js tests/shared/validators/*.test.js tests/shared/middleware/*.test.js tests/health.test.js",
+    "test:auth": "node --test --test-concurrency=1 tests/auth/auth.repository.test.js tests/auth/auth.service.test.js tests/auth/auth.authorization.test.js tests/auth/auth.integration.test.js",
+    "test:auth:db": "RUN_AUTH_DB_TESTS=1 node --test --test-concurrency=1 tests/auth/auth.repository.integration.test.js"
   },
   "keywords": [],
   "author": "",
@@ -21,6 +23,7 @@
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",
+    "cookie-parser": "^1.4.7",
     "cors": "^2.8.6",
     "dotenv": "^18.0.8",
     "express": "^5.3.0",
