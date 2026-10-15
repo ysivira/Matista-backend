@@ -1,5 +1,6 @@
 import express from 'express';
 import cors from 'cors';
+import { errorHandler } from './shared/errors/error-handler.js';
 
 const app = express();
 
@@ -16,5 +17,7 @@ app.get('/api/health', (req, res) => {
     service: 'backend',
   });
 });
+
+app.use(errorHandler);
 
 export default app;
