@@ -11,14 +11,18 @@ Implementado:
 - CORS para el frontend local en `http://localhost:5173`.
 - Parser global de cuerpos JSON.
 - Endpoint de salud `GET /api/health`.
+- Configuracion validada de conexion MySQL para `matista_dev` y `matista_test`.
+- Bootstrap local explicito y migraciones versionadas de persistencia AUTH.
+- Runner de migraciones con checksums y deteccion de aplicaciones parciales.
+- Pruebas unitarias de configuracion y migraciones; pruebas MySQL opt-in.
 
 Reservado, pero no implementado:
 
 - Modulos `auth`, `admin` y `asesor`.
 - Dominio comercial de tarifas, aportes, descuentos y cotizacion.
 - Utilidades compartidas de middleware, validacion y errores.
-- Infraestructura de base de datos, PDF y correo.
-- Migraciones y pruebas automatizadas.
+- Infraestructura de PDF y correo.
+- Repositorios, servicios y casos de uso sobre las tablas AUTH.
 
 Los directorios reservados contienen unicamente archivos `.gitkeep`. No exponen
 rutas ni incluyen controladores, servicios, repositorios, validadores, reglas de
@@ -26,10 +30,10 @@ negocio, migraciones o pruebas ejecutables.
 
 ## Requisitos
 
-- Node.js 18 o una version compatible posterior.
+- Node.js 20.19 o una version compatible posterior.
 - npm y las dependencias declaradas en `package.json`.
 
-El proyecto no declara actualmente una version de Node mediante `engines`.
+La version minima se declara mediante `engines.node`.
 
 ## Configuracion
 
@@ -37,10 +41,20 @@ La plantilla versionada se encuentra en `.env.example`:
 
 ```dotenv
 PORT=3000
+NODE_ENV=development
+
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_NAME=matista_dev
+DB_USER=
+DB_PASSWORD=
+DB_CONNECTION_LIMIT=10
 ```
 
 `PORT` es opcional. Si no se define, `src/server.js` utiliza el puerto `3000`.
-La plantilla no contiene secretos ni configuracion de base de datos, JWT o SMTP.
+La plantilla no contiene secretos. `DB_NAME` debe coincidir estrictamente con
+`NODE_ENV`: `development` usa `matista_dev`, `test` usa `matista_test` y la
+configuracion futura de `production` queda reservada para `matista_db`.
 
 ## Comandos
 
@@ -62,7 +76,34 @@ Iniciar sin modo watch:
 npm start
 ```
 
-No existen todavia scripts de pruebas, lint o build en este repositorio.
+Validar configuracion y conexion sin modificar el esquema:
+
+```bash
+npm run db:check
+```
+
+Aplicar migraciones a la base seleccionada y validada:
+
+```bash
+npm run db:migrate
+```
+
+Ejecutar pruebas que no acceden a MySQL:
+
+```bash
+npm test
+```
+
+Las pruebas de esquema MySQL son explicitas y exigen `NODE_ENV=test`,
+`DB_NAME=matista_test` y credenciales de esa base:
+
+```bash
+npm run test:db
+```
+
+El bootstrap `database/bootstrap/000_create_local_databases.sql` no se ejecuta
+desde ningun script. Debe revisarse y ejecutarse de forma explicita con una
+cuenta local autorizada.
 
 ## Endpoint de salud
 
@@ -99,14 +140,14 @@ src/
 |   |-- middleware/
 |   |-- validators/
 |   `-- errors/
-|-- infrastructure/              # Reservado
-|   |-- database/
+|-- infrastructure/
+|   |-- database/                # Conexion y migraciones AUTH
 |   |-- pdf/
 |   `-- email/
 |-- app.js                       # Implementado
 `-- server.js                    # Implementado
-migrations/                      # Reservado
-tests/                           # Reservado
+migrations/                      # DDL versionado AUTH
+tests/                           # Pruebas unitarias y MySQL opt-in
 ```
 
 Las reglas comerciales futuras deben residir en el dominio backend y no deben
