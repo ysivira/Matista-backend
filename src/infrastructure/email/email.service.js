@@ -25,12 +25,12 @@ export function createEmailTransport(env = process.env) {
 
 /**
  * Envía un mensaje usando el patrón sendMail/try-catch adaptado de SIGEC.
- * @param {object} message Destinatario, asunto y cuerpo text/html definidos por el llamador.
+ * @param {object} message Destinatario, asunto, cuerpo text/html y adjuntos opcionales del llamador.
  * @param {object} options Transporte sustituible y remitente SMTP_FROM configurado por entorno.
  * @returns {Promise<object>} Identificador y aceptación SMTP, no confirmación de entrega final.
  * @throws {Error} EMAIL_SEND_FAILED si SMTP falla o rechaza la entrega; sin datos del proveedor.
  */
-export async function sendEmail({ to, subject, text, html }, {
+export async function sendEmail({ to, subject, text, html, attachments }, {
   transport, from = process.env.SMTP_FROM,
 }) {
   if (!transport || typeof transport.sendMail !== 'function' || !from
@@ -38,8 +38,14 @@ export async function sendEmail({ to, subject, text, html }, {
       || (!text && !html)) {
     throw new Error('Mensaje o transporte de correo incompleto.');
   }
+  // El payload conserva la misma forma de siempre; los adjuntos CID de la plantilla
+  // AUTH se agregan únicamente cuando el llamador los suministra explícitamente.
+  const payload = { from, to, subject, text, html };
+  if (Array.isArray(attachments) && attachments.length > 0) {
+    payload.attachments = attachments;
+  }
   try {
-    const info = await transport.sendMail({ from, to, subject, text, html });
+    const info = await transport.sendMail(payload);
     if (info.rejected?.length || !info.accepted?.length) {
       throw new Error('Entrega rechazada.');
     }
