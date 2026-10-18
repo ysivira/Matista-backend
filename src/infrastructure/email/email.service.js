@@ -3,9 +3,10 @@ import { createAppError } from '../../shared/errors/app-error.js';
 
 /**
  * Adapta el transporte Nodemailer de SIGEC a configuración propia de MATISTA.
- * No abre conexión SMTP hasta enviar y no carga archivos .env al importar.
+ * No abre conexión SMTP hasta enviar (pool de conexiones bajo demanda) y no carga
+ * archivos .env al importar.
  * @param {object} env Variables SMTP_HOST, SMTP_PORT, SMTP_SECURE, SMTP_USER y SMTP_PASSWORD.
- * @returns {object} Transporte Nodemailer reutilizable, sin plantillas ni reglas funcionales.
+ * @returns {object} Transporte Nodemailer reutilizable con pool y tiempos acotados.
  * @throws {Error} Si falta configuración o los parámetros no son válidos.
  */
 export function createEmailTransport(env = process.env) {
@@ -20,7 +21,42 @@ export function createEmailTransport(env = process.env) {
     auth: { user: env.SMTP_USER, pass: env.SMTP_PASSWORD },
     // En STARTTLS se exige cifrado antes de autenticar; nunca se desactiva la validación TLS.
     requireTLS: env.SMTP_SECURE === 'false',
+    // Pool por proceso: la conexión TCP/TLS existente se reutiliza para varios mensajes
+    // y se libera tras el período de inactividad de Nodemailer; no abre conexiones
+    // hasta el primer sendMail y no multiplica handshakes por cada aviso AUTH.
+    pool: true,
+    maxConnections: 2,
+    maxMessages: 10,
+    // Acota los cuelgues ante un relay degradado sin alterar credenciales ni la
+    // seguridad TLS; valores inferiores a los predeterminados (120 s / 30 s / 600 s).
+    connectionTimeout: 10_000,
+    greetingTimeout: 10_000,
+    socketTimeout: 30_000,
   });
+}
+
+/** Transporte compartido de A/B: singleton perezoso por proceso reutilizado entre avisos. */
+let sharedTransport;
+
+/**
+ * Retorna el transporte compartido, creándolo perezosamente al primer envío y
+ * reutilizándolo en los siguientes; la configuración inválida falla como hasta
+ * ahora dentro del envío, no durante el arranque del servicio.
+ * @param {object} env Variables SMTP_HOST, SMTP_PORT, SMTP_SECURE, SMTP_USER y SMTP_PASSWORD.
+ * @returns {object} Transporte Nodemailer con pool reutilizable.
+ */
+export function getEmailTransport(env = process.env) {
+  sharedTransport ??= createEmailTransport(env);
+  return sharedTransport;
+}
+
+/**
+ * Cierra y olvida el transporte compartido para el apagado ordenado del proceso;
+ * es seguro invocarlo sin transporte previo y no toca transportes inyectados.
+ * @returns {void}
+ */
+export function closeSharedEmailTransport() {
+  try { sharedTransport?.close(); } finally { sharedTransport = undefined; }
 }
 
 /**

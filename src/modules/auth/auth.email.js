@@ -1,9 +1,11 @@
-import { createEmailTransport, sendEmail } from '../../infrastructure/email/email.service.js';
+import { getEmailTransport, sendEmail } from '../../infrastructure/email/email.service.js';
 import { buildAuthEmail, MATISTA_LOGO_ATTACHMENT } from './auth.email.template.js';
 
 /**
- * Compone mensajes AUTH con la plantilla compartida Amethyst Prism y usa el transporte existente de B.
- * El aviso incluye la versión text (regla vigente conservada) y el HTML con logotipo vía CID.
+ * Compone mensajes AUTH con la plantilla compartida Amethyst Prism y usa el transporte
+ * compartido de A/B. El aviso incluye la versión text (regla vigente conservada) y el
+ * HTML con logotipo vía CID. El transporte compartido se reutiliza entre avisos del
+ * mismo proceso: un solo pool perezoso evita repetir TCP+TLS en cada notificación.
  * @param {object} notice Tipo, destinatario y token opcional; no se registran sus valores.
  * @param {object} context Origen frontend, entorno SMTP y transporte opcional inyectado.
  * @returns {Promise<object>} Aceptación SMTP del servicio existente.
@@ -27,6 +29,7 @@ export async function sendAuthNotice({ type, to, token }, { origin, env, transpo
   // El token del flujo real nunca se registra; aquí solo compone los cuerpos del mensaje.
   const html = buildAuthEmail(type, { origin, token });
   return sendEmail({ to, subject: subjects[type], text, html, attachments: [MATISTA_LOGO_ATTACHMENT] }, {
-    transport: transport ?? createEmailTransport(env), from: env.SMTP_FROM,
+    // El transporte inyectado tiene prioridad (pruebas); en producción reutiliza el pool compartido.
+    transport: transport ?? getEmailTransport(env), from: env.SMTP_FROM,
   });
 }
