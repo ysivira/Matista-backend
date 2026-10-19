@@ -8,6 +8,7 @@
     "start": "node src/server.js",
     "db:check": "node scripts/check-database.js",
     "db:migrate": "node scripts/migrate.js",
+    "db:carga-inicial": "node scripts/carga-inicial.js",
     "test": "node --test --test-concurrency=1 tests/infrastructure/database/*.test.js",
     "test:db": "RUN_DB_TESTS=1 node --test --test-concurrency=1 tests/infrastructure/database/schema.integration.test.js",
     "test:auth-infra": "node --test --test-concurrency=1 tests/infrastructure/security/*.test.js tests/infrastructure/email/*.test.js tests/shared/errors/*.test.js tests/shared/validators/*.test.js tests/shared/middleware/*.test.js tests/health.test.js",

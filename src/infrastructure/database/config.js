@@ -95,3 +95,39 @@ export function assertTestDatabase(config) {
     );
   }
 }
+
+// Base de SIGEC: unica fuente de lectura autorizada para la carga inicial (E2).
+const SIGEC_DATABASE = 'sigec_db';
+
+// Lee la configuracion de solo lectura de SIGEC desde variables SIGEC_DB_*;
+// lanza error si falta alguna. Nunca debe usarse para escritura.
+export function loadSigecSourceConfig(env = process.env) {
+  const database = env.SIGEC_DB_DATABASE?.trim() || SIGEC_DATABASE;
+
+  if (database !== SIGEC_DATABASE) {
+    throw new Error(
+      `La fuente SIGEC solo puede apuntar a ${SIGEC_DATABASE}; `
+      + `se recibio ${database}.`,
+    );
+  }
+
+  const user = requireValue(env, 'SIGEC_DB_USER');
+
+  if (!Object.hasOwn(env, 'SIGEC_DB_PASSWORD')
+    || typeof env.SIGEC_DB_PASSWORD !== 'string') {
+    throw new Error(
+      'La variable de entorno SIGEC_DB_PASSWORD debe estar definida.',
+    );
+  }
+
+  return Object.freeze({
+    host: env.SIGEC_DB_HOST?.trim() || '127.0.0.1',
+    port: parseInteger(env.SIGEC_DB_PORT || '3306', 'SIGEC_DB_PORT', {
+      min: 1,
+      max: 65535,
+    }),
+    database,
+    user,
+    password: env.SIGEC_DB_PASSWORD,
+  });
+}
