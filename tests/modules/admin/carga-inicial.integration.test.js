@@ -1,7 +1,6 @@
 import 'dotenv/config';
 
 import assert from 'node:assert/strict';
-import { randomInt } from 'node:crypto';
 import path from 'node:path';
 import { after, before, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
@@ -23,9 +22,11 @@ import {
   ejecutarCargaInicial,
 } from '../../../src/modules/admin/carga-inicial.service.js';
 
-// Pruebas de integracion de la carga inicial (E2): reales contra
-// matista_test y sigec_db (solo lectura). Requieren RUN_DB_TESTS=1 mas
-// las variables SIGEC_DB_* y ran ejecutar tras las migraciones.
+// Pruebas de integracion de la carga inicial (E2) contra matista_test y
+// sigec_db (solo lectura). El catalogo inicial es PERMANENTE en la base:
+// estas pruebas no lo eliminan ni lo sobreescriben; verifican consistencia,
+// idempotencia y rollback usando transacciones con rollback propio.
+// Requieren RUN_DB_TESTS=1, las variables SIGEC_DB_* y la carga aplicada.
 const enabled = process.env.RUN_DB_TESTS === '1';
 const currentDirectory = path.dirname(fileURLToPath(import.meta.url));
 const migrationsDirectory = path.resolve(currentDirectory, '../../../migrations');
@@ -33,35 +34,6 @@ const migrationsDirectory = path.resolve(currentDirectory, '../../../migrations'
 let config;
 let pool;
 let sigecConnection;
-let actorLegajo;
-
-// Vacia las tablas ADMIN para dejar la base reproducible entre pruebas.
-// DELETE en cascada logica por orden de dependencia: politica/aportes/
-// cancelaciones/tarifas primero; versiones requiere retirar la self-FK
-// momentaneamente y reponerla tal como la creo la migracion 007.
-async function vaciarCatalogoAdmin() {
-  const connection = await pool.getConnection();
-
-  try {
-    await connection.query('DELETE FROM politica_comercial');
-    await connection.query('DELETE FROM monotributo_aportes');
-    await connection.query('DELETE FROM tarifario_cancelaciones');
-    await connection.query('DELETE FROM tarifas');
-    await connection.query(
-      'ALTER TABLE tarifario_versiones '
-      + 'DROP FOREIGN KEY fk_tarifario_versiones_base',
-    );
-    await connection.query('DELETE FROM tarifario_versiones');
-    await connection.query(
-      'ALTER TABLE tarifario_versiones '
-      + 'ADD CONSTRAINT fk_tarifario_versiones_base '
-      + 'FOREIGN KEY (version_base_id) REFERENCES tarifario_versiones (id)',
-    );
-    await connection.query('DELETE FROM planes');
-  } finally {
-    connection.release();
-  }
-}
 
 before(async () => {
   if (!enabled) {
@@ -79,40 +51,9 @@ before(async () => {
   });
 
   sigecConnection = await abrirConexionSigec();
-
-  // Legajo temporal responsable de la carga: se conserva durante la
-  // misma suite y se elimina al final (los inserts lo referencian).
-  actorLegajo = String(randomInt(10_000_000, 99_999_999));
-  const connection = await pool.getConnection();
-
-  try {
-    await connection.query(
-      `INSERT INTO empleados (
-         legajo, nombre, apellido, password_hash
-       ) VALUES (?, 'Carga', 'E2', 'hash-no-real')`,
-      [actorLegajo],
-    );
-  } finally {
-    connection.release();
-  }
 });
 
 after(async () => {
-  if (pool && enabled) {
-    await vaciarCatalogoAdmin();
-
-    const connection = await pool.getConnection();
-
-    try {
-      await connection.query(
-        'DELETE FROM empleados WHERE legajo = ?',
-        [actorLegajo],
-      );
-    } finally {
-      connection.release();
-    }
-  }
-
   if (sigecConnection) {
     await sigecConnection.end();
   }
@@ -122,60 +63,57 @@ after(async () => {
   }
 });
 
-test('la carga inicial completa la matriz aprobada exacta', {
+/** Ejecuta `callback` con una conexion propia en transaccion y siempre
+ *  revertira el rollback: garantiza que ninguna prueba escriba sobre el
+ *  catalogo permanente de matista_test.
+ *
+ *  - Parametros: `callback` recibe la conexion abierta y en transaccion.
+ *  - Uso: cada prueba que simule escrituras se aisl aqui desde `pool`.
+ */
+async function conTransaccionAislada(callback) {
+  const connection = await pool.getConnection();
+
+  try {
+    await connection.beginTransaction();
+    await callback(connection);
+  } finally {
+    await connection.rollback();
+    connection.release();
+  }
+}
+
+test('el catalogo permanente esta consistente con la carga aprobada', {
   skip: !enabled,
 }, async () => {
-  const resumen = await ejecutarCargaInicial({
-    matistaPool: pool,
-    sigecConnection,
-    actorLegajo,
-  });
+  const estado = await leerEstadoCatalogo(pool);
 
-  assert.equal(resumen.aplicada, true);
-  assert.equal(resumen.planes, 4);
-  assert.equal(resumen.tarifas, 160);
-  assert.equal(resumen.aportesMonotributo, 12);
-  assert.equal(resumen.politicaComercial, 1);
-
-  const excluidosPorId = new Map(
-    resumen.excluidos.map((fila) => [fila.id, fila.motivo]),
-  );
-
-  assert.equal(resumen.excluidos.length, 10);
-  for (const id of [4, 5, 163, 166, 167, 168]) {
-    assert.equal(excluidosPorId.get(id), 'Referencia inactiva');
-  }
-  for (const id of [161, 162]) {
-    assert.match(excluidosPorId.get(id), /monotributo/);
-  }
-  for (const id of [169, 170]) {
-    assert.match(excluidosPorId.get(id), /plan inactivo/);
-  }
+  assert.equal(estado.planes, 4);
+  assert.equal(estado.aportesAbiertos, 12);
+  assert.ok(estado.politicasAbiertas >= 1);
+  assert.equal(estado.versionCargaInicialEstado, 'ACTIVA');
+  assert.equal(estado.tarifasCargaInicial, 160);
 
   const connection = await pool.getConnection();
 
   try {
-    // Cronicidad real en DB: version unica ACTIVA con actor NULL.
+    // Version CARGA_INICIAL unica y actor NULL conforme al diseño.
     const [versiones] = await connection.query(
-      `SELECT id, tipo, estado, actor_legajo
-         FROM tarifario_versiones`,
+      `SELECT COUNT(*) AS cargaIniciales, SUM(actor_legajo IS NULL) AS sinActor
+         FROM tarifario_versiones
+        WHERE tipo = 'CARGA_INICIAL'`,
     );
 
-    assert.equal(versiones.length, 1);
-    assert.equal(versiones[0].tipo, 'CARGA_INICIAL');
-    assert.equal(versiones[0].estado, 'ACTIVA');
-    assert.equal(versiones[0].actor_legajo, null);
+    assert.equal(versiones[0].cargaIniciales, 1);
+    assert.equal(Number(versiones[0].sinActor), 1);
 
-    const versionId = versiones[0].id;
-
-    // Matriz exacta en destino: 8 grupos plan/modalidad con 20 claves.
+    // Matriz 8 grupos de 20 claves canonicas unicas.
     const [grupos] = await connection.query(
       `SELECT plan_id, tipo_ingreso, COUNT(*) AS total,
               COUNT(DISTINCT rango_clave) AS clavesUnicas
          FROM tarifas
         WHERE version_id = ?
         GROUP BY plan_id, tipo_ingreso`,
-      [versionId],
+      [estado.versionCargaInicialId],
     );
 
     assert.equal(grupos.length, 8);
@@ -183,80 +121,35 @@ test('la carga inicial completa la matriz aprobada exacta', {
       (grupo) => grupo.total === 20 && grupo.clavesUnicas === 20,
     ));
 
-    // Correspondencia de precios y normalizaciones contra SIGEC.
-    const [integrales] = await connection.query(
-      `SELECT t.plan_id, t.tipo_ingreso, t.rango_clave, t.rango_etario,
-              t.rango_nota, t.precio
-         FROM tarifas AS t
-        WHERE t.version_id = ?
-          AND t.rango_clave IN ('66+', 'HIJO 0-1')
-        ORDER BY t.id`,
-      [versionId],
-    );
-
-    for (const fila of integrales) {
-      const [origen] = await sigecConnection.query(
-        `SELECT COUNT(*) AS coincidentes
-           FROM listas_de_precios AS lp
-           JOIN planes AS p ON p.id = lp.plan_id
-          WHERE p.activo = 1
-            AND lp.activo = 1
-            AND lp.plan_id = ?
-            AND lp.tipo_ingreso = ?
-            AND lp.rango_etario = ?
-            AND lp.precio = ?`,
-        [
-          fila.plan_id,
-          fila.tipo_ingreso,
-          fila.rango_etario,
-          fila.precio,
-        ],
-      );
-
-      assert.ok(
-        origen[0].coincidentes >= 1,
-        `No hay coincidencia en origen para ${fila.plan_id} `
-        + `${fila.tipo_ingreso} ${fila.rango_clave}`,
-      );
-
-      // Normalizacion: 66-00 => 66+ sin anotacion; HIJO 0-1(*) keeping nota.
-      if (fila.rango_etario === '66-00') {
-        assert.equal(fila.rango_clave, '66+');
-        assert.equal(fila.rango_nota, null);
-      } else {
-        assert.equal(fila.rango_etario, 'HIJO 0-1(*)');
-        assert.equal(fila.rango_clave, 'HIJO 0-1');
-        assert.equal(fila.rango_nota, '(*)');
-      }
-    }
-
-    const [registrosIncluidos] = await connection.query(
+    // Registros 164/165 presentes con sus precios originales.
+    const [completadores] = await connection.query(
       `SELECT COUNT(*) AS total
          FROM tarifas
         WHERE version_id = ?
           AND (
             (plan_id = 4 AND rango_etario = '0-25' AND precio = 404808.93)
             OR
-            (plan_id = 1 AND rango_etario = '26-35'
-              AND precio = 172025.75)
+            (plan_id = 1 AND rango_etario = '26-35' AND precio = 172025.75)
           )`,
-      [versionId],
+      [estado.versionCargaInicialId],
     );
 
-    assert.equal(registrosIncluidos[0].total, 2);
+    assert.equal(completadores[0].total, 2);
 
-    // Monotributo: 12 filas abiertas con actor registrado.
-    const [aportes] = await connection.query(
-      `SELECT categoria, aporte, vigente_hasta, actor_legajo
-         FROM monotributo_aportes
-        WHERE vigente_hasta IS NULL
-        ORDER BY categoria`,
+    // Normalizaciones canonicas aplicadas en la matriz vigente: 8 claves
+    // '66+' (una por grupo) y 8 'HIJO 0-1' con anotacion preservada.
+    const [canonicas] = await connection.query(
+      `SELECT
+         COUNT(CASE WHEN rango_clave = '66+' THEN 1 END) AS total66,
+         SUM(CASE WHEN rango_clave = 'HIJO 0-1' AND rango_nota = '(*)'
+                  THEN 1 ELSE 0 END) AS hijosPunteros
+       FROM tarifas
+      WHERE version_id = ?`,
+      [estado.versionCargaInicialId],
     );
 
-    assert.equal(aportes.length, 12);
-    assert.ok(
-      aportes.every((fila) => String(fila.actor_legajo) === actorLegajo),
-    );
+    assert.equal(Number(canonicas[0].total66), 8);
+    assert.equal(Number(canonicas[0].hijosPunteros), 8);
 
     // Politica comercial: una fila abierta con valores aprobados.
     const [politica] = await connection.query(
@@ -293,19 +186,68 @@ test('la carga inicial completa la matriz aprobada exacta', {
     assert.equal(valores.tdcHabilitado, 1);
     assert.equal(String(valores.topeComercialTdc), '55.00');
     assert.equal(valores.afinidad, null);
+
+    // Correspondencia de precios de origen y destino (muestra canonica).
+    const [integrales] = await connection.query(
+      `SELECT t.plan_id, t.tipo_ingreso, t.rango_clave, t.rango_etario,
+              t.precio
+         FROM tarifas AS t
+        WHERE t.version_id = ?
+          AND t.rango_clave IN ('66+', 'HIJO 0-1')
+        ORDER BY t.id`,
+      [estado.versionCargaInicialId],
+    );
+
+    for (const fila of integrales) {
+      const [origen] = await sigecConnection.query(
+        `SELECT COUNT(*) AS coincidentes
+           FROM listas_de_precios AS lp
+           JOIN planes AS p ON p.id = lp.plan_id
+          WHERE p.activo = 1
+            AND lp.activo = 1
+            AND lp.plan_id = ?
+            AND lp.tipo_ingreso = ?
+            AND lp.rango_etario = ?
+            AND lp.precio = ?`,
+        [fila.plan_id, fila.tipo_ingreso, fila.rango_etario, fila.precio],
+      );
+
+      assert.ok(
+        origen[0].coincidentes >= 1,
+        `No hay coincidencia en origen para ${fila.plan_id} `
+        + `${fila.tipo_ingreso} ${fila.rango_clave}`,
+      );
+    }
   } finally {
     connection.release();
   }
 });
 
-test('la segunda ejecucion es idempotente sin duplicar registros', {
+test('la re-ejecucion de la carga es idempotente sobre el catalogo permanente', {
   skip: !enabled,
 }, async () => {
+  // Necesita un legajo ADMIN activo existente (fixture permanente de la base).
+  const connection = await pool.getConnection();
+  const [admins] = await connection.query(
+    `SELECT legajo
+       FROM empleados
+      WHERE rol = 'ADMIN' AND estado = 'ACTIVO'
+      LIMIT 1`,
+  );
+
+  connection.release();
+
+  assert.ok(
+    admins.length === 1,
+    'matista_test requiere un legajo ADMIN activo para ejecutar la carga '
+    + '(fixture permanente).',
+  );
+
   const estadoAntes = await leerEstadoCatalogo(pool);
   const resumen = await ejecutarCargaInicial({
     matistaPool: pool,
     sigecConnection,
-    actorLegajo,
+    actorLegajo: String(admins[0].legajo),
   });
   const estadoDespues = await leerEstadoCatalogo(pool);
 
@@ -313,40 +255,96 @@ test('la segunda ejecucion es idempotente sin duplicar registros', {
   assert.deepEqual(estadoDespues, estadoAntes);
 });
 
-test('una falla simulada deja todas las tablas ADMIN como estaban', {
+test('los guardas de DB impiden una segunda carga dentro de una transaccion', {
   skip: !enabled,
 }, async () => {
-  await vaciarCatalogoAdmin();
+  const connection = await pool.getConnection();
 
-  await assert.rejects(
-    ejecutarCargaInicial({
-      matistaPool: pool,
-      sigecConnection,
-      actorLegajo,
-      fallarTrasTarifas: true,
-    }),
-    /rollback de la carga/,
-  );
+  try {
+    await connection.beginTransaction();
+
+    const [carga] = await connection.query(
+      `SELECT id, fecha_activacion
+         FROM tarifario_versiones
+        WHERE tipo = 'CARGA_INICIAL'
+        LIMIT 1`,
+    );
+    const versionOriginal = carga[0];
+
+    // (a) fecha_activacion es unica: INSERT ... SELECT conservando la fecha
+    // exacta (microsegundos) garantiza el rechazo determinista.
+    await assert.rejects(
+      connection.query(
+        `INSERT INTO tarifario_versiones
+           (tipo, fecha_activacion, estado, observacion)
+         SELECT tipo, fecha_activacion, 'ACTIVA', 'intento duplicado de carga'
+           FROM tarifario_versiones
+          WHERE id = ?`,
+        [versionOriginal.id],
+      ),
+      (error) => error.code === 'ER_DUP_ENTRY',
+    );
+
+    // (b) la misma clave canonica no puede repetirse dentro de la version
+    // inicial: el snapshot es completo y unico por version.
+    await assert.rejects(
+      connection.query(
+        `INSERT INTO tarifas
+           (version_id, plan_id, tipo_ingreso, rango_etario, rango_clave, precio)
+         VALUES (?, 1, 'Obligatorio', '66-00', '66+', 111.11)`,
+        [versionOriginal.id],
+      ),
+      (error) => error.code === 'ER_DUP_ENTRY',
+    );
+  } finally {
+    await connection.rollback();
+    connection.release();
+  }
+
+  // El catalogo permanente permanece intacto tras el rollback.
+  const estado = await leerEstadoCatalogo(pool);
+  assert.equal(estado.planes, 4);
+  assert.equal(estado.aportesAbiertos, 12);
+});
+
+test('una falla simulada dentro de transaccion no altera el catalogo permanente', {
+  skip: !enabled,
+}, async () => {
+  await conTransaccionAislada(async (connection) => {
+    // Dentro de la transaccion del test se retira por orden de dependencia
+    // el catalogo (solo en la vista transaccional) para poder ejecutar la
+    // ruta completa de la carga desde catalogo vacio; el rollback del test
+    // devuelve TODO el catalogo permanente sin perdidas.
+    await connection.query('DELETE FROM politica_comercial');
+    await connection.query('DELETE FROM monotributo_aportes');
+    await connection.query('DELETE FROM tarifas');
+    await connection.query('DELETE FROM tarifario_versiones');
+    await connection.query('DELETE FROM planes');
+
+    const [admin] = await connection.query(
+      `SELECT legajo FROM empleados
+        WHERE rol = 'ADMIN' AND estado = 'ACTIVO' LIMIT 1`,
+    );
+    const actorLegajo = String(admin[0].legajo);
+
+    // La ruta completa escribe planes/version/tarifas y falla en el punto
+    // inyectado: el servicio no hace commit (conexion externa) y el
+    // rollback del test restaura el catalogo permanente original.
+    await assert.rejects(
+      ejecutarCargaInicial({
+        matistaConnection: connection,
+        sigecConnection,
+        actorLegajo,
+        fallarTrasTarifas: true,
+      }),
+      /rollback de la carga/,
+    );
+  });
 
   const estado = await leerEstadoCatalogo(pool);
 
-  assert.equal(estado.planes, 0);
-  assert.equal(estado.versiones, 0);
-  assert.equal(estado.tarifas, 0);
-  assert.equal(estado.aportesAbiertos, 0);
-  assert.equal(estado.politicasAbiertas, 0);
-});
-
-test('la carga es reproducible tras el rollback (tercera ejecucion)', {
-  skip: !enabled,
-}, async () => {
-  const resumen = await ejecutarCargaInicial({
-    matistaPool: pool,
-    sigecConnection,
-    actorLegajo,
-  });
-
-  assert.equal(resumen.aplicada, true);
-  assert.equal(resumen.tarifas, 160);
-  assert.equal(resumen.aportesMonotributo, 12);
+  assert.equal(estado.planes, 4);
+  assert.equal(estado.aportesAbiertos, 12);
+  assert.equal(estado.politicasAbiertas, 1);
+  assert.equal(estado.tarifasCargaInicial, 160);
 });

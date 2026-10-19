@@ -328,7 +328,13 @@ function plantillasValues(cantidadFilas, columnasPorFila) {
 /** Ejecuta la carga inicial completa contra MATISTA.
  *
  *  - Parametros:
- *      - `matistaPool`: pool de la base destino (matista_test hoy).
+ *      - `matistaPool`: pool de la base destino (matista_test hoy); solo
+ *        se usa cuando no se pasa `matistaConnection`.
+ *      - `matistaConnection`: conexion externa OPCIONAL, ya dentro de una
+ *        transaccion del llamador. Con este parametro el servicio NO
+ *        hace beginTransaction/commit/rollback ni release: si falla es
+ *        el llamador quien decide el rollback (mecanismo de aislamiento
+ *        de las pruebas cuando el catalogo inicial es permanente).
  *      - `sigecConnection`: conexion abierta de solo lectura a sigec_db.
  *      - `actorLegajo`: responsable real de la carga (IMPORT_ACTOR_LEGAJO);
  *        se registra en politica y aportes, y la FK lo impone.
@@ -340,15 +346,19 @@ function plantillasValues(cantidadFilas, columnasPorFila) {
  */
 export async function ejecutarCargaInicial({
   matistaPool,
+  matistaConnection,
   sigecConnection,
   actorLegajo,
   fallarTrasTarifas = false,
 }) {
-  const matistaConnection = await matistaPool.getConnection();
+  const conexionPropia = matistaConnection
+    ? null
+    : await matistaPool.getConnection();
+  const destino = matistaConnection ?? conexionPropia;
 
   try {
-    await assertActorExistente(matistaConnection, actorLegajo);
-    const estado = await leerEstadoCatalogo(matistaConnection);
+    await assertActorExistente(destino, actorLegajo);
+    const estado = await leerEstadoCatalogo(destino);
     const clasificacion = evaluarEstado(estado);
 
     if (clasificacion === 'CARGA_EXISTENTE') {
@@ -364,11 +374,13 @@ export async function ejecutarCargaInicial({
     const fuente = await leerFuenteSigec(sigecConnection);
     const { planesActivos, validas, excluidos, aportes } = validarOrigen(fuente);
 
-    await matistaConnection.beginTransaction();
+    if (conexionPropia) {
+      await destino.beginTransaction();
+    }
 
     try {
       // 1) planes con ids originales preservados (trazabilidad con SIGEC).
-      await matistaConnection.query(
+      await destino.query(
         `INSERT INTO planes
            (id, nombre, detalles, condiciones_generales, activa)
          VALUES ${plantillasValues(planesActivos.length, 5)}`,
@@ -381,8 +393,8 @@ export async function ejecutarCargaInicial({
         ]),
       );
 
-      // 2) version CARGA_INICIAL: una sola, actor NULL, fecha presente hoy.
-      const [resultadoVersion] = await matistaConnection.query(
+      // 2) version CARGA_INICIAL: una sola, actor NULL, fecha y hora actual.
+      const [resultadoVersion] = await destino.query(
         `INSERT INTO tarifario_versiones
            (tipo, fecha_activacion, estado, observacion)
          VALUES ('CARGA_INICIAL', UTC_TIMESTAMP(6), 'ACTIVA', ?)`,
@@ -392,7 +404,7 @@ export async function ejecutarCargaInicial({
 
       // 3) tarifas validas en lotes de 50 filas.
       for (const lote of generarLotes(validas, 50)) {
-        await matistaConnection.query(
+        await destino.query(
           `INSERT INTO tarifas
              (version_id, plan_id, tipo_ingreso, rango_etario,
               rango_clave, rango_nota, precio, activa)
@@ -412,7 +424,7 @@ export async function ejecutarCargaInicial({
 
       if (fallarTrasTarifas) {
         // Punto de inyeccion exclusivo de pruebas: un fallo aqui debe
-        // revertir planes, version y tarifas en blocke.
+        // revertir planes, version y tarifas en bloque.
         throw new Error(
           'Falla simulada para verificar el rollback de la carga '
           + '(parametro fallarTrasTarifas).',
@@ -421,7 +433,7 @@ export async function ejecutarCargaInicial({
 
       // 4) aportes de monotributo: 12 filas abiertas con vigencia actual.
       for (const aporte of aportes) {
-        await matistaConnection.query(
+        await destino.query(
           `INSERT INTO monotributo_aportes
              (categoria, aporte, vigente_desde, vigente_hasta, actor_legajo)
            VALUES (?, ?, UTC_TIMESTAMP(6), NULL, ?)`,
@@ -430,7 +442,7 @@ export async function ejecutarCargaInicial({
       }
 
       // 5) politica comercial inicial: fila abierta con valores aprobados.
-      await matistaConnection.query(
+      await destino.query(
         `INSERT INTO politica_comercial (
            porcentaje_aporte_reconocido, tope_sueldo_bruto,
            joven_porcentaje, comercial_fijo_max_pct,
@@ -462,7 +474,9 @@ export async function ejecutarCargaInicial({
         ],
       );
 
-      await matistaConnection.commit();
+      if (conexionPropia) {
+        await destino.commit();
+      }
 
       return Object.freeze({
         aplicada: true,
@@ -474,11 +488,16 @@ export async function ejecutarCargaInicial({
         excluidos,
       });
     } catch (error) {
-      // Rollback completo: ninguna escritura parcial sobrevive.
-      await matistaConnection.rollback();
+      // Rollback completo solo si la conexion (y su transaccion) es del
+      // servicio; con conexion externa el rollback decide el llamador.
+      if (conexionPropia) {
+        await destino.rollback();
+      }
       throw error;
     }
   } finally {
-    matistaConnection.release();
+    if (conexionPropia) {
+      conexionPropia.release();
+    }
   }
 }

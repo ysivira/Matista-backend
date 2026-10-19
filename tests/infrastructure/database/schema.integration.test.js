@@ -468,25 +468,9 @@ test('aplica el comportamiento ADMIN aprobado (unicidades, CHECK y evento TARIFA
       [legajo, legajo, JSON.stringify({ version_id: versionId })],
     );
 
-    // Fila abierta: solo una politica vigente a la vez por el indice unico con columna generada.
-    await connection.query(
-      `INSERT INTO politica_comercial (
-         porcentaje_aporte_reconocido, tope_sueldo_bruto, joven_porcentaje,
-         comercial_fijo_max_pct, comercial_fijo_meses_max,
-         comercial_escalonado_max_pct, comercial_escalonado_tramos_max,
-         comercial_escalonado_total_meses_max, primer_tramo_50_meses_max,
-         tdc_pct, tdc_habilitado, tope_comercial_tdc_pct,
-         fecha_vigencia, actor_legajo
-       ) VALUES (
-         7.00, 4800000.00, 26.00,
-         40.00, 12,
-         50.00, 4,
-         12, 3,
-         5.00, 1, 55.00,
-         UTC_TIMESTAMP(6), ?
-       )`,
-      [legajo],
-    );
+    // Fila abierta: el catalogo permanente de E2 ya contiene una politica
+    // vigente, por lo que el intento agrega otra fila abierta se rechaza
+    // (unic value indice con columna generada).
     await assert.rejects(
       connection.query(
         `INSERT INTO politica_comercial (
@@ -497,12 +481,12 @@ test('aplica el comportamiento ADMIN aprobado (unicidades, CHECK y evento TARIFA
            tdc_pct, tdc_habilitado, tope_comercial_tdc_pct,
            fecha_vigencia, actor_legajo
          ) VALUES (
-           8.00, 4800000.00, 26.00,
+           7.00, 4800000.00, 26.00,
            40.00, 12,
            50.00, 4,
            12, 3,
            5.00, 1, 55.00,
-           UTC_TIMESTAMP(6) + INTERVAL 1 MINUTE, ?
+           UTC_TIMESTAMP(6), ?
          )`,
         [legajo],
       ),
