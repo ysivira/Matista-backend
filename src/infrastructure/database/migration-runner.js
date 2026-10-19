@@ -4,7 +4,12 @@ import path from 'node:path';
 
 const MIGRATION_FILE_PATTERN = /^(\d{3})_([a-z0-9_]+)\.sql$/;
 const TARGET_TABLE_PATTERN = /^-- matista:target-table ([a-z0-9_]+)$/m;
-const FORBIDDEN_SQL_PATTERN = /\b(USE|DROP|CREATE\s+DATABASE|ALTER\s+USER|CREATE\s+USER|GRANT|REVOKE)\b/i;
+const KIND_PATTERN = /^-- matista:kind: (create|alter)$/m;
+const KIND_GLOBAL_PATTERN = /^-- matista:kind: (create|alter)$/gm;
+const ALTER_STATEMENT_PATTERN = /^ALTER\s+TABLE\b/i;
+const CREATE_TABLE_PATTERN = /^CREATE\s+TABLE\b/i;
+// DROP solo se prohibe salvo cuando es un DROP CHECK (ajuste de restricciones declarativas).
+const FORBIDDEN_SQL_PATTERN = /\b(USE|DROP(?!\s+CHECK)|CREATE\s+DATABASE|ALTER\s+USER|CREATE\s+USER|GRANT|REVOKE)\b/i;
 const LOCAL_MIGRATION_TARGETS = new Map([
   ['development', 'matista_dev'],
   ['test', 'matista_test'],
@@ -73,15 +78,35 @@ export function validateMigrationDefinition(fileName, sql) {
     );
   }
 
+  const kindHeaders = sql.match(KIND_GLOBAL_PATTERN) ?? [];
+
+  if (kindHeaders.length > 1) {
+    throw new Error(`${fileName} solo puede declarar un tipo de migracion.`);
+  }
+
+  const kind = sql.match(KIND_PATTERN)?.[1] ?? 'create';
+
   if (FORBIDDEN_SQL_PATTERN.test(sql)) {
     throw new Error(`${fileName} contiene una operacion SQL no permitida.`);
   }
 
   const statements = executableStatements(sql);
 
-  if (statements.length !== 1 || !/^CREATE\s+TABLE\b/i.test(statements[0])) {
+  if (kind === 'create') {
+    if (statements.length !== 1 || !CREATE_TABLE_PATTERN.test(statements[0])) {
+      throw new Error(
+        `${fileName} debe contener exactamente un CREATE TABLE.`,
+      );
+    }
+  }
+
+  if (
+    kind === 'alter'
+    && (statements.length === 0
+      || statements.some((statement) => !ALTER_STATEMENT_PATTERN.test(statement)))
+  ) {
     throw new Error(
-      `${fileName} debe contener exactamente un CREATE TABLE.`,
+      `${fileName} de tipo alter debe contener solo sentencias ALTER TABLE.`,
     );
   }
 
@@ -90,9 +115,11 @@ export function validateMigrationDefinition(fileName, sql) {
   return Object.freeze({
     fileName,
     version,
+    kind,
     targetTable: targetMatch[1],
     checksum: createHash('sha256').update(sql).digest('hex'),
-    sql: `${statements[0]};`,
+    sql: kind === 'create' ? `${statements[0]};` : statements.join(';\n'),
+    statements: kind === 'create' ? Object.freeze([statements[0]]) : Object.freeze(statements),
   });
 }
 
@@ -110,14 +137,15 @@ export async function loadMigrations(migrationsDirectory) {
   }
 
   const versions = new Set();
-  const targets = new Set();
+  const createdTargets = new Set();
 
   for (const migration of migrations) {
     if (versions.has(migration.version)) {
       throw new Error(`Version de migracion duplicada: ${migration.version}.`);
     }
 
-    if (targets.has(migration.targetTable)) {
+    // Un solo CREATE TABLE por tabla; las migraciones alter ajustan tablas ya creadas.
+    if (migration.kind === 'create' && createdTargets.has(migration.targetTable)) {
       throw new Error(
         `Tabla objetivo duplicada en migraciones iniciales: `
         + `${migration.targetTable}.`,
@@ -125,7 +153,10 @@ export async function loadMigrations(migrationsDirectory) {
     }
 
     versions.add(migration.version);
-    targets.add(migration.targetTable);
+
+    if (migration.kind === 'create') {
+      createdTargets.add(migration.targetTable);
+    }
   }
 
   return migrations;
@@ -159,6 +190,7 @@ export function assessMigrationState(
   for (const migration of migrations) {
     const record = appliedByVersion.get(migration.version);
     const tableExists = tables.has(migration.targetTable);
+    const kind = migration.kind ?? 'create';
 
     if (record && record.checksum !== migration.checksum) {
       throw new MigrationStateError(
@@ -179,7 +211,8 @@ export function assessMigrationState(
       );
     }
 
-    if (!record && tableExists) {
+    // Para alter la tabla objetivo ya existe por diseño; su ausencia de registro es la vía normal.
+    if (!record && tableExists && kind === 'create') {
       throw new MigrationStateError(
         `Aplicacion parcial detectada: existe la tabla `
         + `${migration.targetTable}, pero no la version ${migration.version}.`,
@@ -272,7 +305,9 @@ export async function runMigrations({ pool, config, migrationsDirectory }) {
     const newlyApplied = [];
 
     for (const migration of state.pending) {
-      await connection.query(migration.sql);
+      for (const statement of migration.statements) {
+        await connection.query(statement);
+      }
 
       try {
         await connection.query(

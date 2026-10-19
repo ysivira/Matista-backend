@@ -123,3 +123,109 @@ test('detecta checksums modificados y versiones sin archivo', () => {
       && error.details.type === 'missing-file',
   );
 });
+
+// --- Contratos del tipo alter (E1 SPEC-03: ajustes de restricciones sobre tablas existentes) ---
+
+const altera = Object.freeze({
+  version: '012_alter_example',
+  kind: 'alter',
+  targetTable: 'example',
+  checksum: 'checksum-alter',
+});
+
+test('admite una migracion alter con sentencias ALTER TABLE de un solo comando', () => {
+  const result = validateMigrationDefinition(
+    '012_alter_example.sql',
+    '-- matista:target-table example\n'
+    + '-- matista:kind: alter\n'
+    + 'ALTER TABLE example DROP CHECK chk_example;\n'
+    + 'ALTER TABLE example ADD CONSTRAINT chk_example CHECK (id > 0);\n',
+  );
+
+  assert.equal(result.kind, 'alter');
+  assert.equal(result.version, '012_alter_example');
+  assert.match(result.checksum, /^[a-f0-9]{64}$/);
+  assert.equal(result.statements.length, 2);
+});
+
+test('rechaza alter sin ALTER TABLE o con CREATE TABLE', () => {
+  assert.throws(
+    () => validateMigrationDefinition(
+      '012_alter_example.sql',
+      '-- matista:target-table example\n-- matista:kind: alter\nSELECT 1;\n',
+    ),
+    /solo sentencias ALTER TABLE/,
+  );
+
+  assert.throws(
+    () => validateMigrationDefinition(
+      '012_alter_example.sql',
+      '-- matista:target-table example\n-- matista:kind: alter\n'
+      + 'CREATE TABLE example (id INT);\n',
+    ),
+    /solo sentencias ALTER TABLE/,
+  );
+});
+
+test('solo permite DROP CHECK, cualquier otro DROP es operacion no permitida', () => {
+  assert.doesNotThrow(
+    () => validateMigrationDefinition(
+      '012_alter_example.sql',
+      '-- matista:target-table example\n-- matista:kind: alter\n'
+      + 'ALTER TABLE example DROP CHECK chk_example;\n',
+    ),
+  );
+
+  assert.throws(
+    () => validateMigrationDefinition(
+      '012_alter_example.sql',
+      '-- matista:target-table example\n-- matista:kind: alter\n'
+      + 'ALTER TABLE example DROP INDEX ix;\n',
+    ),
+    /operacion SQL no permitida/,
+  );
+});
+
+test('un archivo create no acepta DROP ni dos sentencias', () => {
+  assert.throws(
+    () => validateMigrationDefinition(
+      '001_create_example.sql',
+      '-- matista:target-table example\n'
+      + 'CREATE TABLE example (id INT); ALTER TABLE example DROP CHECK chk;\n',
+    ),
+    /exactamente un CREATE TABLE/,
+  );
+});
+
+test('clasifica alter: tabla preexistente sin registro es pendiente, no aplicacion parcial', () => {
+  const pendfd = assessMigrationState([altera], [], [altera.targetTable]);
+  const aplicada = assessMigrationState(
+    [altera],
+    [{ version: altera.version, checksum: altera.checksum }],
+    [altera.targetTable],
+  );
+
+  assert.deepEqual(pendfd.pending, [altera]);
+  assert.deepEqual(aplicada.applied, [altera]);
+
+  // El registro aplicado sin tabla sigue siendo condición de error también para alter.
+  assert.throws(
+    () => assessMigrationState(
+      [altera],
+      [{ version: altera.version, checksum: altera.checksum }],
+      [],
+    ),
+    (error) => error instanceof MigrationStateError
+      && error.details.type === 'missing-target',
+  );
+});
+
+test('el tipo por defecto sigue siendo create para archivos sin directiva', () => {
+  const create = validateMigrationDefinition(
+    '005_create_example.sql',
+    '-- matista:target-table example\nCREATE TABLE example (id INT);\n',
+  );
+
+  assert.equal(create.kind, 'create');
+  assert.equal(create.statements.length, 1);
+});

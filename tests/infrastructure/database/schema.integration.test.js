@@ -75,11 +75,40 @@ test('crea exclusivamente las tablas AUTH y la tabla tecnica', {
   );
 });
 
+test('crea las tablas ADMIN del tarifario y la tecnica en orden FK', {
+  skip: !enabled,
+}, async () => {
+  const [rows] = await pool.query(
+    `SELECT TABLE_NAME AS tableName
+       FROM information_schema.TABLES
+      WHERE TABLE_SCHEMA = ?`,
+    ['matista_test'],
+  );
+
+  assert.deepEqual(
+    rows.map((row) => row.tableName),
+    [
+      'auth_sesiones',
+      'auth_tokens',
+      'empleados',
+      'empleados_auditoria',
+      'empleados_correos',
+      'monotributo_aportes',
+      'planes',
+      'politica_comercial',
+      'schema_migrations',
+      'tarifario_cancelaciones',
+      'tarifario_versiones',
+      'tarifas',
+    ],
+  );
+});
+
 test('expone las columnas generadas e indices UNIQUE aprobados', {
   skip: !enabled,
 }, async () => {
   const [columns] = await pool.query(
-    `SELECT COLUMN_NAME AS columnName, EXTRA AS extra
+    `SELECT TABLE_NAME AS tableName, COLUMN_NAME AS columnName, EXTRA AS extra
        FROM information_schema.COLUMNS
       WHERE TABLE_SCHEMA = 'matista_test'
         AND (
@@ -90,6 +119,12 @@ test('expone las columnas generadas e indices UNIQUE aprobados', {
           OR
           (TABLE_NAME = 'auth_tokens'
             AND COLUMN_NAME = 'token_abierto_clave')
+          OR
+          (TABLE_NAME = 'politica_comercial'
+            AND COLUMN_NAME = 'vigente_abierta')
+          OR
+          (TABLE_NAME = 'monotributo_aportes'
+            AND COLUMN_NAME = 'categoria_abierta')
         )`,
   );
   const [indexes] = await pool.query(
@@ -101,17 +136,19 @@ test('expone las columnas generadas e indices UNIQUE aprobados', {
           'uq_empleados_correos_pendiente',
           'uq_empleados_correos_reservado',
           'uq_auth_tokens_hash',
-          'uq_auth_tokens_abierto'
+          'uq_auth_tokens_abierto',
+          'uq_politica_comercial_abierta',
+          'uq_monotributo_abierta'
         )`,
   );
 
-  assert.equal(columns.length, 4);
+  assert.equal(columns.length, 6);
   assert.ok(columns.every((column) => column.extra.includes('STORED GENERATED')));
-  assert.equal(indexes.length, 5);
+  assert.equal(indexes.length, 7);
   assert.ok(indexes.every((index) => index.nonUnique === 0));
 });
 
-test('crea todas las claves foraneas y restricciones CHECK aprobadas', {
+test('crea las claves foraneas y restricciones CHECK AUTH sin ofertas ADMIN', {
   skip: !enabled,
 }, async () => {
   const [rows] = await pool.query(
@@ -119,7 +156,14 @@ test('crea todas las claves foraneas y restricciones CHECK aprobadas', {
             CONSTRAINT_TYPE AS constraintType
        FROM information_schema.TABLE_CONSTRAINTS
       WHERE CONSTRAINT_SCHEMA = 'matista_test'
-        AND CONSTRAINT_TYPE IN ('FOREIGN KEY', 'CHECK')`,
+        AND CONSTRAINT_TYPE IN ('FOREIGN KEY', 'CHECK')
+        AND TABLE_NAME IN (
+          'empleados',
+          'empleados_correos',
+          'auth_tokens',
+          'auth_sesiones',
+          'empleados_auditoria'
+        )`,
   );
   const foreignKeys = rows
     .filter((row) => row.constraintType === 'FOREIGN KEY')
@@ -158,6 +202,86 @@ test('crea todas las claves foraneas y restricciones CHECK aprobadas', {
     'chk_empleados_nombre',
     'chk_empleados_password',
     'chk_empleados_rol',
+  ]);
+});
+
+test('crea las claves foraneas y restricciones CHECK ADMIN aprobadas', {
+  skip: !enabled,
+}, async () => {
+  const [rows] = await pool.query(
+    `SELECT TABLE_NAME AS tableName,
+            CONSTRAINT_NAME AS constraintName,
+            CONSTRAINT_TYPE AS constraintType
+       FROM information_schema.TABLE_CONSTRAINTS
+      WHERE CONSTRAINT_SCHEMA = 'matista_test'
+        AND CONSTRAINT_TYPE IN ('FOREIGN KEY', 'CHECK')
+        AND TABLE_NAME IN (
+          'planes',
+          'tarifario_versiones',
+          'tarifario_cancelaciones',
+          'tarifas',
+          'politica_comercial',
+          'monotributo_aportes'
+        )`,
+  );
+  const foreignKeys = rows
+    .filter((row) => row.constraintType === 'FOREIGN KEY')
+    .map((row) => row.constraintName)
+    .sort();
+  const checks = rows
+    .filter((row) => row.constraintType === 'CHECK')
+    .map((row) => row.constraintName)
+    .sort();
+
+  assert.deepEqual(foreignKeys, [
+    'fk_monotributo_aportes_actor',
+    'fk_politica_comercial_actor',
+    'fk_tarifario_cancelaciones_cancelada_por',
+    'fk_tarifario_cancelaciones_reactivada_por',
+    'fk_tarifario_cancelaciones_version',
+    'fk_tarifario_versiones_actor',
+    'fk_tarifario_versiones_base',
+    'fk_tarifario_versiones_plan',
+    'fk_tarifario_versiones_revertida',
+    'fk_tarifas_plan',
+    'fk_tarifas_version',
+  ]);
+  assert.deepEqual(checks, [
+    'chk_monotributo_aporte',
+    'chk_monotributo_categoria',
+    'chk_monotributo_vigencia',
+    'chk_planes_activa',
+    'chk_planes_nombre',
+    'chk_politica_afinidad',
+    'chk_politica_aporte_reconocido',
+    'chk_politica_comercial_fijo_max_pct',
+    'chk_politica_comercial_fijo_meses',
+    'chk_politica_escalonado_max_pct',
+    'chk_politica_escalonado_total_meses',
+    'chk_politica_escalonado_tramos',
+    'chk_politica_joven',
+    'chk_politica_primer_tramo_meses',
+    'chk_politica_tdc_habilitado',
+    'chk_politica_tdc_pct',
+    'chk_politica_tope_bruto',
+    'chk_politica_tope_comercial_tdc',
+    'chk_politica_vigencia',
+    'chk_tarifario_cancelaciones_motivo',
+    'chk_tarifario_cancelaciones_reactivacion',
+    'chk_tarifario_versiones_actor',
+    'chk_tarifario_versiones_aumento_masivo',
+    'chk_tarifario_versiones_carga_inicial',
+    'chk_tarifario_versiones_edicion_plan',
+    'chk_tarifario_versiones_estado',
+    'chk_tarifario_versiones_modalidad',
+    'chk_tarifario_versiones_porcentaje',
+    'chk_tarifario_versiones_reversion',
+    'chk_tarifario_versiones_tipo',
+    'chk_tarifas_activa',
+    'chk_tarifas_precio',
+    'chk_tarifas_rango_clave',
+    'chk_tarifas_rango_etario',
+    'chk_tarifas_tipo_ingreso',
   ]);
 });
 
@@ -247,6 +371,145 @@ test('aplica unicidad de correo, token abierto y auditoria de password', {
       (error) => error.code === 'ER_CHECK_CONSTRAINT_VIOLATED',
     );
   } finally {
+    await connection.rollback();
+    connection.release();
+  }
+});
+
+test('aplica el comportamiento ADMIN aprobado (unicidades, CHECK y evento TARIFARIO)', {
+  skip: !enabled,
+}, async () => {
+  const connection = await pool.getConnection();
+  const legajo = String(randomInt(10_000_000, 99_999_999));
+
+  try {
+    await connection.beginTransaction();
+
+    // Empleado necesario para las FKs actor/plan desde ADMIN.
+    await connection.query(
+      `INSERT INTO empleados (
+         legajo, nombre, apellido, password_hash
+       ) VALUES (?, 'Prueba', 'Tarifario', 'hash-no-real')`,
+      [legajo],
+    );
+
+    const [planResult] = await connection.query(
+      `INSERT INTO planes (nombre) VALUES (?)`,
+      [`Basico-${legajo}`],
+    );
+
+    // Timestamps fijos: la comparacion de unicidad debe ser determinista.
+    await connection.query(
+      `INSERT INTO tarifario_versiones (
+         tipo, fecha_activacion, observacion
+       ) VALUES ('CARGA_INICIAL', '2026-01-01 00:00:00', 'carga de prueba')`,
+    );
+
+    // Dos versiones no pueden activarse en el mismo instante: orden por fecha, no por id.
+    await assert.rejects(
+      connection.query(
+        `INSERT INTO tarifario_versiones (
+           tipo, fecha_activacion, observacion
+         ) VALUES ('CARGA_INICIAL', '2026-01-01 00:00:00', 'duplicada')`,
+      ),
+      (error) => error.code === 'ER_DUP_ENTRY',
+    );
+
+    // Un AUMENTO_MASIVO sin version_base_id/porcentaje viola su CHECK de coherencia.
+    await assert.rejects(
+      connection.query(
+        `INSERT INTO tarifario_versiones (
+           tipo, fecha_activacion, observacion
+         ) VALUES (
+           'AUMENTO_MASIVO',
+           UTC_TIMESTAMP(6) + INTERVAL 1 MINUTE,
+           'incoherente'
+         )`,
+      ),
+      (error) => error.code === 'ER_CHECK_CONSTRAINT_VIOLATED',
+    );
+
+    // Snapshot completo: la misma clave tarifaria dentro de una version es unica.
+    const [versionRows] = await connection.query(
+      `SELECT id FROM tarifario_versiones
+        WHERE tipo = 'CARGA_INICIAL'
+        ORDER BY created_at LIMIT 1`,
+    );
+    const versionId = versionRows[0].id;
+
+    await connection.query(
+      `INSERT INTO tarifas (
+         version_id, plan_id, tipo_ingreso, rango_etario, rango_clave, precio
+       ) VALUES (?, ?, 'Obligatorio', 'a partir de 66', '66+', 100.50)`,
+      [versionId, planResult.insertId],
+    );
+    await assert.rejects(
+      connection.query(
+        `INSERT INTO tarifas (
+           version_id, plan_id, tipo_ingreso, rango_etario, rango_clave, precio
+         ) VALUES (?, ?, 'Obligatorio', 'otro', '66+', 200.00)`,
+        [versionId, planResult.insertId],
+      ),
+      (error) => error.code === 'ER_DUP_ENTRY',
+    );
+
+    // La baja logica (activa=0) conserva la fila sin bloquear la version.
+    await connection.query(
+      `UPDATE tarifas SET activa = 0
+        WHERE version_id = ? AND plan_id = ? AND tipo_ingreso = 'Obligatorio'`,
+      [versionId, planResult.insertId],
+    );
+
+    // El evento TARIFARIO ampliado en E1 se acepta; la FK a versiones se aprobo para una etapa posterior.
+    await connection.query(
+      `INSERT INTO empleados_auditoria (
+         legajo, actor_legajo, evento, campo, valor_anterior, valor_nuevo
+       ) VALUES (?, ?, 'VERSION_CREADA', 'TARIFARIO', NULL, ?)`,
+      [legajo, legajo, JSON.stringify({ version_id: versionId })],
+    );
+
+    // Fila abierta: solo una politica vigente a la vez por el indice unico con columna generada.
+    await connection.query(
+      `INSERT INTO politica_comercial (
+         porcentaje_aporte_reconocido, tope_sueldo_bruto, joven_porcentaje,
+         comercial_fijo_max_pct, comercial_fijo_meses_max,
+         comercial_escalonado_max_pct, comercial_escalonado_tramos_max,
+         comercial_escalonado_total_meses_max, primer_tramo_50_meses_max,
+         tdc_pct, tdc_habilitado, tope_comercial_tdc_pct,
+         fecha_vigencia, actor_legajo
+       ) VALUES (
+         7.00, 4800000.00, 26.00,
+         40.00, 12,
+         50.00, 4,
+         12, 3,
+         5.00, 1, 55.00,
+         UTC_TIMESTAMP(6), ?
+       )`,
+      [legajo],
+    );
+    await assert.rejects(
+      connection.query(
+        `INSERT INTO politica_comercial (
+           porcentaje_aporte_reconocido, tope_sueldo_bruto, joven_porcentaje,
+           comercial_fijo_max_pct, comercial_fijo_meses_max,
+           comercial_escalonado_max_pct, comercial_escalonado_tramos_max,
+           comercial_escalonado_total_meses_max, primer_tramo_50_meses_max,
+           tdc_pct, tdc_habilitado, tope_comercial_tdc_pct,
+           fecha_vigencia, actor_legajo
+         ) VALUES (
+           8.00, 4800000.00, 26.00,
+           40.00, 12,
+           50.00, 4,
+           12, 3,
+           5.00, 1, 55.00,
+           UTC_TIMESTAMP(6) + INTERVAL 1 MINUTE, ?
+         )`,
+        [legajo],
+      ),
+      (error) => error.code === 'ER_DUP_ENTRY',
+    );
+  } finally {
+    // Las instalaciones de prueba no deben dejar rastros permanentes: rollback completo.
     await connection.rollback();
     connection.release();
   }
