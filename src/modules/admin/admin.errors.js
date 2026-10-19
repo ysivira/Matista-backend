@@ -15,6 +15,9 @@ export const ERRORES_ADMIN = Object.freeze({
   DEPENDENCIA_RECHAZADA: 'DEPENDENCIA_RECHAZADA',
   COLA_OCUPADA: 'VERSION_QUEUE_REJECTED',
   CONFLICTO_PRECIO: 'PRICE_VERSION_CONFLICT',
+  TRANSICION_NO_PERMITIDA: 'ADMIN_TRANSICION',
+  ULTIMO_ADMIN_PROTEGIDO: 'ULTIMO_ADMIN_PROTEGIDO',
+  OPERACION_PROPIA_NO_PERMITIDA: 'OPERACION_PROPIA_NO_PERMITIDA',
   NO_ENCONTRADO: 'ADMIN_NO_ENCONTRADO',
   CONCURRENCIA: 'ADMIN_CONCURRENCIA',
   INTEGRIDAD: 'ADMIN_INTEGRIDAD',
@@ -65,6 +68,25 @@ export function errorConflictoPrecio() {
   return createAppError(ERRORES_ADMIN.CONFLICTO_PRECIO, 'El precio de la '
     + 'version cambio durante la operacion; reintente con el estado '
     + 'recargado.', 409);
+}
+
+/** Crea el error de transicion de estado no permitida (409). */
+export function errorTransicion(mensaje = 'La transicion de estado '
+  + 'solicitada no esta permitida.') {
+  return createAppError(ERRORES_ADMIN.TRANSICION_NO_PERMITIDA, mensaje, 409);
+}
+
+/** Crea el error de proteccion del ultimo ADMIN activo del sistema (409). */
+export function errorUltimoAdmin(mensaje = 'La operacion dejaria el sistema '
+  + 'sin un ADMIN activo; prohibida por el diseno.') {
+  return createAppError(ERRORES_ADMIN.ULTIMO_ADMIN_PROTEGIDO, mensaje, 409);
+}
+
+/** Crea el error de no operar la propia cuenta desde el directorio (409). */
+export function errorOperacionPropia() {
+  return createAppError(ERRORES_ADMIN.OPERACION_PROPIA_NO_PERMITIDA,
+    'No se permite administrar la propia cuenta; use Mi perfil.',
+    409);
 }
 
 /** Crea el error de recurso inexistente (404). */

@@ -66,11 +66,13 @@ export function createAuthRouter({ env, httpPolicy, context }) {
 
 /**
  * Inicializa configuración de A/B y pool reutilizable al primer acceso AUTH, sin consultar bases al importar.
+ * Exportada también para módulos que requieran el contexto AUTH idéntico (ADMIN, SPEC-03),
+ * sin duplicar dependencias ni alterar el comportamiento aprobado.
  * @param {object} env Entorno del proceso, con secretos fuera del código.
  * @param {object} httpPolicy Origen exacto para enlaces.
  * @returns {Promise<object>} Dependencias usadas por funciones de servicio, sin factories por capa.
  */
-async function initializeRuntime(env, httpPolicy) {
+export async function initializeRuntime(env, httpPolicy) {
   const security = loadSecurityConfig(env);
   const database = loadDatabaseConfig(env);
   const dummyPasswordHash = await hashPassword(randomBytes(54).toString('base64url'), security);

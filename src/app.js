@@ -3,6 +3,7 @@ import cors from 'cors';
 import { errorHandler } from './shared/errors/error-handler.js';
 import { createAppError } from './shared/errors/app-error.js';
 import { createAuthRouter } from './modules/auth/auth.routes.js';
+import { createEmployeesRouter } from './modules/admin/employees.routes.js';
 import { loadAuthHttpPolicy } from './modules/auth/auth.constants.js';
 
 /**
@@ -37,6 +38,8 @@ export function createApp({ env = process.env, authContext } = {}) {
   });
 
   app.use('/api/auth', createAuthRouter({ env, httpPolicy, context: authContext }));
+  /** ADMIN comparte el contexto y el runtime AUTH; sin sesión válida no hay directorio. */
+  app.use('/api/admin', createEmployeesRouter({ env, context: authContext }));
   app.use(errorHandler);
   return app;
 }
