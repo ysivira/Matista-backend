@@ -5,13 +5,8 @@
 // El runtime de dependencias se reutiliza de AUTH sin duplicarlo.
 
 import { Router } from 'express';
-import cookieParser from 'cookie-parser';
-import { loadAuthHttpPolicy } from '../auth/auth.constants.js';
-import { initializeRuntime } from '../auth/auth.routes.js';
-import { requireTrustedOrigin } from '../../shared/middleware/require-trusted-origin.js';
 import { authenticate } from '../../shared/middleware/authenticate.js';
 import { authorize } from '../../shared/middleware/authorize.js';
-import { createAppError } from '../../shared/errors/app-error.js';
 import {
   gestionarListado, gestionarDetalle, gestionarEstado, gestionarRol,
 } from './employees.service.js';
@@ -82,33 +77,11 @@ export async function cambiarRol(req, res) {
 }
 
 /**
- * Compone el router ADMIN de empleados con dependencias y guardias AUTH.
- * Reutiliza el runtime AUTH (pool, security, reloj) y el mismo contexto
- * de pruebas; importar o consultar health no crea pool ni transporte.
- * @param {object} options Entorno del proceso y contexto opcional con dobles.
- * @returns {object} Router Express con guardias de rol y errores JSON.
+ * Compone las rutas de empleados sobre la infraestructura del router ADMIN.
+ * @returns {object} Router Express con endpoints y guardias de rol.
  */
-export function createEmployeesRouter({ env, context } = {}) {
+export function createEmployeesRouter() {
   const router = Router();
-  const httpPolicy = loadAuthHttpPolicy(env);
-  let runtime;
-
-  router.use(cookieParser());
-  router.use((req, res, next) => {
-    req.authHttp = httpPolicy;
-    res.set('Cache-Control', 'no-store');
-    next();
-  });
-  router.use(requireTrustedOrigin);
-  router.use(async (req, res, next) => {
-    if (context) {
-      req.authContext = context;
-    } else {
-      if (!runtime) runtime = initializeRuntime(env, httpPolicy);
-      try { req.authContext = await runtime; } catch (error) { runtime = undefined; throw error; }
-    }
-    next();
-  });
 
   // El actor llega siempre de la sesion real; ninguna decision usa claims JWT.
   router.get('/employees', authenticate, authorize('ADMIN'), listar);
@@ -116,7 +89,5 @@ export function createEmployeesRouter({ env, context } = {}) {
   router.patch('/employees/:legajo/estado', authenticate, authorize('ADMIN'), cambiarEstado);
   router.patch('/employees/:legajo/rol', authenticate, authorize('ADMIN'), cambiarRol);
 
-  router.use((req, res, next) => next(createAppError('ADMIN_ROUTE_NOT_FOUND',
-    'La ruta ADMIN no existe.', 404)));
   return router;
 }
