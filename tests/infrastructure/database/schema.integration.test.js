@@ -99,6 +99,7 @@ test('crea las tablas ADMIN del tarifario y la tecnica en orden FK', {
       'schema_migrations',
       'tarifario_cancelaciones',
       'tarifario_versiones',
+      'tarifario_versiones_eventos',
       'tarifas',
     ],
   );
@@ -218,6 +219,7 @@ test('crea las claves foraneas y restricciones CHECK ADMIN aprobadas', {
         AND TABLE_NAME IN (
           'planes',
           'tarifario_versiones',
+          'tarifario_versiones_eventos',
           'tarifario_cancelaciones',
           'tarifas',
           'politica_comercial',
@@ -234,6 +236,10 @@ test('crea las claves foraneas y restricciones CHECK ADMIN aprobadas', {
     .sort();
 
   assert.deepEqual(foreignKeys, [
+    'fk_eventos_actor',
+    'fk_eventos_agrupador',
+    'fk_eventos_plan',
+    'fk_eventos_version',
     'fk_monotributo_aportes_actor',
     'fk_politica_comercial_actor',
     'fk_tarifario_cancelaciones_cancelada_por',
@@ -247,6 +253,17 @@ test('crea las claves foraneas y restricciones CHECK ADMIN aprobadas', {
     'fk_tarifas_version',
   ]);
   assert.deepEqual(checks, [
+    'chk_eventos_actor_apellido',
+    'chk_eventos_actor_nombre',
+    'chk_eventos_agrupador_cero',
+    'chk_eventos_agrupador_fila',
+    'chk_eventos_detalle',
+    'chk_eventos_entidad_ciclo',
+    'chk_eventos_entidad_fila',
+    'chk_eventos_entidad_plan',
+    'chk_eventos_operacion',
+    'chk_eventos_operacion_modificacion',
+    'chk_eventos_valores',
     'chk_monotributo_aporte',
     'chk_monotributo_categoria',
     'chk_monotributo_vigencia',
@@ -269,13 +286,11 @@ test('crea las claves foraneas y restricciones CHECK ADMIN aprobadas', {
     'chk_tarifario_cancelaciones_motivo',
     'chk_tarifario_cancelaciones_reactivacion',
     'chk_tarifario_versiones_actor',
-    'chk_tarifario_versiones_aumento_masivo',
     'chk_tarifario_versiones_carga_inicial',
-    'chk_tarifario_versiones_edicion_plan',
     'chk_tarifario_versiones_estado',
+    'chk_tarifario_versiones_estado_fecha',
     'chk_tarifario_versiones_modalidad',
     'chk_tarifario_versiones_porcentaje',
-    'chk_tarifario_versiones_reversion',
     'chk_tarifario_versiones_tipo',
     'chk_tarifas_activa',
     'chk_tarifas_precio',
@@ -399,23 +414,31 @@ test('aplica el comportamiento ADMIN aprobado (unicidades, CHECK y evento TARIFA
     );
 
     // Timestamps fijos: la comparacion de unicidad debe ser determinista.
-    await connection.query(
+    // Modelo "copia completa" (013/015): un borrador PREPARACION con actor
+    // obligatorio (CHECK de 007) y fecha pendiente; el guarda generada
+    // impide un segundo borrador abierto.
+    const [borradorResult] = await connection.query(
       `INSERT INTO tarifario_versiones (
-         tipo, fecha_activacion, observacion
-       ) VALUES ('CARGA_INICIAL', '2026-01-01 00:00:00', 'carga de prueba')`,
+         tipo, estado, actor_legajo, observacion
+       ) VALUES ('EDICION_LISTA', 'PREPARACION', ?, 'borrador de prueba')`,
+      [legajo],
     );
+    assert.equal(Number(borradorResult.insertId) > 0, true);
 
-    // Dos versiones no pueden activarse en el mismo instante: orden por fecha, no por id.
+    // La exclusividad de borrador es de persistencia: segundo PREPARACION
+    // viola uq_guard_borrador_version sin banderas de la aplicacion.
     await assert.rejects(
       connection.query(
         `INSERT INTO tarifario_versiones (
-           tipo, fecha_activacion, observacion
-         ) VALUES ('CARGA_INICIAL', '2026-01-01 00:00:00', 'duplicada')`,
+           tipo, estado, actor_legajo, observacion
+         ) VALUES ('EDICION_LISTA', 'PREPARACION', ?, 'borrador duplicado')`,
+        [legajo],
       ),
       (error) => error.code === 'ER_DUP_ENTRY',
     );
 
-    // Un AUMENTO_MASIVO sin version_base_id/porcentaje viola su CHECK de coherencia.
+    // Los tipos de la arquitectura anterior ya no pertenecen al ciclo:
+    // el CHECK de tipo (013) rechaza el intento incoherente.
     await assert.rejects(
       connection.query(
         `INSERT INTO tarifario_versiones (
@@ -430,12 +453,7 @@ test('aplica el comportamiento ADMIN aprobado (unicidades, CHECK y evento TARIFA
     );
 
     // Snapshot completo: la misma clave tarifaria dentro de una version es unica.
-    const [versionRows] = await connection.query(
-      `SELECT id FROM tarifario_versiones
-        WHERE tipo = 'CARGA_INICIAL'
-        ORDER BY created_at LIMIT 1`,
-    );
-    const versionId = versionRows[0].id;
+    const versionId = borradorResult.insertId;
 
     await connection.query(
       `INSERT INTO tarifas (

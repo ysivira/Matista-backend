@@ -4,7 +4,10 @@ import { describe, test } from 'node:test';
 import {
   listarPlanesActivos,
   listarTarifasActivas,
+  listarTarifasDeVersion,
+  listarVersiones,
   obtenerPlanPorId,
+  obtenerVersionPorId,
 } from '../../../src/modules/admin/tarifario.repository.js';
 
 /**
@@ -52,5 +55,48 @@ describe('repositorio de consulta tarifaria SL-2', () => {
     assert.equal(filas[0].precio, '123.45');
     assert.match(connection.llamadas[0].sql, /activa = 1/);
     assert.deepEqual(connection.llamadas[0].parametros, [8, 3, 'Voluntario']);
+  });
+});
+
+describe('repositorio de consultas de versiones SL-3', () => {
+  const conexionConQuery = (filas) => ({
+    llamadas: [],
+    async execute(sql, parametros = []) {
+      this.llamadas.push({ sql, parametros });
+      return [filas, []];
+    },
+    async query(sql, parametros = []) {
+      this.llamadas.push({ sql, parametros });
+      return [filas, []];
+    },
+  });
+
+  test('lista versiones cronologicamente por creacion con responsable', async () => {
+    const connection = conexionConQuery([]);
+    await listarVersiones(connection);
+
+    assert.match(connection.llamadas[0].sql, /LEFT JOIN empleados/);
+    assert.match(connection.llamadas[0].sql, /ORDER BY v.created_at ASC, v.id ASC/);
+  });
+
+  test('busca la version parametrizada identificando estados y trazabilidad', async () => {
+    const connection = conexionConQuery([{ id: 5 }]);
+    const version = await obtenerVersionPorId(connection, 5);
+
+    assert.equal(version.id, 5);
+    assert.match(connection.llamadas[0].sql, /WHERE v.id = \?/);
+    assert.deepEqual(connection.llamadas[0].parametros, [5]);
+  });
+
+  test('lee el snapshot completo y opcionalmente carga solo filas activas', async () => {
+    const completas = conexionConQuery([{ plan_id: 1, precio: '10.00', activa: 0 }]);
+    await listarTarifasDeVersion(completas, 9);
+    assert.match(completas.llamadas[0].sql, /JOIN planes/);
+    assert.doesNotMatch(completas.llamadas[0].sql, /activa = 1/);
+    assert.deepEqual(completas.llamadas[0].parametros, [9]);
+
+    const efectivas = conexionConQuery([{ plan_id: 1, precio: '10.00', activa: 1 }]);
+    await listarTarifasDeVersion(efectivas, 9, { soloActivas: true });
+    assert.match(efectivas.llamadas[0].sql, /AND t.activa = 1/);
   });
 });

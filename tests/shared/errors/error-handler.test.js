@@ -24,7 +24,9 @@ test('devuelve errores operativos uniformes con detalles públicos', async (t) =
 test('oculta stack, SQL, secretos y propiedades de errores inesperados', async (t) => {
   const app = express();
   const sensitive = randomBytes(24).toString('hex');
-  /** Simula un error interno con datos privados sin registrarlos. */
+  const registros = [];
+  t.mock.method(console, 'error', (...argumentos) => registros.push(argumentos));
+  /** Simula un error interno con datos privados sin exponerlos ni registrarlos. */
   app.get('/fixture', (req, res, next) => {
     const error = Object.assign(new Error(sensitive), { code: 'MYSQL_FAILURE', status: 400, sql: sensitive });
     next(error);
@@ -35,6 +37,11 @@ test('oculta stack, SQL, secretos y propiedades de errores inesperados', async (
   assert.equal(response.status, 500);
   assert.deepEqual(response.body, { error: { code: 'INTERNAL_ERROR', message: 'Ocurrió un error interno.' } });
   assert.equal(JSON.stringify(response.body).includes(sensitive), false);
+  assert.equal(JSON.stringify(registros).includes(sensitive), false);
+  assert.deepEqual(registros[0], [
+    '[matista] error 500 no controlado',
+    { method: 'GET', path: '/fixture', errorName: 'Error' },
+  ]);
 });
 
 /** Delega el error original sin intentar escribir una segunda respuesta. */

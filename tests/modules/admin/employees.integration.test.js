@@ -1,8 +1,8 @@
 // Pruebas de integracion HTTP del modulo ADMIN de empleados (SL-1) sobre
 // matista_test con el stack real (pool mysql2, migraciones, JWT y
-// cookie de AUTH). Solo lectura del catalogo permanente; las cuentas que
-// las pruebas crean usan el prefijo 99 y se eliminan al terminar, sin
-// tocar el ADMIN permanente 0000000001 ni datos de SIGEC.
+// cookie de AUTH). Solo lectura del catalogo permanente; cada cuenta creada
+// queda registrada por su legajo exacto y se elimina al terminar, sin tocar
+// el ADMIN permanente 0000000001 ni datos de SIGEC.
 // Requieren RUN_DB_TESTS=1 y la carga inicial aplicada (commit E2).
 
 import 'dotenv/config';
@@ -31,13 +31,16 @@ import { startTestServer } from '../../../tests/helpers/http.js';
 const enabled = process.env.RUN_DB_TESTS === '1';
 const currentDirectory = path.dirname(fileURLToPath(import.meta.url));
 const migrationsDirectory = path.resolve(currentDirectory, '../../../migrations');
-const PREFIJO = '99';
 const ORIGIN = 'http://localhost:5173';
+const PREFIJO_CORRIDA = String(
+  10_000_000 + (randomBytes(4).readUInt32BE(0) % 90_000_000),
+);
 
 let pool;
 let api;
 let security;
 let sessionCounter = 0;
+const legajosCreados = new Set();
 
 before(async (t) => {
   if (!enabled) return;
@@ -74,17 +77,69 @@ after(async () => {
   }
 });
 
-/** Limpia exclusivamente las filas creadas por las pruebas (prefijo 99). */
+/**
+ * Elimina atomica y exclusivamente las cuentas cuyos legajos fueron
+ * registrados después de un INSERT exitoso de esta corrida.
+ * @returns {Promise<void>}
+ * @throws {Error} Revierte toda la limpieza si alguna tabla no puede limpiarse.
+ */
 async function limpiarCuentasDePrueba() {
+  const legajos = [...legajosCreados];
+  if (legajos.length === 0) return;
+  const marcadores = legajos.map(() => '?').join(', ');
   const connection = await pool.getConnection();
   try {
+    await connection.beginTransaction();
     await connection.execute(
-      'DELETE FROM empleados_auditoria WHERE legajo LIKE ? OR actor_legajo LIKE ?',
-      [`${PREFIJO}%`, `${PREFIJO}%`]);
-    await connection.execute('DELETE FROM auth_tokens WHERE legajo LIKE ?', [`${PREFIJO}%`]);
-    await connection.execute('DELETE FROM auth_sesiones WHERE legajo LIKE ?', [`${PREFIJO}%`]);
-    await connection.execute('DELETE FROM empleados_correos WHERE legajo LIKE ?', [`${PREFIJO}%`]);
-    await connection.execute('DELETE FROM empleados WHERE legajo LIKE ?', [`${PREFIJO}%`]);
+      `DELETE FROM empleados_auditoria
+        WHERE legajo IN (${marcadores}) OR actor_legajo IN (${marcadores})`,
+      [...legajos, ...legajos],
+    );
+    for (const tabla of ['auth_tokens', 'auth_sesiones', 'empleados_correos']) {
+      await connection.execute(
+        `DELETE FROM ${tabla} WHERE legajo IN (${marcadores})`,
+        legajos,
+      );
+    }
+    await connection.execute(
+      `DELETE FROM empleados WHERE legajo IN (${marcadores})`,
+      legajos,
+    );
+    await connection.commit();
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
+}
+
+/**
+ * Comprueba que ninguna tabla relacionada conserva filas de los legajos
+ * exactos creados por la corrida.
+ * @returns {Promise<void>}
+ * @throws {AssertionError} Si el cleanup dejó una cuenta o relación residual.
+ */
+async function verificarAusenciaDeResiduos() {
+  const legajos = [...legajosCreados];
+  if (legajos.length === 0) return;
+  const marcadores = legajos.map(() => '?').join(', ');
+  const connection = await pool.getConnection();
+  try {
+    const consultas = [
+      [`SELECT COUNT(*) AS total FROM empleados_auditoria
+          WHERE legajo IN (${marcadores}) OR actor_legajo IN (${marcadores})`,
+      [...legajos, ...legajos]],
+      ...['auth_tokens', 'auth_sesiones', 'empleados_correos', 'empleados']
+        .map((tabla) => [
+          `SELECT COUNT(*) AS total FROM ${tabla} WHERE legajo IN (${marcadores})`,
+          legajos,
+        ]),
+    ];
+    for (const [sql, parametros] of consultas) {
+      const [filas] = await connection.execute(sql, parametros);
+      assert.equal(Number(filas[0].total), 0);
+    }
   } finally {
     connection.release();
   }
@@ -97,7 +152,7 @@ async function limpiarCuentasDePrueba() {
  * - Retorna: el legajo creado.
  */
 async function cuentaProbe({ rol = 'ASESOR', estado = 'PENDIENTE', email = null } = {}) {
-  const legajo = `${PREFIJO}${String(Date.now()).slice(-6)}${sessionCounter++}`.slice(0, 10);
+  const legajo = `${PREFIJO_CORRIDA}${String(sessionCounter++).padStart(2, '0')}`;
   const passwordHash = await hashPassword('clave-de-prueba', security);
   const connection = await pool.getConnection();
   try {
@@ -105,6 +160,9 @@ async function cuentaProbe({ rol = 'ASESOR', estado = 'PENDIENTE', email = null 
       `INSERT INTO empleados (legajo, nombre, apellido, password_hash, rol, estado)
        VALUES (?, 'Probe', 'De Test', ?, ?, ?)`,
       [legajo, passwordHash, rol, estado]);
+    // Se registra inmediatamente después del INSERT padre para que el
+    // cleanup también cubra fallos posteriores al crear el correo.
+    legajosCreados.add(legajo);
     const correo = email ?? `${legajo}@probe.test`;
     const fecha = new Date();
     await connection.execute(
@@ -144,15 +202,13 @@ async function cookieAutenticada(legajo) {
 describe('ADMIN empleados: rutas HTTP (SL-1)', { skip: !enabled }, () => {
   after(async () => {
     await limpiarCuentasDePrueba();
+    await verificarAusenciaDeResiduos();
     // Defensa final: el catalogo permanente queda intacto.
     const connection = await pool.getConnection();
     try {
       const [permanentes] = await connection.execute(
         "SELECT rol, estado FROM empleados WHERE legajo = '0000000001'");
       assert.deepEqual(permanentes, [{ rol: 'ADMIN', estado: 'ACTIVO' }]);
-      const [residuos] = await connection.execute(
-        "SELECT COUNT(*) AS total FROM empleados WHERE legajo LIKE '99%'");
-      assert.equal(residuos[0].total, 0);
     } finally {
       connection.release();
     }
@@ -183,15 +239,19 @@ describe('ADMIN empleados: rutas HTTP (SL-1)', { skip: !enabled }, () => {
   test('lista con filtros y detalle publica el correo ACTUAL', { skip: !enabled }, async (t) => {
     const legajoAdmin = await cuentaAdminProbe();
     const cookie = await cookieAutenticada(legajoAdmin);
-    const objetivo = await cuentaProbe({ estado: 'ACTIVO', email: 'activado-zz@probe.test' });
+    const emailObjetivo = `activado-${PREFIJO_CORRIDA}@probe.test`;
+    const objetivo = await cuentaProbe({ estado: 'ACTIVO', email: emailObjetivo });
 
     const activos = await api('/api/admin/employees?estado=ACTIVO', { cookie });
     assert.ok(activos.body.empleados.some((f) => f.legajo === objetivo));
     assert.ok(activos.body.empleados.every((f) => f.estado === 'ACTIVO'));
 
-    const porBusqueda = await api('/api/admin/employees?busqueda=activado-zz@probe.test', { cookie });
+    const porBusqueda = await api(
+      `/api/admin/employees?busqueda=${encodeURIComponent(emailObjetivo)}`,
+      { cookie },
+    );
     assert.deepEqual(porBusqueda.body.empleados.map((f) => f.legajo), [objetivo]);
-    assert.equal(porBusqueda.body.empleados[0].email, 'activado-zz@probe.test');
+    assert.equal(porBusqueda.body.empleados[0].email, emailObjetivo);
 
     const detalle = await api(`/api/admin/employees/${objetivo}`, { cookie });
     assert.equal(detalle.status, 200);

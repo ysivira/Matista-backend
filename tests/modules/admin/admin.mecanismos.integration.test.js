@@ -1,6 +1,7 @@
 import 'dotenv/config';
 
 import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { after, before, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
@@ -41,15 +42,25 @@ const migrationsDirectory = path.resolve(currentDirectory, '../../../migrations'
 // Actor permanente de matista_test (fixture ADMIN copiado desde dev).
 const ACTOR_FIXTURE = '0000000001';
 
-// Etiquetas deterministas de los registros propios de estas pruebas; se
-// crean y se eliminan dentro de la misma corrida.
-const ETIQUETA_NEGOCIO = 'tmp_mecanismo_elm:commit';
-const ETIQUETA_AUDITORIA_COMMIT = 'version#0:MECANISMO_COMMIT';
-const ETIQUETA_AUDITORIA_ROLLBACK = 'version#0:MECANISMO_ROLLBACK';
-const TABLA_RASCADO = 'tmp_mecanismo_elm';
+// El UUID forma identificadores SQL seguros (solo hexadecimal) y etiquetas
+// irrepetibles: una colision aborta antes de tocar una tabla preexistente.
+const ID_CORRIDA = randomUUID().replaceAll('-', '');
+const TABLA_RASCADO = `tmp_mecanismo_elm_${ID_CORRIDA}`;
+const ETIQUETA_NEGOCIO = `tmp_mecanismo_elm:${ID_CORRIDA}:commit`;
+const ETIQUETA_LOCK_ROLLBACK = `tmp_mecanismo_elm:${ID_CORRIDA}:lock_rollback`;
+const ETIQUETA_AUDIT_ROLLBACK = `tmp_mecanismo_elm:${ID_CORRIDA}:audit_rollback`;
+const ETIQUETA_AUDITORIA_COMMIT = `version#0:${ID_CORRIDA}:MECANISMO_COMMIT`;
+const ETIQUETA_AUDITORIA_ROLLBACK = `version#0:${ID_CORRIDA}:MECANISMO_ROLLBACK`;
+const ETIQUETA_CHECK_012 = `version#0:${ID_CORRIDA}:MECANISMO_CHECK_012`;
+const ETIQUETAS_AUDITORIA = [
+  ETIQUETA_AUDITORIA_COMMIT,
+  ETIQUETA_AUDITORIA_ROLLBACK,
+  ETIQUETA_CHECK_012,
+];
 
 let config;
 let pool;
+let tablaRascadoCreada = false;
 
 before(async () => {
   if (!enabled) {
@@ -62,12 +73,26 @@ before(async () => {
   await verifyDatabaseConnection(pool, 'matista_test');
   await runMigrations({ pool, config, migrationsDirectory });
 
-  // Tabla de rascado propia de la prueba (no es del dominio y se elimina
-  // al final): sirve para demostrar commit/rollback de una "escritura de
-  // negocio" sin tocar el catalogo tarifario ni datos AUTH.
-  await pool.query(`CREATE TABLE IF NOT EXISTS ${TABLA_RASCADO} (
-    etiqueta VARCHAR(60) NOT NULL PRIMARY KEY
+  const [tablasPrevias] = await pool.execute(
+    `SELECT COUNT(*) AS total FROM information_schema.tables
+      WHERE table_schema = DATABASE() AND table_name = ?`,
+    [TABLA_RASCADO],
+  );
+  assert.equal(Number(tablasPrevias[0].total), 0);
+  const marcadores = ETIQUETAS_AUDITORIA.map(() => '?').join(', ');
+  const [auditoriaPrevia] = await pool.execute(
+    `SELECT COUNT(*) AS total FROM empleados_auditoria
+      WHERE actor_legajo = ? AND valor_nuevo IN (${marcadores})`,
+    [ACTOR_FIXTURE, ...ETIQUETAS_AUDITORIA],
+  );
+  assert.equal(Number(auditoriaPrevia[0].total), 0);
+
+  // CREATE sin IF NOT EXISTS acredita propiedad: una colision falla y el
+  // after no intenta eliminar la tabla ajena.
+  await pool.query(`CREATE TABLE ${TABLA_RASCADO} (
+    etiqueta VARCHAR(100) NOT NULL PRIMARY KEY
   )`);
+  tablaRascadoCreada = true;
 
   // Confirmar el actor permanente disponible.
   const [actores] = await pool.query(
@@ -79,18 +104,42 @@ before(async () => {
 });
 
 after(async () => {
-  if (pool) {
-    // Limpieza limitada: solo registros creados por esta suite.
-    await pool.query(
+  if (!pool) return;
+  let errorLimpieza;
+  const marcadores = ETIQUETAS_AUDITORIA.map(() => '?').join(', ');
+  try {
+    // Las etiquetas aleatorias se comprobaron ausentes antes de iniciar.
+    await pool.execute(
       `DELETE FROM empleados_auditoria
-        WHERE evento = 'VERSION_CREADA'
-          AND actor_legajo = ?
-          AND valor_nuevo IN (?, ?)`,
-      [ACTOR_FIXTURE, ETIQUETA_AUDITORIA_COMMIT, ETIQUETA_AUDITORIA_ROLLBACK],
+        WHERE actor_legajo = ? AND valor_nuevo IN (${marcadores})`,
+      [ACTOR_FIXTURE, ...ETIQUETAS_AUDITORIA],
     );
-    await pool.query(`DROP TABLE IF EXISTS ${TABLA_RASCADO}`);
+    const [residuosAuditoria] = await pool.execute(
+      `SELECT COUNT(*) AS total FROM empleados_auditoria
+        WHERE actor_legajo = ? AND valor_nuevo IN (${marcadores})`,
+      [ACTOR_FIXTURE, ...ETIQUETAS_AUDITORIA],
+    );
+    assert.equal(Number(residuosAuditoria[0].total), 0);
+  } catch (error) {
+    errorLimpieza = error;
+  }
+  try {
+    if (tablaRascadoCreada) {
+      await pool.query(`DROP TABLE ${TABLA_RASCADO}`);
+      tablaRascadoCreada = false;
+    }
+    const [tablasResiduales] = await pool.execute(
+      `SELECT COUNT(*) AS total FROM information_schema.tables
+        WHERE table_schema = DATABASE() AND table_name = ?`,
+      [TABLA_RASCADO],
+    );
+    assert.equal(Number(tablasResiduales[0].total), 0);
+  } catch (error) {
+    errorLimpieza ??= error;
+  } finally {
     await pool.end();
   }
+  if (errorLimpieza) throw errorLimpieza;
 });
 
 /** Instante UTC con 6 decimales para DATETIME(6), consistente con la zona UTC. */
@@ -151,7 +200,8 @@ test('un error dentro de la operacion libera el bloqueo y hace rollback', {
     withAdminVersionLock(pool, async (connection) => {
       // Escritura propia dentro de la transaccion: el rollback la deshace.
       await connection.execute(
-        `INSERT INTO ${TABLA_RASCADO} (etiqueta) VALUES ('tmp_mecanismo_elm:lock_rollback')`,
+        `INSERT INTO ${TABLA_RASCADO} (etiqueta) VALUES (?)`,
+        [ETIQUETA_LOCK_ROLLBACK],
       );
       throw errorValidacion('Fallo de negocio simulado.');
     }),
@@ -162,7 +212,8 @@ test('un error dentro de la operacion libera el bloqueo y hace rollback', {
   try {
     // El rollback deshizo la escritura y el lock quedo libre.
     const [restos] = await connection.query(
-      `SELECT COUNT(*) AS total FROM ${TABLA_RASCADO} WHERE etiqueta = 'tmp_mecanismo_elm:lock_rollback'`,
+      `SELECT COUNT(*) AS total FROM ${TABLA_RASCADO} WHERE etiqueta = ?`,
+      [ETIQUETA_LOCK_ROLLBACK],
     );
     assert.equal(restos[0].total, 0);
 
@@ -246,8 +297,9 @@ test('escritura de negocio y auditoria se confirman en la misma transaccion', {
 
   // Limpieza propia del registro de auditoria de la prueba.
   const [limpia] = await pool.query(
-    'DELETE FROM empleados_auditoria WHERE valor_nuevo = ?',
-    [ETIQUETA_AUDITORIA_COMMIT],
+    `DELETE FROM empleados_auditoria
+      WHERE evento = 'VERSION_CREADA' AND actor_legajo = ? AND valor_nuevo = ?`,
+    [ACTOR_FIXTURE, ETIQUETA_AUDITORIA_COMMIT],
   );
   assert.equal(Number(limpia.affectedRows), 1);
 });
@@ -268,7 +320,8 @@ test('un fallo de auditoria obligatoria impide confirmar la operacion', {
   await assert.rejects(
     withAdminTransaction(pool, async (connection) => {
       await connection.execute(
-        `INSERT INTO ${TABLA_RASCADO} (etiqueta) VALUES ('tmp_mecanismo_elm:audit_rollback')`,
+        `INSERT INTO ${TABLA_RASCADO} (etiqueta) VALUES (?)`,
+        [ETIQUETA_AUDIT_ROLLBACK],
       );
       // Auditoria que viola un CHECK real de empleados_auditoria: ese
       // error de base aborta la transaccion completa (negocio incluido).
@@ -287,7 +340,8 @@ test('un fallo de auditoria obligatoria impide confirmar la operacion', {
   const connection = await pool.getConnection();
   try {
     const [restosNegocio] = await connection.query(
-      `SELECT COUNT(*) AS total FROM ${TABLA_RASCADO} WHERE etiqueta = 'tmp_mecanismo_elm:audit_rollback'`,
+      `SELECT COUNT(*) AS total FROM ${TABLA_RASCADO} WHERE etiqueta = ?`,
+      [ETIQUETA_AUDIT_ROLLBACK],
     );
     assert.equal(restosNegocio[0].total, 0);
 
@@ -304,7 +358,6 @@ test('un fallo de auditoria obligatoria impide confirmar la operacion', {
 test('la auditoria VERSION_* aceptada por el esquema persiste', {
   skip: !enabled,
 }, async () => {
-  const ETIQUETA = 'version#0:MECANISMO_CHECK_012';
   const fecha = ahoraUtc();
 
   await withAdminTransaction(pool, async (connection) => {
@@ -314,7 +367,7 @@ test('la auditoria VERSION_* aceptada por el esquema persiste', {
       'VERSION_REACTIVADA',
       ACTOR_FIXTURE,
       null,
-      ETIQUETA,
+      ETIQUETA_CHECK_012,
       fecha,
     );
   });
@@ -322,7 +375,7 @@ test('la auditoria VERSION_* aceptada por el esquema persiste', {
   const [filas] = await pool.query(
     `SELECT legajo, actor_legajo, evento, campo, valor_nuevo
        FROM empleados_auditoria WHERE valor_nuevo = ?`,
-    [ETIQUETA],
+    [ETIQUETA_CHECK_012],
   );
   assert.equal(filas.length, 1);
   assert.equal(filas[0].evento, 'VERSION_REACTIVADA');
@@ -330,7 +383,11 @@ test('la auditoria VERSION_* aceptada por el esquema persiste', {
   assert.equal(filas[0].legajo, ACTOR_FIXTURE);
   assert.equal(filas[0].actor_legajo, ACTOR_FIXTURE);
 
-  await pool.query('DELETE FROM empleados_auditoria WHERE valor_nuevo = ?', [ETIQUETA]);
+  await pool.query(
+    `DELETE FROM empleados_auditoria
+      WHERE evento = 'VERSION_REACTIVADA' AND actor_legajo = ? AND valor_nuevo = ?`,
+    [ACTOR_FIXTURE, ETIQUETA_CHECK_012],
+  );
 });
 
 test('resuelve la version vigente del catalogo permanente', {

@@ -32,6 +32,16 @@ export function errorHandler(error, req, res, next) {
       error: { code: parserError.code, message: parserError.message },
     });
   }
+  // El registro conserva contexto operativo mínimo sin serializar el error,
+  // su stack, SQL, query string ni propiedades que puedan contener secretos.
+  const path = typeof req.originalUrl === 'string'
+    ? req.originalUrl.split('?')[0]
+    : undefined;
+  console.error('[matista] error 500 no controlado', {
+    method: req.method,
+    path,
+    errorName: typeof error?.name === 'string' ? error.name : 'Error',
+  });
   return res.status(500).json({
     error: { code: 'INTERNAL_ERROR', message: 'Ocurrió un error interno.' },
   });

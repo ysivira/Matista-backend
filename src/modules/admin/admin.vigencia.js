@@ -2,15 +2,20 @@
 // Consultas de solo lectura sobre tarifario_versiones y sus
 // dependencias; nunca escriben ni recalculan versiones historicas
 // (inmutabilidad). El orden de vigencia es por fecha de activacion,
-// nunca por id. Las cancelaciones abiertas (reactivada_por NULL)
-// dejan a la version fuera de la vigencia hasta su reactivacion.
+// nunca por id. Con el modelo "copia completa" (migraciones 013-015,
+// decisiones O-1..O-7 cerradas) las cancelaciones y reversiones quedan
+// descontinuadas funcionalmente: la vigencia se resuelve unicamente
+// sobre estados efectivos ACTIVA/HISTORICA.
 
 /**
  * Resuelve la version del tarifario vigente para una fecha de referencia.
- * Regla aprobada: entre las versiones ACTIVA con fecha_activacion menor
- * o igual al instante de referencia y sin cancelacion sin reactivar,
- * gana la de fecha de activacion mas reciente (desempate: id mas alto,
- * dadas fechas unicas por el indice uq_tarifario_versiones_fecha).
+ * Regla del modelo "copia completa": entre las versiones efectivamente
+ * activas en ese momento -- estados ACTIVA e HISTORICA, que conservan la
+ * fecha de activacion con que rigieron -- gana la de fecha de activacion
+ * mas reciente menor o igual al instante pedido; el borrador actual
+ * (PREPARACION/LISTA_PARA_ACTIVAR) nunca rige. Desempate estatico por id
+ * mas alto ante fechas teoricamente iguales (la UNIQUE de fechas activas
+ * impide colisiones reales).
  *
  * - Parametros: `connection` conexion mysql2; `fechaReferencia`
  *   string 'YYYY-MM-DD HH:MM:SS(.ffffff)' en UTC.
@@ -21,14 +26,8 @@ export async function resolverVersionVigente(connection, fechaReferencia) {
   const [filas] = await connection.execute(
     `SELECT v.id, v.tipo, v.estado, v.fecha_activacion, v.actor_legajo
        FROM tarifario_versiones v
-      WHERE v.estado = 'ACTIVA'
+      WHERE v.estado IN ('ACTIVA', 'HISTORICA')
         AND v.fecha_activacion <= ?
-        AND NOT EXISTS (
-            SELECT 1
-              FROM tarifario_cancelaciones c
-             WHERE c.version_id = v.id
-               AND c.reactivada_por IS NULL
-        )
       ORDER BY v.fecha_activacion DESC, v.id DESC
       LIMIT 1`,
     [fechaReferencia],

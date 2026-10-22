@@ -56,8 +56,39 @@ test('las migraciones ADMIN declaran el orden FK aprobado sin tablas extra', asy
       ['010_create_politica_comercial', 'politica_comercial', 'create'],
       ['011_create_monotributo_aportes', 'monotributo_aportes', 'create'],
       ['012_alter_empleados_auditoria_eventos', 'empleados_auditoria', 'alter'],
+      ['013_ciclo_vida_versiones', 'tarifario_versiones', 'alter'],
+      ['014_auditoria_eventos_versiones', 'tarifario_versiones_eventos', 'create'],
+      ['015_garantias_exclusividad_versiones', 'tarifario_versiones', 'alter'],
+      ['016_reanudacion_evento', 'tarifario_versiones_eventos', 'alter'],
+      ['017_descarte_versiones', 'tarifario_versiones_eventos', 'alter'],
     ],
   );
+});
+
+test('el ciclo de vida nuevo declara estados, borrador y garantias unicas', async () => {
+  const migrations = await loadMigrations(migrationsDirectory);
+  const ciclo = migrations.find((m) => m.version === '013_ciclo_vida_versiones');
+  const auditoria = migrations.find((m) => m.version === '014_auditoria_eventos_versiones');
+  const garantias = migrations.find(
+    (m) => m.version === '015_garantias_exclusividad_versiones',
+  );
+
+  // 013: modelo "copia completa" sin cancelaciones productoras de flujo.
+  assert.match(ciclo.sql, /estado IN \('PREPARACION', 'LISTA_PARA_ACTIVAR', 'ACTIVA', 'HISTORICA', 'CANCELADA'\)/);
+  assert.match(ciclo.sql, /tipo IN \('CARGA_INICIAL', 'EDICION_LISTA'\)/);
+  assert.match(ciclo.sql, /fecha_activacion DATETIME\(6\) NULL/);
+  assert.match(ciclo.sql, /revision INT UNSIGNED NOT NULL DEFAULT 0/);
+
+  // 014: auditoria con snapshot de identidad y agrupador de masivo.
+  assert.match(auditoria.sql, /actor_nombre VARCHAR\(100\) NOT NULL/);
+  assert.match(auditoria.sql, /REFERENCES empleados \(legajo\)/);
+  assert.match(auditoria.sql, /chk_eventos_agrupador_fila/);
+  assert.match(auditoria.sql, /chk_eventos_valores/);
+
+  // 015: exclusividad a nivel de persistencia (concurrencia sin banderas).
+  assert.match(garantias.sql, /guard_activa INT\s+GENERATED ALWAYS AS \(IF\(estado = 'ACTIVA', 1, NULL\)\) STORED/);
+  assert.match(garantias.sql, /uq_guard_activa_version/);
+  assert.match(garantias.sql, /uq_guard_borrador_version/);
 });
 
 test('el tarifario aprobado declara snapshot, baja logica y vigencia lazy', async () => {
