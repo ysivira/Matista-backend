@@ -143,6 +143,12 @@ export async function gestionarEstado(
   }
 
   return repositorio.withConnection(pool, async (connection) => {
+    // Guardia del ultimo ADMIN a prueba de carreras: se bloquea primero el
+    // conjunto completo de ADMIN activos y recien despues la cuenta
+    // objetivo, de modo que dos operaciones concurrentes se serializan
+    // sobre el mismo conjunto y no pueden aprobarse mutuamente dejando
+    // cero administradores activos.
+    await repositorio.bloquearAdminsActivos(connection);
     // findEmployee con lock FOR UPDATE evita carreras al decidir guardias.
     const objetivo = await repositorio.findEmployee(connection, String(legajoTarget), true);
     if (!objetivo) {
@@ -193,6 +199,11 @@ export async function gestionarRol(
   }
 
   return repositorio.withConnection(pool, async (connection) => {
+    // Mismo orden de bloqueo que gestionarEstado: primero el conjunto de
+    // ADMIN activos y despues la cuenta objetivo, para que la degradacion
+    // de rol del ultimo administrador no gane la carrera contra otra
+    // reduccion concurrente.
+    await repositorio.bloquearAdminsActivos(connection);
     const objetivo = await repositorio.findEmployee(connection, String(legajoTarget), true);
     if (!objetivo) {
       throw errorNoEncontrado('El empleado indicado no existe.');

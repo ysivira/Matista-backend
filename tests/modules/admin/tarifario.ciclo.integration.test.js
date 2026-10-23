@@ -142,9 +142,22 @@ async function capturarSnapshotPermanente(poolReal) {
 /** Crea el catalogo minimo propio sobre tablas temporales de la sesion. */
 async function prepararFixturesAislados() {
   for (const tabla of TABLAS_AISLADAS) {
-    await connectionAislada.query(
-      `CREATE TEMPORARY TABLE ${tabla} LIKE \`${config.database}\`.${tabla}`,
+    // MySQL 8.4 rechaza `CREATE TEMPORARY TABLE t LIKE db.t` (alias duplicado),
+    // por lo que la estructura y sus indices se clonan desde SHOW CREATE TABLE
+    // renombrando la definicion a TEMPORARY.
+    const [filas] = await connectionAislada.query(
+      `SHOW CREATE TABLE \`${config.database}\`.${tabla}`,
     );
+    const lineasDefinicion = filas[0]['Create Table']
+      .replace(/^CREATE TABLE /i, 'CREATE TEMPORARY TABLE ')
+      .split('\n');
+    // MySQL 8.4 no admite claves foraneas en tablas temporales: se descartan
+    // y se completa la coma pendiente si la FK era la ultima definicion.
+    const sinForaneas = lineasDefinicion
+      .filter((linea) => !/^\s+CONSTRAINT\s+`fk_/i.test(linea))
+      .join('\n')
+      .replace(/,(\s*\n\))/, '$1');
+    await connectionAislada.query(sinForaneas);
   }
 
   actorLegajo = '9900000001';

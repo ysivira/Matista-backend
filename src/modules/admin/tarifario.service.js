@@ -897,6 +897,12 @@ export async function activarVersionTarifario(
   return dependencias.withConnection(
     pool,
     async (connection) => {
+      // Orden de bloqueo consistente con crearBorradorTarifario: primero la
+      // fila de la version ACTIVA y despues el borrador finalizado. Si la
+      // activacion tomara las filas en el orden inverso, una creacion de
+      // borrador y una activacion concurrentes podrian generar un ciclo de
+      // bloqueo (deadlock) que llegaria como error 500 generico.
+      const versionActiva = await dependencias.bloquearVersionActiva(connection);
       const version = await dependencias.bloquearVersion(connection, id);
       if (!version) {
         throw errorNoEncontrado('La version indicada no existe.');
@@ -921,7 +927,6 @@ export async function activarVersionTarifario(
           'La version indicada no tiene filas de tarifas para activar.',
         );
       }
-      const versionActiva = await dependencias.bloquearVersionActiva(connection);
       if (!versionActiva) {
         throw errorEstado(
           'No hay una version activa vigente que reemplazar por la edicion.',

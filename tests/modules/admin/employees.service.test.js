@@ -21,19 +21,42 @@ const NOW = new Date('2026-10-15T12:00:00Z');
 function crearDoble({ empleados = [], sesiones = [] } = {}) {
   const estado = { empleados, correos: [], sesiones, auditoria: [], escrituras: [] };
   let sequence = 1;
+  // Candado del conjunto de ADMIN activos: simula el FOR UPDATE real. La
+  // operacion siguiente espera a que la anterior termine (commit o
+  // rollback), y el snapshot de rollback se toma en ese punto de
+  // serializacion para no deshacer cambios ya confirmados por otra.
+  let candado = Promise.resolve();
 
   const repositorio = {
-    /** Ejecuta la operacion con una conexion etiquetada y revierte ante fallo. */
+    /** Ejecuta `operacion` con control transaccional propio y restaura los datos ante un error. */
     async withConnection(pool, operacion, { transaction = false } = {}) {
       const antes = structuredClone(estado);
+      // Cada conexion conserva su snapshot y su liberador fuera de los datos
+      // clonables; una operacion no puede liberar el candado de otra.
+      const connection = { conexion: true };
       try {
-        const resultado = await operacion({ conexion: true });
+        const resultado = await operacion(connection);
         estado.comit = transaction ? 'COMMIT' : 'AUTO';
         return resultado;
       } catch (error) {
-        if (transaction) Object.assign(estado, structuredClone(antes));
+        // El punto de serializacion del bloqueo es el equivalente real al
+        // inicio de la transaccion: si se tomo ahi, el rollback no revierte
+        // cambios confirmados por otra operacion concurrente.
+        if (transaction) Object.assign(estado, structuredClone(connection.antesBloqueo ?? antes));
         throw error;
+      } finally {
+        connection.soltarCandado?.();
       }
+    },
+    /** Serializa los ADMIN activos y guarda en `connection` el snapshot y liberador propios. */
+    async bloquearAdminsActivos(connection) {
+      estado.escrituras.push({ op: 'bloquearAdminsActivos' });
+      const esperarPrevia = candado;
+      let soltar;
+      candado = new Promise((resolver) => { soltar = resolver; });
+      await esperarPrevia;
+      connection.soltarCandado = soltar;
+      connection.antesBloqueo = structuredClone(estado);
     },
     /** Igual a AUTH: fila interna completa, sin distinguir lock en memoria. */
     async findEmployee(connection, legajo, lock) {
@@ -232,6 +255,53 @@ test('permite desactivar un ADMIN cuando existe otro ADMIN activo', async () => 
   });
   await gestionarEstado({}, '0000000001', '0000000099', 'INACTIVO', NOW, doble.repositorio);
   assert.equal(estadoFinal(doble, '0000000099').estado, 'INACTIVO');
+});
+
+test('dos desactivaciones concurrentes del par de ADMIN no dejan cero activos', async () => {
+  // Reproduce la carrera de la auditoria: sin bloquear el conjunto de ADMIN
+  // activos, cada desactivacion cuenta al otro como activo y ambas se
+  // aprueban mutuamente. Con la correccion, exactamente una gana y la otra
+  // se rechaza con ULTIMO_ADMIN_PROTEGIDO.
+  const doble = crearDoble({
+    empleados: [empleado('0000000001', { rol: 'ADMIN' }),
+      empleado('0000000002', { rol: 'ADMIN' })],
+  });
+  const resultados = await Promise.allSettled([
+    gestionarEstado({}, '9000000009', '0000000001', 'INACTIVO', NOW, doble.repositorio),
+    gestionarEstado({}, '9000000009', '0000000002', 'INACTIVO', NOW, doble.repositorio),
+  ]);
+  const exitosas = resultados.filter((r) => r.status === 'fulfilled');
+  const rechazadas = resultados.filter((r) => r.status === 'rejected');
+
+  assert.equal(exitosas.length, 1, 'exactamente una desactivacion debe confirmarse');
+  assert.equal(rechazadas.length, 1, 'la otra debe rechazarse por ultimo ADMIN');
+  assert.equal(rechazadas[0].reason.code, 'ULTIMO_ADMIN_PROTEGIDO');
+  assert.equal(
+    doble.estado.empleados.filter((e) => e.rol === 'ADMIN' && e.estado === 'ACTIVO').length,
+    1,
+    'siempre queda un ADMIN activo',
+  );
+});
+
+test('dos degradaciones de rol concurrentes del par de ADMIN no dejan cero activos', async () => {
+  const doble = crearDoble({
+    empleados: [empleado('0000000001', { rol: 'ADMIN' }),
+      empleado('0000000002', { rol: 'ADMIN' })],
+  });
+  const resultados = await Promise.allSettled([
+    gestionarRol({}, '9000000009', '0000000001', 'ASESOR', NOW, doble.repositorio),
+    gestionarRol({}, '9000000009', '0000000002', 'ASESOR', NOW, doble.repositorio),
+  ]);
+  const exitosas = resultados.filter((r) => r.status === 'fulfilled');
+  const rechazadas = resultados.filter((r) => r.status === 'rejected');
+
+  assert.equal(exitosas.length, 1);
+  assert.equal(rechazadas.length, 1);
+  assert.equal(rechazadas[0].reason.code, 'ULTIMO_ADMIN_PROTEGIDO');
+  assert.equal(
+    doble.estado.empleados.filter((e) => e.rol === 'ADMIN' && e.estado === 'ACTIVO').length,
+    1,
+  );
 });
 
 test('prohibe operar la propia cuenta por estado o rol', async () => {

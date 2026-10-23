@@ -96,6 +96,30 @@ export async function contarAdminsActivos(connection, legajoExcluido) {
 }
 
 /**
+ * Bloquea en bloque el conjunto completo de ADMIN activos (FOR UPDATE).
+ *
+ * La guardia del ultimo ADMIN exige serializar las operaciones que pueden
+ * reducir administradores: bloquear unicamente la fila objetivo permite que
+ * dos transacciones concurrentes se aprueben mutuamente (cada una ve al
+ * otro ADMIN todavia activo) y dejen el sistema sin ningun ADMIN activo.
+ * Bloquear el conjunto con orden estable por legajo ANTES de leer la cuenta
+ * objetivo elimina esa carrera; todas las operaciones de estado/rol toman
+ * primero este conjunto, por lo que no se generan ciclos de bloqueo.
+ *
+ * - Parametros: `connection` transaccion viva de la unidad de trabajo.
+ * - Retorna: nada; los bloqueos se liberan al commit o rollback del servicio.
+ */
+export async function bloquearAdminsActivos(connection) {
+  await connection.query(
+    `SELECT legajo
+       FROM empleados
+      WHERE rol = 'ADMIN' AND estado = 'ACTIVO'
+      ORDER BY legajo
+      FOR UPDATE`,
+  );
+}
+
+/**
  * Actualiza el estado de un empleado (uso exclusivo del servicio ADMIN,
  * que ya aplico guardias, en la transaccion con auditoria y revocaciones).
  *

@@ -415,6 +415,7 @@ function entornoEscritura(overrides = {}) {
       { id: 102, version_id: 1, plan_id: 2, tipo_ingreso: 'Voluntario', rango_clave: '66+', precio: '50.25' },
     ],
     eventos: [],
+    logBloqueos: [],
     siguienteEvento: 1,
     ...overrides,
   };
@@ -450,7 +451,11 @@ function entornoEscritura(overrides = {}) {
       };
       return operation(connection);
     },
-    async bloquearVersionActiva() { return estado.activa; },
+    /** Registra la solicitud de bloqueo de la ACTIVA y devuelve la version simulada. */
+    async bloquearVersionActiva() {
+      estado.logBloqueos.push('SELECT ... FROM versiones WHERE estado = \'ACTIVA\' FOR UPDATE');
+      return estado.activa;
+    },
     async bloquearBorradorAbierto() { return estado.borrador; },
     async insertarBorrador(conexion, datos) {
       const id = estado.proximoId;
@@ -468,7 +473,9 @@ function entornoEscritura(overrides = {}) {
         .map((fila) => ({ ...fila, version_id: destinoId })));
       return estado.tarifas.filter((fila) => Number(fila.version_id) === Number(destinoId)).length;
     },
+    /** Registra el bloqueo solicitado para `id` y devuelve la version simulada o null. */
     async bloquearVersion(conexion, id) {
+      estado.logBloqueos.push(`SELECT ... FROM versiones WHERE id = ${id} FOR UPDATE`);
       return Number(id) === 1 ? estado.activa
         : estado.versiones.find((fila) => Number(fila.id) === Number(id)) ?? null;
     },
@@ -843,15 +850,18 @@ describe('servicio de activacion SL-5', () => {
       id: 7, tipo: 'EDICION_LISTA', estado: 'LISTA_PARA_ACTIVAR',
       version_base_id: 1, actor_legajo: '1234567', revision: 2,
     };
-    const { dependencias, estado } = entornoEscritura({
-      versiones: [borrador],
-      tarifas: [{ id: 201, version_id: 7, plan_id: 2, tipo_ingreso: 'Obligatorio', rango_clave: '0-25', precio: '100.00' }],
-    });
-    const resultado = await activarVersionTarifario(
-      { pool: true }, { id: '7' }, { legajo: '7654321' }, dependencias,
-    );
+  const { dependencias, estado } = entornoEscritura({
+    versiones: [borrador],
+    tarifas: [{ id: 201, version_id: 7, plan_id: 2, tipo_ingreso: 'Obligatorio', rango_clave: '0-25', precio: '100.00' }],
+  });
+  const resultado = await activarVersionTarifario(
+    { pool: true }, { id: '7' }, { legajo: '7654321' }, dependencias,
+  );
 
-    assert.equal(resultado.versionReemplazada, '1');
+  assert.equal(estado.logBloqueos[0], 'SELECT ... FROM versiones WHERE estado = \'ACTIVA\' FOR UPDATE');
+  assert.equal(estado.logBloqueos[1], 'SELECT ... FROM versiones WHERE id = 7 FOR UPDATE');
+
+  assert.equal(resultado.versionReemplazada, '1');
     assert.equal(resultado.version.id, '7');
     assert.equal(resultado.version.estado, 'ACTIVA');
     assert.equal(resultado.version.fecha_activacion, '2026-10-21T18:00:00.000Z');

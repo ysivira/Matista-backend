@@ -57,8 +57,11 @@ test('la suite de mecanismos no destruye tablas ni etiquetas ajenas', async () =
 test('el ciclo de versiones corre sobre fixtures propios sin tocar versiones preexistentes', async () => {
   const fuente = await leerSuite('tarifario.ciclo.integration.test.js');
 
-  // Sombra temporal por sesion: las tablas permanentes no reciben escrituras.
-  assert.match(fuente, /CREATE TEMPORARY TABLE \$\{tabla\} LIKE/u);
+  // Sombra temporal por sesion clonada desde SHOW CREATE TABLE (MySQL 8.4
+  // rechaza CREATE TEMPORARY ... LIKE con el nombre real): las tablas
+  // permanentes no reciben escrituras.
+  assert.match(fuente, /SHOW CREATE TABLE/u);
+  assert.match(fuente, /CREATE TEMPORARY TABLE /u);
   assert.match(fuente, /DROP TEMPORARY TABLE IF EXISTS/u);
 
   // Todos los borradores nacen via dependencias aisladas (INSERT-SELECT
