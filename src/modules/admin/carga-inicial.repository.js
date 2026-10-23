@@ -66,7 +66,12 @@ export async function leerFuenteSigec(sourceConnection) {
  *  - Parametros: `matistaConnection`: conexion de la base destino.
  *  - Retorna: conteos de las tablas ADMIN + id/estado de la version
  *    CARGA_INICIAL y la cantidad de tarifas pertenecientes a esa version
- *    (0 si no existe), base para decidir la idempotencia.
+ *    (0 si no existe), base para decidir la idempotencia. Incluye la
+ *    politica vigente y su catalogo de porcentajes abiertos para que el
+ *    servicio pueda completar cargas preexistentes sin catalogo.
+ *  - Nota de vigencia: desde la migracion 021 una politica CANCELADA
+ *    conserva `vigente_hasta IS NULL`, por lo que el conteo de politicas
+ *    abiertas razona por `estado = 'VIGENTE'` y no por la fecha de cierre.
  */
 export async function leerEstadoCatalogo(matistaConnection) {
   const [conteos] = await matistaConnection.query(
@@ -76,8 +81,16 @@ export async function leerEstadoCatalogo(matistaConnection) {
        (SELECT COUNT(*) FROM tarifas) AS tarifas,
        (SELECT COUNT(*) FROM monotributo_aportes WHERE vigente_hasta IS NULL)
          AS aportesAbiertos,
-       (SELECT COUNT(*) FROM politica_comercial WHERE vigente_hasta IS NULL)
-         AS politicasAbiertas`,
+       (SELECT COUNT(*) FROM politica_comercial WHERE estado = 'VIGENTE')
+         AS politicasAbiertas,
+       (SELECT p.id FROM politica_comercial p
+         WHERE p.estado = 'VIGENTE' ORDER BY p.id LIMIT 1)
+         AS politicaVigenteId,
+       (SELECT COUNT(*)
+          FROM porcentajes_comerciales pc
+          JOIN politica_comercial p ON p.id = pc.politica_comercial_id
+         WHERE p.estado = 'VIGENTE' AND pc.vigente_hasta IS NULL)
+         AS porcentajesVigenteAbiertos`,
   );
 
   const [version] = await matistaConnection.query(
@@ -106,6 +119,8 @@ export async function leerEstadoCatalogo(matistaConnection) {
     tarifas: conteos[0].tarifas,
     aportesAbiertos: conteos[0].aportesAbiertos,
     politicasAbiertas: conteos[0].politicasAbiertas,
+    politicaVigenteId: conteos[0].politicaVigenteId ?? null,
+    porcentajesVigenteAbiertos: conteos[0].porcentajesVigenteAbiertos,
     versionCargaInicialId,
     versionCargaInicialEstado: version[0]?.estado ?? null,
     tarifasCargaInicial,

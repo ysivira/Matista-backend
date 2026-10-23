@@ -41,6 +41,28 @@ function poolTarifarioFalso() {
           { rango_clave: 'HIJO 0-1', rango_etario: 'HIJO 0-1(*)', rango_nota: '(*)', precio: '50.25' },
         ], []];
       }
+      if (sql.includes('FROM politica_comercial')) {
+        return [[{
+          id: 1,
+          porcentaje_aporte_reconocido: '50.00',
+          tope_sueldo_bruto: '500000.00',
+          joven_porcentaje: '10.00',
+          comercial_fijo_max_pct: '15.00',
+          comercial_fijo_meses_max: 6,
+          comercial_escalonado_max_pct: '25.00',
+          comercial_escalonado_tramos_max: 3,
+          comercial_escalonado_total_meses_max: 12,
+          primer_tramo_50_meses_max: 6,
+          tdc_pct: '5.00',
+          tdc_habilitado: 1,
+          tope_comercial_tdc_pct: '10.00',
+          afinidad_pct: '3.00',
+          fecha_vigencia: new Date('2026-10-14T12:00:00Z'),
+          vigente_hasta: null,
+          actor_legajo: '1234567',
+          created_at: new Date('2026-10-14T12:00:00Z'),
+        }], []];
+      }
       throw new Error(`Consulta no contemplada por el doble: ${sql}`);
     },
     release() {},
@@ -907,4 +929,428 @@ test('rutas de eventos y deshacer responden contrato, roles y transaccion', asyn
     headers: { cookie },
   });
   assert.equal(prohibida.status, 403);
+});
+
+// ─────────────────────────────────────────────────────────────────────
+// Rutas de política comercial (SPEC-03 ADMIN): ciclo de vida con estados
+// VIGENTE/PROGRAMADA/HISTORICA/CANCELADA, eventos y recuperación.
+// ─────────────────────────────────────────────────────────────────────
+
+/**
+ * Pool falso para la política comercial con estado transaccional en memoria.
+ * Simula el ciclo de vida real: activaciones, cierres, programaciones y
+ * eventos, para verificar los contratos HTTP sin base de datos.
+ * @returns {object} Pool con política comercial sintética.
+ */
+function poolPoliticaComercialFalso() {
+  const estado = {
+    politicas: [{
+      id: 1,
+      estado: 'VIGENTE',
+      revision: 0,
+      version_base_id: null,
+      porcentaje_aporte_reconocido: '50.00',
+      tope_sueldo_bruto: '500000.00',
+      joven_porcentaje: '10.00',
+      comercial_fijo_max_pct: '15.00',
+      comercial_fijo_meses_max: 6,
+      comercial_escalonado_max_pct: '25.00',
+      comercial_escalonado_tramos_max: 3,
+      comercial_escalonado_total_meses_max: 12,
+      primer_tramo_50_meses_max: 6,
+      tdc_pct: '5.00',
+      tdc_habilitado: 1,
+      tope_comercial_tdc_pct: '10.00',
+      afinidad_pct: '3.00',
+      aporte_monotributo: '23892.00',
+      fecha_vigencia: new Date('2026-10-14T12:00:00Z'),
+      vigente_hasta: null,
+      cancelada_en: null,
+      cancelada_por: null,
+      motivo_cancelacion: null,
+      actor_legajo: '1234567',
+      actor_nombre: 'Laura',
+      actor_apellido: 'Gimenez',
+      created_at: new Date('2026-10-14T12:00:00Z'),
+    }],
+    porcentajes: [{
+      id: 1,
+      politica_comercial_id: 1,
+      porcentaje: '10.00',
+      descripcion: null,
+      fecha_vigencia: new Date('2026-10-14T12:00:00Z'),
+      vigente_hasta: null,
+      actor_legajo: '1234567',
+      created_at: new Date('2026-10-14T12:00:00Z'),
+    }],
+    eventos: [],
+    siguienteId: 2,
+    sqlHorde: [],
+  };
+
+  const buscarPolitica = (id) => estado.politicas.find(
+    (fila) => Number(fila.id) === Number(id),
+  ) ?? null;
+  const buscarVigente = () => estado.politicas.find(
+    (fila) => fila.estado === 'VIGENTE',
+  ) ?? null;
+  const buscarProgramada = () => estado.politicas.find(
+    (fila) => fila.estado === 'PROGRAMADA',
+  ) ?? null;
+
+  const connection = {
+    async query(sql, parametros = []) {
+      estado.sqlHorde.push(sql);
+      if (sql.includes('SET time_zone')) {
+        return [[], []];
+      }
+      if (sql.includes('FROM porcentajes_comerciales') && sql.includes('politica_comercial_id IN')) {
+        const ids = parametros.map(Number);
+        return [estado.porcentajes.filter((fila) => ids.includes(Number(fila.politica_comercial_id))), []];
+      }
+      if (sql.includes('FROM politica_comercial') && sql.includes("estado = 'VIGENTE'")) {
+        return [buscarVigente() ? [buscarVigente()] : [], []];
+      }
+      if (sql.includes('FROM politica_comercial') && sql.includes("estado = 'PROGRAMADA'")) {
+        return [buscarProgramada() ? [buscarProgramada()] : [], []];
+      }
+      if (sql.includes('FROM politica_comercial') && sql.includes('ORDER BY p.created_at')) {
+        return [[...estado.politicas].reverse(), []];
+      }
+      if (sql.includes('FROM politica_comercial') && sql.includes('WHERE p.id = ?')) {
+        const politica = buscarPolitica(parametros[0]);
+        return [politica ? [politica] : [], []];
+      }
+      if (sql.includes('FROM politica_comercial_eventos')) {
+        const politicaId = Number(parametros[0]);
+        return [
+          estado.eventos
+            .filter((evento) => Number(evento.politica_comercial_id) === politicaId)
+            .sort((a, b) => b.id - a.id),
+          [],
+        ];
+      }
+      throw new Error(`Consulta no contemplada por el doble: ${sql}`);
+    },
+    async execute(sql, parametros = []) {
+      estado.sqlHorde.push(sql);
+      if (sql.includes('SET time_zone')) {
+        return [[], []];
+      }
+      if (sql.includes('FROM porcentajes_comerciales') && sql.includes('politica_comercial_id IN')) {
+        const ids = parametros.map(Number);
+        return [estado.porcentajes.filter((fila) => ids.includes(Number(fila.politica_comercial_id))), []];
+      }
+      if (sql.includes('FROM politica_comercial') && sql.includes("estado = 'VIGENTE'")) {
+        return [buscarVigente() ? [buscarVigente()] : [], []];
+      }
+      if (sql.includes('FROM politica_comercial') && sql.includes("estado = 'PROGRAMADA'")) {
+        return [buscarProgramada() ? [buscarProgramada()] : [], []];
+      }
+      if (sql.includes('FROM politica_comercial') && sql.includes('WHERE p.id = ?')) {
+        const politica = buscarPolitica(parametros[0]);
+        return [politica ? [politica] : [], []];
+      }
+      if (sql.includes('FROM politica_comercial_eventos')) {
+        const politicaId = Number(parametros[0]);
+        return [
+          estado.eventos
+            .filter((evento) => Number(evento.politica_comercial_id) === politicaId)
+            .sort((a, b) => b.id - a.id),
+          [],
+        ];
+      }
+      throw new Error(`Consulta no contemplada por el doble: ${sql}`);
+    },
+    async execute(sql, parametros = []) {
+      estado.sqlHorde.push(sql);
+      if (sql.includes('SET time_zone')) {
+        return [[], []];
+      }
+      if (sql.includes('FROM porcentajes_comerciales') && sql.includes('politica_comercial_id IN')) {
+        const ids = parametros.map(Number);
+        return [estado.porcentajes.filter((fila) => ids.includes(Number(fila.politica_comercial_id))), []];
+      }
+      if (sql.includes('FROM politica_comercial') && sql.includes("estado = 'VIGENTE'")) {
+        return [buscarVigente() ? [buscarVigente()] : [], []];
+      }
+      if (sql.includes('FROM politica_comercial') && sql.includes("estado = 'PROGRAMADA'")) {
+        return [buscarProgramada() ? [buscarProgramada()] : [], []];
+      }
+      if (sql.includes('FROM politica_comercial') && sql.includes('WHERE p.id = ?')) {
+        const politica = buscarPolitica(parametros[0]);
+        return [politica ? [politica] : [], []];
+      }
+      if (sql.includes('FROM empleados WHERE legajo = ?')) {
+        return [[{ nombre: 'Laura', apellido: 'Gimenez' }], []];
+      }
+      if (sql.includes('INSERT INTO politica_comercial_eventos')) {
+        const [politicaId, tipoEvento, actorLegajo, actorNombre, actorApellido, detalle] = parametros;
+        estado.eventos.push({
+          id: estado.eventos.length + 1,
+          politica_comercial_id: politicaId,
+          tipo_evento: tipoEvento,
+          actor_legajo: actorLegajo,
+          actor_nombre: actorNombre,
+          actor_apellido: actorApellido,
+          detalle,
+          evento_en: new Date('2026-10-21T18:00:00Z'),
+        });
+        return [{ insertId: estado.eventos.length }];
+      }
+      if (sql.includes('UPDATE porcentajes_comerciales') && sql.includes('SET vigente_hasta')) {
+        const fechaCierre = parametros[0];
+        const politicaId = Number(parametros[1]);
+        estado.porcentajes = estado.porcentajes.map((fila) => (
+          fila.vigente_hasta === null && Number(fila.politica_comercial_id) === politicaId
+            ? { ...fila, vigente_hasta: fechaCierre }
+            : fila
+        ));
+        return [{ affectedRows: 1 }];
+      }
+      if (sql.includes('UPDATE politica_comercial') && sql.includes("SET estado = 'HISTORICA'")) {
+        const politica = buscarPolitica(parametros[1]);
+        politica.estado = 'HISTORICA';
+        politica.vigente_hasta = parametros[0];
+        return [{ affectedRows: 1 }];
+      }
+      if (sql.includes('UPDATE politica_comercial') && sql.includes("SET estado = 'VIGENTE'")) {
+        const politica = buscarPolitica(parametros[0]);
+        politica.estado = 'VIGENTE';
+        return [{ affectedRows: 1 }];
+      }
+      if (sql.includes('UPDATE politica_comercial') && sql.includes("SET estado = 'CANCELADA'")) {
+        const politica = buscarPolitica(parametros[2]);
+        politica.estado = 'CANCELADA';
+        politica.cancelada_en = new Date('2026-10-21T18:00:00Z');
+        politica.cancelada_por = parametros[0];
+        politica.motivo_cancelacion = parametros[1];
+        return [{ affectedRows: 1 }];
+      }
+      if (sql.includes('UPDATE politica_comercial') && sql.includes('revision = revision + 1')) {
+        const politica = buscarPolitica(parametros[16]);
+        if (!politica || politica.estado !== 'PROGRAMADA') return [{ affectedRows: 0 }];
+        politica.porcentaje_aporte_reconocido = parametros[0];
+        politica.tope_sueldo_bruto = parametros[1];
+        politica.joven_porcentaje = parametros[2];
+        politica.comercial_fijo_max_pct = parametros[3];
+        politica.comercial_fijo_meses_max = parametros[4];
+        politica.comercial_escalonado_max_pct = parametros[5];
+        politica.comercial_escalonado_tramos_max = parametros[6];
+        politica.comercial_escalonado_total_meses_max = parametros[7];
+        politica.primer_tramo_50_meses_max = parametros[8];
+        politica.tdc_pct = parametros[9];
+        politica.tdc_habilitado = parametros[10];
+        politica.tope_comercial_tdc_pct = parametros[11];
+        politica.afinidad_pct = parametros[12];
+        politica.aporte_monotributo = parametros[13];
+        politica.fecha_vigencia = parametros[14];
+        politica.actor_legajo = parametros[15];
+        politica.revision += 1;
+        return [{ affectedRows: 1 }];
+      }
+      if (sql.includes('INSERT INTO politica_comercial')) {
+        const [
+          estadoNuevo, versionBaseId,
+          porcentaje_aporte_reconocido, tope_sueldo_bruto, joven_porcentaje,
+          comercial_fijo_max_pct, comercial_fijo_meses_max,
+          comercial_escalonado_max_pct, comercial_escalonado_tramos_max,
+          comercial_escalonado_total_meses_max, primer_tramo_50_meses_max,
+          tdc_pct, tdc_habilitado, tope_comercial_tdc_pct, afinidad_pct,
+          aporte_monotributo, fechaVigencia, actorLegajo,
+        ] = parametros;
+        if (estadoNuevo === 'VIGENTE') {
+          const anterior = buscarVigente();
+          if (anterior) {
+            anterior.estado = 'HISTORICA';
+            anterior.vigente_hasta = fechaVigencia;
+          }
+        }
+        const nuevaId = estado.siguienteId;
+        estado.siguienteId += 1;
+        estado.politicas.push({
+          id: nuevaId,
+          estado: estadoNuevo,
+          revision: 0,
+          version_base_id: versionBaseId,
+          porcentaje_aporte_reconocido,
+          tope_sueldo_bruto,
+          joven_porcentaje,
+          comercial_fijo_max_pct,
+          comercial_fijo_meses_max,
+          comercial_escalonado_max_pct,
+          comercial_escalonado_tramos_max,
+          comercial_escalonado_total_meses_max,
+          primer_tramo_50_meses_max,
+          tdc_pct,
+          tdc_habilitado,
+          tope_comercial_tdc_pct,
+          afinidad_pct,
+          aporte_monotributo,
+          fecha_vigencia: fechaVigencia,
+          vigente_hasta: null,
+          cancelada_en: null,
+          cancelada_por: null,
+          motivo_cancelacion: null,
+          actor_legajo: actorLegajo,
+          actor_nombre: 'Laura',
+          actor_apellido: 'Gimenez',
+          created_at: new Date('2026-10-21T18:00:00Z'),
+        });
+        return [{ insertId: nuevaId }];
+      }
+      if (sql.includes('INSERT INTO porcentajes_comerciales')) {
+        const [politicaId, porcentaje, fecha, actorLegajo] = parametros;
+        estado.porcentajes.push({
+          id: estado.porcentajes.length + 1,
+          politica_comercial_id: politicaId,
+          porcentaje,
+          descripcion: null,
+          fecha_vigencia: fecha,
+          vigente_hasta: null,
+          actor_legajo: actorLegajo,
+          created_at: new Date('2026-10-21T18:00:00Z'),
+        });
+        return [{ insertId: estado.porcentajes.length }];
+      }
+      throw new Error(`Consulta no contemplada por el doble: ${sql}`);
+    },
+    async beginTransaction() {},
+    async commit() {},
+    async rollback() {},
+    release() {},
+  };
+  return {
+    async getConnection() { return connection; },
+    estado,
+  };
+}
+
+test('rutas de política comercial aplican contrato, rol ADMIN y transaccion', async (t) => {
+  const fixture = memoryContext({ rol: 'ADMIN' });
+  const pool = poolPoliticaComercialFalso();
+  fixture.context.pool = pool;
+  const signed = await fixtureSession(fixture);
+  const app = createApp({ env: localEnv, authContext: fixture.context });
+  const request = await startTestServer(t, app);
+  const cookie = `matista_session=${signed.token}`;
+  const originMutante = { origin: 'http://localhost:5173' };
+
+  // Sin sesion: 401
+  const sinSesion = await request('/api/admin/politica-comercial');
+  assert.equal(sinSesion.status, 401);
+
+  // GET /politica-comercial: 200 con la política vigente sin pendiente
+  const politica = await request('/api/admin/politica-comercial', { headers: { cookie } });
+  assert.equal(politica.status, 200);
+  assert.equal(politica.headers['cache-control'], 'no-store');
+  assert.equal(String(politica.body.id), '1');
+  assert.equal(politica.body.estado, 'VIGENTE');
+  assert.equal(politica.body.joven_porcentaje, '10.00');
+  assert.equal(politica.body.tdc_pct, '5.00');
+  assert.equal(politica.body.tdc_habilitado, 1);
+  assert.deepEqual(politica.body.porcentajes_comerciales, ['10.00']);
+  assert.equal(politica.body.programacion_pendiente, null);
+
+  // Las rutas estáticas se resuelven antes de /:id y ambas incluyen el catálogo.
+  const historial = await request('/api/admin/politica-comercial/historial', { headers: { cookie } });
+  assert.equal(historial.status, 200);
+  assert.equal(historial.body.historial.length, 1);
+  const detalle = await request('/api/admin/politica-comercial/1', { headers: { cookie } });
+  assert.equal(detalle.status, 200);
+  assert.deepEqual(detalle.body.porcentajes_comerciales, ['10.00']);
+  assert.deepEqual(detalle.body.eventos, []);
+
+  // PUT /politica-comercial/:id con datos validos: 200 con nueva política vigente
+  const actualizacion = await request('/api/admin/politica-comercial/1', {
+    method: 'put',
+    headers: { cookie, ...originMutante, 'content-type': 'application/json' },
+    body: JSON.stringify({
+      joven_porcentaje: '12.00',
+      tdc_pct: '6.00',
+      tdc_habilitado: 1,
+    }),
+  });
+  assert.equal(actualizacion.status, 200);
+  assert.equal(String(actualizacion.body.id), '2');
+  assert.equal(actualizacion.body.estado, 'VIGENTE');
+  assert.equal(actualizacion.body.joven_porcentaje, '12.00');
+  assert.equal(actualizacion.body.tdc_pct, '6.00');
+  assert.equal(actualizacion.body.tdc_habilitado, 1);
+  // La política anterior quedó histórica y se registró el evento de creación
+  const versionAnterior = pool.estado.politicas.find((fila) => fila.id === 1);
+  assert.equal(versionAnterior.estado, 'HISTORICA');
+  assert.ok(versionAnterior.vigente_hasta);
+  assert.equal(pool.estado.eventos.length, 1);
+  assert.equal(pool.estado.eventos[0].tipo_evento, 'CREACION');
+  assert.equal(pool.estado.eventos[0].actor_legajo, '12345678');
+  assert.equal(pool.estado.eventos[0].actor_nombre, 'Laura');
+
+  // Validación: joven_porcentaje fuera de rango -> 400
+  const invalido = await request('/api/admin/politica-comercial/2', {
+    method: 'put',
+    headers: { cookie, ...originMutante, 'content-type': 'application/json' },
+    body: JSON.stringify({ joven_porcentaje: '150' }),
+  });
+  assert.equal(invalido.status, 400);
+  assert.equal(invalido.body.error.code, 'ADMIN_VALIDACION');
+
+  // Validación: tdc_habilitado invalido -> 400
+  const invalido2 = await request('/api/admin/politica-comercial/2', {
+    method: 'put',
+    headers: { cookie, ...originMutante, 'content-type': 'application/json' },
+    body: JSON.stringify({ tdc_habilitado: 2 }),
+  });
+  assert.equal(invalido2.status, 400);
+  assert.equal(invalido2.body.error.code, 'ADMIN_VALIDACION');
+
+  // ID desactualizado: 409 por concurrencia
+  const inexistente = await request('/api/admin/politica-comercial/999', {
+    method: 'put',
+    headers: { cookie, ...originMutante, 'content-type': 'application/json' },
+    body: JSON.stringify({ joven_porcentaje: '12.00' }),
+  });
+  assert.equal(inexistente.status, 409);
+  assert.equal(inexistente.body.error.code, 'ADMIN_CONCURRENCIA');
+
+  // Recuperar la versión histórica preserva su fila y crea otra activa.
+  const recuperacion = await request('/api/admin/politica-comercial/1/recuperacion', {
+    method: 'post',
+    headers: { cookie, ...originMutante },
+  });
+  assert.equal(recuperacion.status, 201);
+  assert.equal(String(recuperacion.body.id), '3');
+  assert.equal(recuperacion.body.joven_porcentaje, '10.00');
+  assert.deepEqual(recuperacion.body.porcentajes_comerciales, ['10.00']);
+  assert.equal(pool.estado.eventos.length, 2);
+  assert.equal(pool.estado.eventos[1].tipo_evento, 'RECUPERACION');
+
+  // El detalle de la histórica expone su auditoría de ciclo.
+  const detalleHistorica = await request('/api/admin/politica-comercial/1', { headers: { cookie } });
+  assert.equal(detalleHistorica.status, 200);
+  assert.equal(detalleHistorica.body.estado, 'HISTORICA');
+  assert.ok(detalleHistorica.body.vigente_hasta);
+
+  // ASESOR: 403
+  fixture.state.employees[0].rol = 'ASESOR';
+  const prohibido = await request('/api/admin/politica-comercial', { headers: { cookie } });
+  assert.equal(prohibido.status, 403);
+  assert.equal(prohibido.body.error.code, 'ROLE_FORBIDDEN');
+});
+
+test('CORS responde el preflight de PUT y anuncia los métodos mutables', async (t) => {
+  const app = createApp({ env: localEnv, authContext: memoryContext().context });
+  const request = await startTestServer(t, app);
+  const preflight = await request('/api/admin/politica-comercial/1', {
+    method: 'OPTIONS',
+    headers: {
+      origin: localEnv.FRONTEND_ORIGIN,
+      'access-control-request-method': 'PUT',
+    },
+  });
+
+  assert.equal(preflight.status, 204);
+  assert.equal(preflight.headers['access-control-allow-origin'], localEnv.FRONTEND_ORIGIN);
+  assert.match(preflight.headers['access-control-allow-methods'], /PUT/);
+  assert.match(preflight.headers['access-control-allow-methods'], /DELETE/);
 });

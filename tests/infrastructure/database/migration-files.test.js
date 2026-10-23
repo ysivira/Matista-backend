@@ -61,6 +61,12 @@ test('las migraciones ADMIN declaran el orden FK aprobado sin tablas extra', asy
       ['015_garantias_exclusividad_versiones', 'tarifario_versiones', 'alter'],
       ['016_reanudacion_evento', 'tarifario_versiones_eventos', 'alter'],
       ['017_descarte_versiones', 'tarifario_versiones_eventos', 'alter'],
+      ['018_create_porcentajes_comerciales', 'porcentajes_comerciales', 'create'],
+      ['019_link_porcentajes_politica', 'porcentajes_comerciales', 'alter'],
+      ['020_auditoria_politica_comercial', 'empleados_auditoria', 'alter'],
+      ['021_ciclo_vida_politica_comercial', 'politica_comercial', 'alter'],
+      ['022_guardas_porcentajes_por_politica', 'porcentajes_comerciales', 'alter'],
+      ['023_eventos_politica_comercial', 'politica_comercial_eventos', 'create'],
     ],
   );
 });
@@ -143,6 +149,41 @@ test('la alter extension del CHECK de auditoria mantiene los eventos AUTH', asyn
     alter.sql,
     /'VERSION_REVERTIDA'\s*\)\s*AND campo = 'TARIFARIO'/,
   );
+});
+
+test('el catálogo comercial queda vinculado y rellena solo coincidencias seguras', async () => {
+  const migrations = await loadMigrations(migrationsDirectory);
+  const vinculo = migrations.find(
+    (migration) => migration.version === '019_link_porcentajes_politica',
+  );
+
+  assert.match(vinculo.sql, /ADD COLUMN politica_comercial_id BIGINT UNSIGNED NULL/);
+  assert.match(vinculo.sql, /pc\.vigente_hasta IS NULL[\s\S]*p\.vigente_hasta IS NULL/);
+  assert.match(vinculo.sql, /otra\.id IS NULL/);
+  assert.match(vinculo.sql, /FOREIGN KEY \(politica_comercial_id\)[\s\S]*REFERENCES politica_comercial \(id\)/);
+});
+
+test('la auditoría comercial conserva todas las parejas previas y agrega guardado y recuperación', async () => {
+  const migrations = await loadMigrations(migrationsDirectory);
+  const auditoria = migrations.find(
+    (migration) => migration.version === '020_auditoria_politica_comercial',
+  );
+
+  for (const pareja of [
+    "'REGISTRO' AND campo = 'CUENTA'",
+    "'EMAIL_VERIFICADO' AND campo = 'EMAIL'",
+    "'EMAIL_CAMBIADO' AND campo = 'EMAIL'",
+    "'ESTADO_CAMBIADO' AND campo = 'ESTADO'",
+    "'ROL_CAMBIADO' AND campo = 'ROL'",
+    "'PASSWORD_CAMBIADA' AND campo = 'PASSWORD'",
+    "'VERSION_REVERTIDA'",
+    "'POLITICA_COMERCIAL_ACTUALIZADA'",
+    "'POLITICA_COMERCIAL_RECUPERADA'",
+  ]) {
+    assert.match(auditoria.sql, new RegExp(pareja));
+  }
+  assert.match(auditoria.sql, /campo = 'TARIFARIO'/);
+  assert.match(auditoria.sql, /campo = 'TODOS'/);
 });
 
 test('la auditoria declara campo y prohibe valores para password', async () => {

@@ -7,6 +7,8 @@ const TARGET_TABLE_PATTERN = /^-- matista:target-table ([a-z0-9_]+)$/m;
 const KIND_PATTERN = /^-- matista:kind: (create|alter)$/m;
 const KIND_GLOBAL_PATTERN = /^-- matista:kind: (create|alter)$/gm;
 const ALTER_STATEMENT_PATTERN = /^ALTER\s+TABLE\b/i;
+const ALTER_TARGET_PATTERN = /^ALTER\s+TABLE\s+`?([a-z0-9_]+)`?\b/i;
+const UPDATE_TARGET_PATTERN = /^UPDATE\s+`?([a-z0-9_]+)`?\b/i;
 const CREATE_TABLE_PATTERN = /^CREATE\s+TABLE\b/i;
 // DROP solo se prohibe salvo cuando es un DROP CHECK (ajuste de restricciones declarativas).
 const FORBIDDEN_SQL_PATTERN = /\b(USE|DROP(?!\s+CHECK)|CREATE\s+DATABASE|ALTER\s+USER|CREATE\s+USER|GRANT|REVOKE)\b/i;
@@ -60,6 +62,26 @@ function executableStatements(sql) {
     .filter(Boolean);
 }
 
+/**
+ * Verifica que una sentencia de ajuste altere o rellene solo la tabla declarada.
+ * @param {string} statement Sentencia SQL individual ya separada.
+ * @param {string} targetTable Tabla objetivo declarada en la cabecera.
+ * @returns {boolean} true para ALTER TABLE o UPDATE sobre la tabla objetivo.
+ */
+function isAllowedAlterStatement(statement, targetTable) {
+  const alterTarget = statement.match(ALTER_TARGET_PATTERN)?.[1];
+  if (alterTarget) return alterTarget === targetTable;
+  const updateTarget = statement.match(UPDATE_TARGET_PATTERN)?.[1];
+  return updateTarget === targetTable;
+}
+
+/**
+ * Valida nombre, cabeceras y sentencias permitidas de una migración local.
+ * @param {string} fileName Nombre versionado del archivo SQL.
+ * @param {string} sql Contenido completo de la migración.
+ * @returns {object} Definición normalizada y lista para ejecutar.
+ * @throws {Error} Si la migración excede su tabla objetivo o usa SQL prohibido.
+ */
 export function validateMigrationDefinition(fileName, sql) {
   const fileMatch = fileName.match(MIGRATION_FILE_PATTERN);
 
@@ -103,10 +125,12 @@ export function validateMigrationDefinition(fileName, sql) {
   if (
     kind === 'alter'
     && (statements.length === 0
-      || statements.some((statement) => !ALTER_STATEMENT_PATTERN.test(statement)))
+      || !statements.some((statement) => ALTER_STATEMENT_PATTERN.test(statement))
+      || statements.some((statement) => !isAllowedAlterStatement(statement, targetMatch[1])))
   ) {
     throw new Error(
-      `${fileName} de tipo alter debe contener solo sentencias ALTER TABLE.`,
+      `${fileName} de tipo alter solo admite ALTER TABLE y UPDATE de backfill `
+      + 'sobre su tabla objetivo.',
     );
   }
 

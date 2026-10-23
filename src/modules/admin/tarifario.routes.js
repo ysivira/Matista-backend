@@ -22,6 +22,15 @@ import {
   reconstruirTarifarioHistorico,
   resumirEventosDeVersion,
 } from './tarifario.service.js';
+import {
+  actualizarPoliticaComercial,
+  cancelarProgramacionPoliticaComercial,
+  listarEventosPoliticaComercial,
+  listarHistorialPoliticaComercial,
+  obtenerDetallePoliticaComercial,
+  obtenerPoliticaComercial,
+  recuperarPoliticaComercial,
+} from './politica-comercial.service.js';
 
 /**
  * Responde el catalogo de planes activos.
@@ -130,6 +139,104 @@ export async function reconstruirTarifario(req, res) {
     req.query,
   );
   return res.status(200).json(resultado);
+}
+
+/**
+ * Responde la política comercial actualmente vigente.
+ * @param {object} req Solicitud con contexto AUTH ya inicializado.
+ * @param {object} res Respuesta Express sin almacenamiento.
+ * @returns {Promise<object>} JSON con la política comercial.
+ */
+export async function consultarPolitica(req, res) {
+  const politica = await obtenerPoliticaComercial(req.authContext.pool);
+  return res.status(200).json(politica);
+}
+
+/**
+ * Actualiza la política comercial vigente.
+ * @param {object} req Solicitud con el id de la política en la ruta y los datos en el cuerpo.
+ * @param {object} res Respuesta Express sin almacenamiento.
+ * @returns {Promise<object>} JSON con la política comercial actualizada.
+ */
+export async function actualizarPolitica(req, res) {
+  const resultado = await actualizarPoliticaComercial(
+    req.authContext.pool,
+    req.params.id,
+    req.body ?? {},
+    { legajo: req.auth.user.legajo },
+  );
+  return res.status(200).json(resultado);
+}
+
+/**
+ * Responde el historial completo de políticas y sus porcentajes.
+ * @param {object} req Solicitud con contexto AUTH ya inicializado.
+ * @param {object} res Respuesta Express sin almacenamiento.
+ * @returns {Promise<object>} JSON `{ historial }` ordenado desde el más reciente.
+ */
+export async function consultarHistorialPolitica(req, res) {
+  const resultado = await listarHistorialPoliticaComercial(req.authContext.pool);
+  return res.status(200).json(resultado);
+}
+
+/**
+ * Responde una versión de política con su snapshot de porcentajes.
+ * @param {object} req Solicitud con el id de política en la ruta.
+ * @param {object} res Respuesta Express sin almacenamiento.
+ * @returns {Promise<object>} JSON con el detalle completo de la versión.
+ */
+export async function consultarDetallePolitica(req, res) {
+  const resultado = await obtenerDetallePoliticaComercial(
+    req.authContext.pool,
+    req.params.id,
+  );
+  return res.status(200).json(resultado);
+}
+
+/**
+ * Recupera una política histórica creando una nueva versión vigente o programada.
+ * @param {object} req Solicitud con id histórico, activación opcional y actor autenticado.
+ * @param {object} res Respuesta Express sin almacenamiento.
+ * @returns {Promise<object>} JSON con el nuevo snapshot recuperado.
+ */
+export async function recuperarPolitica(req, res) {
+  const resultado = await recuperarPoliticaComercial(
+    req.authContext.pool,
+    req.params.id,
+    req.body ?? {},
+    { legajo: req.auth.user.legajo },
+  );
+  return res.status(201).json(resultado);
+}
+
+/**
+ * Cancela la única programación pendiente con revisión optimista y motivo.
+ * @param {object} req Solicitud con id de la programación, revision y motivo.
+ * @param {object} res Respuesta Express sin almacenamiento.
+ * @returns {Promise<object>} JSON con la versión cancelada y su evento.
+ */
+export async function cancelarProgramacionPolitica(req, res) {
+  const resultado = await cancelarProgramacionPoliticaComercial(
+    req.authContext.pool,
+    req.params.id,
+    req.body ?? {},
+    { legajo: req.auth.user.legajo },
+  );
+  return res.status(200).json(resultado);
+}
+
+/**
+ * Responde los eventos de ciclo de vida registrados para una versión.
+ * @param {object} req Solicitud con el id de política en la ruta.
+ * @param {object} res Respuesta Express sin almacenamiento.
+ * @returns {Promise<object>} JSON `{ eventos }` desde el más reciente.
+ */
+export async function consultarEventosPolitica(req, res) {
+  const eventos = await listarEventosPoliticaComercial(
+    req.authContext.pool,
+    req.params.id,
+  );
+  return res.status(200).json({ eventos });
 }
 
 /**
@@ -325,6 +432,43 @@ export function createTarifarioRouter() {
     authenticate,
     authorize('ADMIN'),
     descartarVersion,
+  );
+  router.get('/politica-comercial', authenticate, authorize('ADMIN'), consultarPolitica);
+  router.get(
+    '/politica-comercial/historial',
+    authenticate,
+    authorize('ADMIN'),
+    consultarHistorialPolitica,
+  );
+  router.get(
+    '/politica-comercial/:id',
+    authenticate,
+    authorize('ADMIN'),
+    consultarDetallePolitica,
+  );
+  router.put(
+    '/politica-comercial/:id',
+    authenticate,
+    authorize('ADMIN'),
+    actualizarPolitica,
+  );
+  router.post(
+    '/politica-comercial/:id/recuperacion',
+    authenticate,
+    authorize('ADMIN'),
+    recuperarPolitica,
+  );
+  router.post(
+    '/politica-comercial/:id/cancelacion',
+    authenticate,
+    authorize('ADMIN'),
+    cancelarProgramacionPolitica,
+  );
+  router.get(
+    '/politica-comercial/:id/eventos',
+    authenticate,
+    authorize('ADMIN'),
+    consultarEventosPolitica,
   );
   return router;
 }

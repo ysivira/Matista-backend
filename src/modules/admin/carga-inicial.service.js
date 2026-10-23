@@ -27,7 +27,19 @@ const POLITICA_INICIAL = Object.freeze({
   tdc_habilitado: 1,
   tope_comercial_tdc_pct: '55.00',
   afinidad_pct: null,
+  aporte_monotributo: '23892.00',
 });
+
+// Catalogo comercial inicial aprobado para la carga (RF-D16): los nueve
+// porcentajes configurados en matista_dev por el responsable y verificados
+// en las evidencias de cierre (avance_spec3_12/13/14), todos mayores que 0
+// y dentro del tope escalonado del 50% (HU-ADM-08: lista de porcentajes
+// elegibles con 0 excluido). Cada fila queda vinculada a la version
+// VIGENTE de la politica que la crea, para que ninguna instalacion nueva
+// quede con una politica vigente incompleta.
+const PORCENTAJES_COMERCIALES_INICIALES = Object.freeze(
+  ['50.00', '45.00', '40.00', '35.00', '30.00', '25.00', '20.00', '15.00', '10.00'],
+);
 
 // Nombres de planes aprobados: la carga no inventa planes y verifica
 // exactamente esta matriz antes de escribir.
@@ -325,6 +337,28 @@ function plantillasValues(cantidadFilas, columnasPorFila) {
   return Array(cantidadFilas).fill(fila).join(', ');
 }
 
+/** Inserta el catalogo inicial de porcentajes comerciales de una politica.
+ *
+ *  - Parametros: `destino` conexion transaccional de la base destino;
+ *    `politicaId` version propietaria del catalogo; `actorLegajo`
+ *    responsable de la operacion (FK a empleados).
+ *  - Retorna: nada; las filas quedan vinculadas a la politica indicada con
+ *    la marca temporal de vigencia del instante de la insercion.
+ */
+async function insertarCatalogoPorcentajes(destino, politicaId, actorLegajo) {
+  const filas = PORCENTAJES_COMERCIALES_INICIALES
+    .map(() => '(?, ?, NULL, UTC_TIMESTAMP(6), ?)')
+    .join(', ');
+  await destino.query(
+    `INSERT INTO porcentajes_comerciales
+       (politica_comercial_id, porcentaje, descripcion, fecha_vigencia, actor_legajo)
+     VALUES ${filas}`,
+    PORCENTAJES_COMERCIALES_INICIALES.flatMap(
+      (porcentaje) => [politicaId, porcentaje, actorLegajo],
+    ),
+  );
+}
+
 /** Ejecuta la carga inicial completa contra MATISTA.
  *
  *  - Parametros:
@@ -362,12 +396,40 @@ export async function ejecutarCargaInicial({
     const clasificacion = evaluarEstado(estado);
 
     if (clasificacion === 'CARGA_EXISTENTE') {
+      // Carga preexistente de bases inicializadas antes de esta correccion:
+      // la politica vigente puede carecer de catalogo comercial (caso de
+      // matista_test). Se completa SOLO cuando esta totalmente vacio y con
+      // los valores iniciales aprobados; nunca se sobrescribe un catalogo
+      // ya configurado por el negocio (caso de matista_dev).
+      let porcentajesComerciales = estado.porcentajesVigenteAbiertos;
+      if (estado.politicaVigenteId !== null && estado.porcentajesVigenteAbiertos === 0) {
+        if (conexionPropia) {
+          await destino.beginTransaction();
+        }
+        try {
+          await insertarCatalogoPorcentajes(
+            destino,
+            estado.politicaVigenteId,
+            actorLegajo,
+          );
+          if (conexionPropia) {
+            await destino.commit();
+          }
+          porcentajesComerciales = PORCENTAJES_COMERCIALES_INICIALES.length;
+        } catch (error) {
+          if (conexionPropia) {
+            await destino.rollback();
+          }
+          throw error;
+        }
+      }
       return Object.freeze({
         aplicada: false,
         planes: estado.planes,
         tarifas: estado.tarifas,
         aportesMonotributo: estado.aportesAbiertos,
         politicaComercial: estado.politicasAbiertas,
+        porcentajesComerciales,
       });
     }
 
@@ -441,21 +503,23 @@ export async function ejecutarCargaInicial({
         );
       }
 
-      // 5) politica comercial inicial: fila abierta con valores aprobados.
-      await destino.query(
+      // 5) politica comercial inicial: version VIGENTE con valores aprobados
+      //    y el aporte de monotributo fijo como campo versionado del snapshot.
+      const [resultadoPolitica] = await destino.query(
         `INSERT INTO politica_comercial (
-           porcentaje_aporte_reconocido, tope_sueldo_bruto,
+           estado, porcentaje_aporte_reconocido, tope_sueldo_bruto,
            joven_porcentaje, comercial_fijo_max_pct,
            comercial_fijo_meses_max, comercial_escalonado_max_pct,
            comercial_escalonado_tramos_max,
            comercial_escalonado_total_meses_max,
            primer_tramo_50_meses_max, tdc_pct, tdc_habilitado,
-           tope_comercial_tdc_pct, afinidad_pct, fecha_vigencia,
+           tope_comercial_tdc_pct, afinidad_pct, aporte_monotributo,
+           fecha_vigencia,
            actor_legajo
-         ) VALUES (?,
+         ) VALUES ('VIGENTE', ?,
            ?, ?,
            ?, ?, ?, ?,
-           ?, ?, ?, ?, ?, ?, UTC_TIMESTAMP(6), ?)`,
+           ?, ?, ?, ?, ?, ?, ?, UTC_TIMESTAMP(6), ?)`,
         [
           POLITICA_INICIAL.porcentaje_aporte_reconocido,
           POLITICA_INICIAL.tope_sueldo_bruto,
@@ -470,9 +534,15 @@ export async function ejecutarCargaInicial({
           POLITICA_INICIAL.tdc_habilitado,
           POLITICA_INICIAL.tope_comercial_tdc_pct,
           POLITICA_INICIAL.afinidad_pct,
+          POLITICA_INICIAL.aporte_monotributo,
           actorLegajo,
         ],
       );
+
+      // 6) catalogo comercial inicial vinculado a esa politica VIGENTE: sin
+      //    este paso una instalacion nueva quedaria con una politica vigente
+      //    sin descuentos autorizados (hallazgo de la auditoria de cierre).
+      await insertarCatalogoPorcentajes(destino, resultadoPolitica.insertId, actorLegajo);
 
       if (conexionPropia) {
         await destino.commit();
@@ -485,6 +555,7 @@ export async function ejecutarCargaInicial({
         tarifas: validas.length,
         aportesMonotributo: aportes.length,
         politicaComercial: 1,
+        porcentajesComerciales: PORCENTAJES_COMERCIALES_INICIALES.length,
         excluidos,
       });
     } catch (error) {

@@ -17,6 +17,9 @@ import {
 import {
   runMigrations,
 } from '../../../src/infrastructure/database/migration-runner.js';
+import { createApp } from '../../../src/app.js';
+import { fixtureSession, localEnv, memoryContext } from '../../auth/fixtures.js';
+import { startTestServer } from '../../helpers/http.js';
 
 const enabled = process.env.RUN_DB_TESTS === '1';
 const currentDirectory = path.dirname(fileURLToPath(import.meta.url));
@@ -96,6 +99,8 @@ test('crea las tablas ADMIN del tarifario y la tecnica en orden FK', {
       'monotributo_aportes',
       'planes',
       'politica_comercial',
+      'politica_comercial_eventos',
+      'porcentajes_comerciales',
       'schema_migrations',
       'tarifario_cancelaciones',
       'tarifario_versiones',
@@ -124,6 +129,9 @@ test('expone las columnas generadas e indices UNIQUE aprobados', {
           (TABLE_NAME = 'politica_comercial'
             AND COLUMN_NAME = 'vigente_abierta')
           OR
+          (TABLE_NAME = 'porcentajes_comerciales'
+            AND COLUMN_NAME = 'vigente_abierta')
+          OR
           (TABLE_NAME = 'monotributo_aportes'
             AND COLUMN_NAME = 'categoria_abierta')
         )`,
@@ -139,13 +147,16 @@ test('expone las columnas generadas e indices UNIQUE aprobados', {
           'uq_auth_tokens_hash',
           'uq_auth_tokens_abierto',
           'uq_politica_comercial_abierta',
+          'uq_politica_comercial_programada',
+          'uq_porcentajes_comerciales_abierta',
           'uq_monotributo_abierta'
         )`,
   );
 
-  assert.equal(columns.length, 6);
+  assert.equal(columns.length, 7);
   assert.ok(columns.every((column) => column.extra.includes('STORED GENERATED')));
-  assert.equal(indexes.length, 7);
+  assert.equal(indexes.length, 10);
+  assert.equal(new Set(indexes.map((index) => index.indexName)).size, 9);
   assert.ok(indexes.every((index) => index.nonUnique === 0));
 });
 
@@ -223,6 +234,8 @@ test('crea las claves foraneas y restricciones CHECK ADMIN aprobadas', {
           'tarifario_cancelaciones',
           'tarifas',
           'politica_comercial',
+          'politica_comercial_eventos',
+          'porcentajes_comerciales',
           'monotributo_aportes'
         )`,
   );
@@ -242,6 +255,12 @@ test('crea las claves foraneas y restricciones CHECK ADMIN aprobadas', {
     'fk_eventos_version',
     'fk_monotributo_aportes_actor',
     'fk_politica_comercial_actor',
+    'fk_politica_comercial_base',
+    'fk_politica_comercial_cancelada_por',
+    'fk_politica_eventos_actor',
+    'fk_politica_eventos_version',
+    'fk_porcentajes_comerciales_actor',
+    'fk_porcentajes_comerciales_politica',
     'fk_tarifario_cancelaciones_cancelada_por',
     'fk_tarifario_cancelaciones_reactivada_por',
     'fk_tarifario_cancelaciones_version',
@@ -270,12 +289,19 @@ test('crea las claves foraneas y restricciones CHECK ADMIN aprobadas', {
     'chk_planes_activa',
     'chk_planes_nombre',
     'chk_politica_afinidad',
+    'chk_politica_aporte_monotributo',
     'chk_politica_aporte_reconocido',
+    'chk_politica_comercial_cancelacion',
+    'chk_politica_comercial_estado',
+    'chk_politica_comercial_estado_vigencia',
     'chk_politica_comercial_fijo_max_pct',
     'chk_politica_comercial_fijo_meses',
     'chk_politica_escalonado_max_pct',
     'chk_politica_escalonado_total_meses',
     'chk_politica_escalonado_tramos',
+    'chk_politica_eventos_actor_apellido',
+    'chk_politica_eventos_actor_nombre',
+    'chk_politica_eventos_detalle',
     'chk_politica_joven',
     'chk_politica_primer_tramo_meses',
     'chk_politica_tdc_habilitado',
@@ -283,6 +309,8 @@ test('crea las claves foraneas y restricciones CHECK ADMIN aprobadas', {
     'chk_politica_tope_bruto',
     'chk_politica_tope_comercial_tdc',
     'chk_politica_vigencia',
+    'chk_porcentajes_comerciales_pct',
+    'chk_porcentajes_comerciales_vigencia',
     'chk_tarifario_cancelaciones_motivo',
     'chk_tarifario_cancelaciones_reactivacion',
     'chk_tarifario_versiones_actor',
@@ -487,31 +515,405 @@ test('aplica el comportamiento ADMIN aprobado (unicidades, CHECK y evento TARIFA
     );
 
     // Fila abierta: el catalogo permanente de E2 ya contiene una politica
-    // vigente, por lo que el intento agrega otra fila abierta se rechaza
-    // (unic value indice con columna generada).
+    // vigente, por lo que el intento de agregar otra version VIGENTE se
+    // rechaza por el indice unico con columna generada (021).
     await assert.rejects(
       connection.query(
         `INSERT INTO politica_comercial (
-           porcentaje_aporte_reconocido, tope_sueldo_bruto, joven_porcentaje,
+           estado, porcentaje_aporte_reconocido, tope_sueldo_bruto, joven_porcentaje,
            comercial_fijo_max_pct, comercial_fijo_meses_max,
            comercial_escalonado_max_pct, comercial_escalonado_tramos_max,
            comercial_escalonado_total_meses_max, primer_tramo_50_meses_max,
            tdc_pct, tdc_habilitado, tope_comercial_tdc_pct,
-           fecha_vigencia, actor_legajo
+           aporte_monotributo, fecha_vigencia, actor_legajo
          ) VALUES (
+           'VIGENTE',
            7.00, 4800000.00, 26.00,
            40.00, 12,
            50.00, 4,
            12, 3,
            5.00, 1, 55.00,
-           UTC_TIMESTAMP(6), ?
+           23892.00, UTC_TIMESTAMP(6), ?
          )`,
         [legajo],
       ),
       (error) => error.code === 'ER_DUP_ENTRY',
     );
+
+    // Ciclo de vida (021): la HISTORICA exige cierre y la CANCELADA exige
+    // responsable y motivo; el aporte es un importe positivo.
+    await assert.rejects(
+      connection.query(
+        `INSERT INTO politica_comercial (
+           estado, porcentaje_aporte_reconocido, tope_sueldo_bruto, joven_porcentaje,
+           comercial_fijo_max_pct, comercial_fijo_meses_max,
+           comercial_escalonado_max_pct, comercial_escalonado_tramos_max,
+           comercial_escalonado_total_meses_max, primer_tramo_50_meses_max,
+           tdc_pct, tdc_habilitado, tope_comercial_tdc_pct,
+           aporte_monotributo, fecha_vigencia, actor_legajo
+         ) VALUES (
+           'HISTORICA',
+           7.00, 4800000.00, 26.00,
+           40.00, 12,
+           50.00, 4,
+           12, 3,
+           5.00, 1, 55.00,
+           23892.00, UTC_TIMESTAMP(6), ?
+         )`,
+        [legajo],
+      ),
+      (error) => error.code === 'ER_CHECK_CONSTRAINT_VIOLATED',
+    );
+    await assert.rejects(
+      connection.query(
+        `INSERT INTO politica_comercial (
+           estado, porcentaje_aporte_reconocido, tope_sueldo_bruto, joven_porcentaje,
+           comercial_fijo_max_pct, comercial_fijo_meses_max,
+           comercial_escalonado_max_pct, comercial_escalonado_tramos_max,
+           comercial_escalonado_total_meses_max, primer_tramo_50_meses_max,
+           tdc_pct, tdc_habilitado, tope_comercial_tdc_pct,
+           aporte_monotributo, fecha_vigencia, actor_legajo
+         ) VALUES (
+           'PROGRAMADA',
+           7.00, 4800000.00, 26.00,
+           40.00, 12,
+           50.00, 4,
+           12, 3,
+           5.00, 1, 55.00,
+           0.00, UTC_TIMESTAMP(6), ?
+         )`,
+        [legajo],
+      ),
+      (error) => error.code === 'ER_CHECK_CONSTRAINT_VIOLATED',
+    );
   } finally {
     // Las instalaciones de prueba no deben dejar rastros permanentes: rollback completo.
+    await connection.rollback();
+    connection.release();
+  }
+});
+
+test('el HTTP versiona, relee y recupera una política completa en MySQL', {
+  skip: !enabled,
+}, async (t) => {
+  const connection = await pool.getConnection();
+  const legajo = String(randomInt(10_000_000, 99_999_999));
+
+  // El servicio usa su contrato de pool, pero commit/release quedan neutralizados
+  // para que toda la prueba real se deshaga con el rollback exterior.
+  const transactionPool = {
+    async getConnection() {
+      return {
+        query: (...args) => connection.query(...args),
+        execute: (...args) => connection.execute(...args),
+        beginTransaction: async () => {},
+        commit: async () => {},
+        rollback: async () => {},
+        release: () => {},
+      };
+    },
+  };
+
+  try {
+    await connection.beginTransaction();
+    await connection.query(
+      `INSERT INTO empleados (legajo, nombre, apellido, password_hash, rol, estado)
+       VALUES (?, 'Prueba', 'Politica', 'hash-no-real', 'ADMIN', 'ACTIVO')`,
+      [legajo],
+    );
+
+    const [originales] = await connection.query(
+      `SELECT id, afinidad_pct
+         FROM politica_comercial
+        WHERE estado = 'VIGENTE'`,
+    );
+    const original = originales[0];
+    const fixture = memoryContext({ rol: 'ADMIN' });
+    fixture.state.employees[0].legajo = legajo;
+    fixture.state.emails[0].legajo = legajo;
+    fixture.context.pool = transactionPool;
+    const signed = await fixtureSession(fixture, legajo);
+    const request = await startTestServer(t, createApp({ env: localEnv, authContext: fixture.context }));
+    const headers = {
+      cookie: `matista_session=${signed.token}`,
+      origin: localEnv.FRONTEND_ORIGIN,
+      'content-type': 'application/json',
+    };
+
+    const guardada = await request(`/api/admin/politica-comercial/${original.id}`, {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify({ afinidad_pct: 10, porcentajes_comerciales: [10, 20.5] }),
+    });
+    assert.equal(guardada.status, 200);
+    assert.equal(String(guardada.body.afinidad_pct), '10.00');
+    assert.deepEqual(guardada.body.porcentajes_comerciales, ['20.50', '10.00']);
+
+    const recargada = await request('/api/admin/politica-comercial', {
+      headers: { cookie: headers.cookie },
+    });
+    assert.equal(recargada.status, 200);
+    assert.equal(Number(recargada.body.id), Number(guardada.body.id));
+    assert.equal(String(recargada.body.afinidad_pct), '10.00');
+
+    const historial = await request('/api/admin/politica-comercial/historial', {
+      headers: { cookie: headers.cookie },
+    });
+    assert.equal(historial.status, 200);
+    assert.ok(historial.body.historial.some((version) => Number(version.id) === Number(original.id)));
+    assert.ok(historial.body.historial.some((version) => Number(version.id) === Number(guardada.body.id)));
+
+    const recuperada = await request(`/api/admin/politica-comercial/${original.id}/recuperacion`, {
+      method: 'POST',
+      headers,
+      body: '{}',
+    });
+    assert.equal(recuperada.status, 201);
+    assert.notEqual(Number(recuperada.body.id), Number(original.id));
+    assert.equal(String(recuperada.body.afinidad_pct), String(original.afinidad_pct));
+
+    const [vigentes] = await connection.query(
+      `SELECT COUNT(*) AS cantidad
+         FROM politica_comercial
+        WHERE estado = 'VIGENTE'`,
+    );
+    const [eventos] = await connection.query(
+      `SELECT tipo_evento
+         FROM politica_comercial_eventos
+        WHERE actor_legajo = ?
+          AND tipo_evento IN ('CREACION', 'RECUPERACION')
+        ORDER BY id`,
+      [legajo],
+    );
+    assert.equal(Number(vigentes[0].cantidad), 1);
+    assert.deepEqual(eventos.map((fila) => fila.tipo_evento), [
+      'CREACION',
+      'RECUPERACION',
+    ]);
+    // La auditoria de ciclo preserva la identidad real del responsable.
+    const [identidad] = await connection.query(
+      `SELECT actor_nombre, actor_apellido, actor_legajo
+         FROM politica_comercial_eventos
+        WHERE actor_legajo = ?
+        LIMIT 1`,
+      [legajo],
+    );
+    assert.equal(identidad[0].actor_nombre, 'Prueba');
+    assert.equal(identidad[0].actor_apellido, 'Politica');
+  } finally {
+    await connection.rollback();
+    connection.release();
+  }
+});
+
+test('el HTTP programa, edita el pendiente, cancela y activa automaticamente en MySQL', {
+  skip: !enabled,
+}, async (t) => {
+  const connection = await pool.getConnection();
+  const legajo = String(randomInt(10_000_000, 99_999_999));
+
+  // Mismo arnes del ciclo: commit/release neutralizados para deshacer todo.
+  const transactionPool = {
+    async getConnection() {
+      return {
+        query: (...args) => connection.query(...args),
+        execute: (...args) => connection.execute(...args),
+        beginTransaction: async () => {},
+        commit: async () => {},
+        rollback: async () => {},
+        release: () => {},
+      };
+    },
+  };
+
+  try {
+    await connection.beginTransaction();
+    await connection.query(
+      `INSERT INTO empleados (legajo, nombre, apellido, password_hash, rol, estado)
+       VALUES (?, 'Prueba', 'Programada', 'hash-no-real', 'ADMIN', 'ACTIVO')`,
+      [legajo],
+    );
+
+    const [originales] = await connection.query(
+      `SELECT id
+         FROM politica_comercial
+        WHERE estado = 'VIGENTE'`,
+    );
+    const vigenteOriginal = originales[0];
+    const fixture = memoryContext({ rol: 'ADMIN' });
+    fixture.state.employees[0].legajo = legajo;
+    fixture.state.emails[0].legajo = legajo;
+    fixture.context.pool = transactionPool;
+    const signed = await fixtureSession(fixture, legajo);
+    const request = await startTestServer(t, createApp({ env: localEnv, authContext: fixture.context }));
+    const headers = {
+      cookie: `matista_session=${signed.token}`,
+      origin: localEnv.FRONTEND_ORIGIN,
+      'content-type': 'application/json',
+    };
+
+    // 1) Programada futura: la vigente sigue rigiendo y aparece pendiente.
+    const programada = await request(`/api/admin/politica-comercial/${vigenteOriginal.id}`, {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify({
+        joven_porcentaje: 7,
+        activacion: { modo: 'PROGRAMADA', fecha: '2026-12-01T12:00:00-03:00' },
+      }),
+    });
+    assert.equal(programada.status, 200);
+    assert.equal(programada.body.estado, 'PROGRAMADA');
+    assert.ok(programada.body.revision !== undefined);
+    const pendienteId = programada.body.id;
+
+    const consulta = await request('/api/admin/politica-comercial', {
+      headers: { cookie: headers.cookie },
+    });
+    assert.equal(consulta.status, 200);
+    assert.equal(Number(consulta.body.id), Number(vigenteOriginal.id));
+    assert.equal(consulta.body.programacion_pendiente.id, pendienteId);
+
+    // 2) Unica version pendiente: una segunda programada viola la guarda
+    //    de persistencia incluso saltando la aplicacion.
+    await assert.rejects(
+      connection.query(
+        `INSERT INTO politica_comercial (
+           estado, porcentaje_aporte_reconocido, tope_sueldo_bruto, joven_porcentaje,
+           comercial_fijo_max_pct, comercial_fijo_meses_max,
+           comercial_escalonado_max_pct, comercial_escalonado_tramos_max,
+           comercial_escalonado_total_meses_max, primer_tramo_50_meses_max,
+           tdc_pct, tdc_habilitado, tope_comercial_tdc_pct,
+           aporte_monotributo, fecha_vigencia, actor_legajo
+         ) VALUES (
+           'PROGRAMADA', 7.00, 4800000.00, 26.00, 40.00, 12, 50.00, 4, 12, 3,
+           5.00, 1, 55.00, 23892.00, UTC_TIMESTAMP(6) + INTERVAL 1 DAY, ?
+         )`,
+        [legajo],
+      ),
+      (error) => error.code === 'ER_DUP_ENTRY',
+    );
+
+    // 3) Edicion del pendiente con revision optimista: cambia descuento TDC
+    //    y reposiciona la fecha; el backend incrementa la revision.
+    const editada = await request(`/api/admin/politica-comercial/${pendienteId}`, {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify({
+        tdc_pct: 6,
+        revision: programada.body.revision,
+        activacion: { modo: 'PROGRAMADA', fecha: '2026-12-05T12:00:00-03:00' },
+      }),
+    });
+    assert.equal(editada.status, 200);
+    assert.equal(editada.body.tdc_pct, '6.00');
+    assert.ok(Number(editada.body.revision) > Number(programada.body.revision));
+
+    // Edicion con revision desfasada: 409 sin mutar nada.
+    const desfasada = await request(`/api/admin/politica-comercial/${pendienteId}`, {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify({
+        tdc_pct: 7,
+        revision: 0,
+        activacion: { modo: 'PROGRAMADA', fecha: '2026-12-06T12:00:00-03:00' },
+      }),
+    });
+    assert.equal(desfasada.status, 409);
+    assert.equal(desfasada.body.error.code, 'ADMIN_CONCURRENCIA');
+
+    // 4) La auditoria del pendiente lleva nombre, apellido y legajo reales.
+    const [eventosPendiente] = await connection.query(
+      `SELECT tipo_evento, actor_nombre, actor_apellido, actor_legajo
+         FROM politica_comercial_eventos
+        WHERE politica_comercial_id = ?
+        ORDER BY id`,
+      [pendienteId],
+    );
+    assert.deepEqual(eventosPendiente.map((fila) => fila.tipo_evento), [
+      'PROGRAMACION',
+      'MODIFICACION',
+    ]);
+    for (const evento of eventosPendiente) {
+      assert.equal(evento.actor_legajo, legajo);
+      assert.equal(evento.actor_nombre, 'Prueba');
+      assert.equal(evento.actor_apellido, 'Programada');
+    }
+
+    // 5) Activacion automatica simulada: el pendiente vence y la siguiente
+    //    lectura lo convierte en vigente, cerrando la anterior.
+    await connection.query(
+      `UPDATE politica_comercial
+          SET fecha_vigencia = UTC_TIMESTAMP(6) - INTERVAL 1 SECOND
+        WHERE id = ?`,
+      [pendienteId],
+    );
+    const activada = await request('/api/admin/politica-comercial', {
+      headers: { cookie: headers.cookie },
+    });
+    assert.equal(activada.status, 200);
+    assert.equal(Number(activada.body.id), Number(pendienteId));
+    assert.equal(activada.body.estado, 'VIGENTE');
+    assert.equal(activada.body.tdc_pct, '6.00');
+    assert.equal(activada.body.programacion_pendiente, null);
+    const [vigentesTrasActivacion] = await connection.query(
+      `SELECT COUNT(*) AS cantidad
+         FROM politica_comercial
+        WHERE estado = 'VIGENTE'`,
+    );
+    assert.equal(Number(vigentesTrasActivacion[0].cantidad), 1);
+    const [originalTrasActivacion] = await connection.query(
+      'SELECT estado FROM politica_comercial WHERE id = ?',
+      [vigenteOriginal.id],
+    );
+    assert.equal(originalTrasActivacion[0].estado, 'HISTORICA');
+
+    // 6) Programada u otra futura: reprogramar y cancelar con motivo.
+    const reprogramada = await request(`/api/admin/politica-comercial/${pendienteId}`, {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify({
+        joven_porcentaje: 8,
+        activacion: { modo: 'PROGRAMADA', fecha: '2026-12-10T12:00:00-03:00' },
+      }),
+    });
+    assert.equal(reprogramada.status, 200);
+    assert.equal(reprogramada.body.estado, 'PROGRAMADA');
+    const pendienteDosId = reprogramada.body.id;
+
+    const cancelada = await request(`/api/admin/politica-comercial/${pendienteDosId}/cancelacion`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ revision: reprogramada.body.revision, motivo: 'El negocio deshizo el cambio.' }),
+    });
+    assert.equal(cancelada.status, 200);
+    assert.equal(cancelada.body.version.estado, 'CANCELADA');
+    assert.equal(cancelada.body.version.motivo_cancelacion, 'El negocio deshizo el cambio.');
+    assert.equal(cancelada.body.evento.tipo, 'CANCELACION');
+
+    // Cancelar dos veces: el pendiente ya no existe (409 de estado).
+    const canceladaDos = await request(`/api/admin/politica-comercial/${pendienteDosId}/cancelacion`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ revision: reprogramada.body.revision, motivo: 'Segunda vez.' }),
+    });
+    assert.equal(canceladaDos.status, 409);
+    assert.equal(canceladaDos.body.error.code, 'ADMIN_ESTADO');
+
+    const [cancelaciones] = await connection.query(
+      `SELECT COUNT(*) AS cantidad
+         FROM politica_comercial
+        WHERE estado = 'CANCELADA'
+          AND cancelada_por = ?`,
+      [legajo],
+    );
+    assert.equal(Number(cancelaciones[0].cantidad), 1);
+    const [vigentesFinal] = await connection.query(
+      `SELECT COUNT(*) AS cantidad
+         FROM politica_comercial
+        WHERE estado = 'VIGENTE'`,
+    );
+    assert.equal(Number(vigentesFinal[0].cantidad), 1);
+  } finally {
     await connection.rollback();
     connection.release();
   }

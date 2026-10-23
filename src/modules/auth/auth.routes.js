@@ -65,24 +65,42 @@ export function createAuthRouter({ env, httpPolicy, context }) {
 }
 
 /**
- * Inicializa configuración de A/B y pool reutilizable al primer acceso AUTH, sin consultar bases al importar.
- * Exportada también para módulos que requieran el contexto AUTH idéntico (ADMIN, SPEC-03),
- * sin duplicar dependencias ni alterar el comportamiento aprobado.
+ * Inicializa configuración de seguridad y pool reutilizable al primer acceso,
+ * sin consultar bases al importar. Exportada también para módulos que
+ * requieran el contexto AUTH idéntico (ADMIN, SPEC-03).
+ *
+ * Se memoiza la PROMESA (no el resultado): las llamadas concurrentes de AUTH,
+ * ADMIN y el activador programado de políticas esperan la MISMA
+ * inicialización en lugar de crear pools paralelos mientras el primer pool
+ * todavía se prepara. Si la inicialización falla, la promesa se descarta
+ * para permitir un reintento posterior con el mismo contrato.
+ *
  * @param {object} env Entorno del proceso, con secretos fuera del código.
  * @param {object} httpPolicy Origen exacto para enlaces.
  * @returns {Promise<object>} Dependencias usadas por funciones de servicio, sin factories por capa.
  */
-export async function initializeRuntime(env, httpPolicy) {
-  const security = loadSecurityConfig(env);
-  const database = loadDatabaseConfig(env);
-  const dummyPasswordHash = await hashPassword(randomBytes(54).toString('base64url'), security);
-  return {
-    pool: createDatabasePool(database), repository, security, dummyPasswordHash,
-    /** Devuelve UTC del reloj del proceso; las pruebas inyectan su propio reloj. */
-    now: () => new Date(),
-    /** Reutiliza el envío de B con mensaje funcional y configuración propia de MATISTA. */
-    notify: (notice) => sendAuthNotice(notice, { origin: httpPolicy.origin, env }),
-    /** Registra únicamente código y tipo de incidente, nunca errores SMTP ni datos personales. */
-    reportIncident: (incident) => console.warn('Incidente AUTH:', incident.code, incident.operation),
-  };
+export function initializeRuntime(env, httpPolicy) {
+  if (!promesaRuntime) {
+    promesaRuntime = (async () => {
+      const security = loadSecurityConfig(env);
+      const database = loadDatabaseConfig(env);
+      const dummyPasswordHash = await hashPassword(randomBytes(54).toString('base64url'), security);
+      return {
+        pool: createDatabasePool(database), repository, security, dummyPasswordHash,
+        /** Devuelve UTC del reloj del proceso; las pruebas inyectan su propio reloj. */
+        now: () => new Date(),
+        /** Reutiliza el envío de B con mensaje funcional y configuración propia de MATISTA. */
+        notify: (notice) => sendAuthNotice(notice, { origin: httpPolicy.origin, env }),
+        /** Registra únicamente código y tipo de incidente, nunca errores SMTP ni datos personales. */
+        reportIncident: (incident) => console.warn('Incidente AUTH:', incident.code, incident.operation),
+      };
+    })();
+    // La promesa se descarta solo si falla: nadie debe quedarse esperando
+    // una inicialización rota ni reutilizar un pool a medio construir.
+    promesaRuntime.catch(() => { promesaRuntime = undefined; });
+  }
+  return promesaRuntime;
 }
+
+/** Promesa de inicialización memoizada del proceso (pool y dependencias compartidas). */
+let promesaRuntime;

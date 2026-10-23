@@ -133,19 +133,20 @@ const altera = Object.freeze({
   checksum: 'checksum-alter',
 });
 
-test('admite una migracion alter con sentencias ALTER TABLE de un solo comando', () => {
+test('admite una migracion alter y backfill sobre una unica tabla objetivo', () => {
   const result = validateMigrationDefinition(
     '012_alter_example.sql',
     '-- matista:target-table example\n'
     + '-- matista:kind: alter\n'
     + 'ALTER TABLE example DROP CHECK chk_example;\n'
+    + 'UPDATE example SET id = id WHERE id > 0;\n'
     + 'ALTER TABLE example ADD CONSTRAINT chk_example CHECK (id > 0);\n',
   );
 
   assert.equal(result.kind, 'alter');
   assert.equal(result.version, '012_alter_example');
   assert.match(result.checksum, /^[a-f0-9]{64}$/);
-  assert.equal(result.statements.length, 2);
+  assert.equal(result.statements.length, 3);
 });
 
 test('rechaza alter sin ALTER TABLE o con CREATE TABLE', () => {
@@ -154,7 +155,7 @@ test('rechaza alter sin ALTER TABLE o con CREATE TABLE', () => {
       '012_alter_example.sql',
       '-- matista:target-table example\n-- matista:kind: alter\nSELECT 1;\n',
     ),
-    /solo sentencias ALTER TABLE/,
+    /solo admite ALTER TABLE y UPDATE de backfill/,
   );
 
   assert.throws(
@@ -163,7 +164,28 @@ test('rechaza alter sin ALTER TABLE o con CREATE TABLE', () => {
       '-- matista:target-table example\n-- matista:kind: alter\n'
       + 'CREATE TABLE example (id INT);\n',
     ),
-    /solo sentencias ALTER TABLE/,
+    /solo admite ALTER TABLE y UPDATE de backfill/,
+  );
+});
+
+test('rechaza backfill o alter sobre una tabla distinta de la declarada', () => {
+  assert.throws(
+    () => validateMigrationDefinition(
+      '012_alter_example.sql',
+      '-- matista:target-table example\n-- matista:kind: alter\n'
+      + 'ALTER TABLE example ADD COLUMN value INT;\n'
+      + 'UPDATE other SET value = 1;\n',
+    ),
+    /sobre su tabla objetivo/,
+  );
+
+  assert.throws(
+    () => validateMigrationDefinition(
+      '012_alter_example.sql',
+      '-- matista:target-table example\n-- matista:kind: alter\n'
+      + 'ALTER TABLE other ADD COLUMN value INT;\n',
+    ),
+    /sobre su tabla objetivo/,
   );
 });
 

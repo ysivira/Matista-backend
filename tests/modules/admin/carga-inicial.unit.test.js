@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import {
+  evaluarEstado,
+  ejecutarCargaInicial,
   normalizarRangoClave,
   seleccionarReferenciasValidas,
   validarOrigen,
@@ -209,5 +211,186 @@ test('validarOrigen rechaza matriz incompleta, duplicados y aportes raros', () =
       aportes: fuenteCompleta.aportes,
     }),
     /matriz aprobada/,
+  );
+});
+
+/**
+ * Conexion destino sintetica: interpreta el SQL del servicio con el estado
+ * de catalogo que cada prueba necesita y registra todas las escrituras.
+ * @param {object} opciones Estado inicial del catalogo y id de la politica nueva.
+ * @returns {{destino: object, escrituras: object}} Doble y observabilidad.
+ */
+function crearDestino({ estadoCatalogo, politicaInsertId = 77 }) {
+  const escrituras = { sqls: [], begins: 0, commits: 0, rollbacks: 0 };
+  const destino = {
+    async query(sql, valores = []) {
+      escrituras.sqls.push({ sql, valores });
+      if (/SELECT legajo FROM empleados/i.test(sql)) {
+        return [[{ legajo: valores[0] }], []];
+      }
+      if (sql.includes('AS planes')) {
+        return [[estadoCatalogo], []];
+      }
+      if (sql.includes("tipo = 'CARGA_INICIAL'")) {
+        return [estadoCatalogo.versionCargaInicialId
+          ? [{ id: estadoCatalogo.versionCargaInicialId, estado: estadoCatalogo.versionCargaInicialEstado }]
+          : [], []];
+      }
+      if (sql.includes('AS total FROM tarifas WHERE version_id')) {
+        return [[{ total: estadoCatalogo.tarifasCargaInicial ?? 0 }], []];
+      }
+      if (/INSERT INTO planes/i.test(sql)) return [{ insertId: 1 }, []];
+      if (/INSERT INTO tarifario_versiones/i.test(sql)) return [{ insertId: 41 }, []];
+      if (/INSERT INTO tarifas/i.test(sql)) return [{ insertId: 1 }, []];
+      if (/INSERT INTO monotributo_aportes/i.test(sql)) return [{ insertId: 1 }, []];
+      if (/INSERT INTO politica_comercial/i.test(sql)) return [{ insertId: politicaInsertId }, []];
+      if (/INSERT INTO porcentajes_comerciales/i.test(sql)) return [{ insertId: 1 }, []];
+      throw new Error(`SQL no contemplada por el doble: ${sql}`);
+    },
+    async beginTransaction() { escrituras.begins += 1; },
+    async commit() { escrituras.commits += 1; },
+    async rollback() { escrituras.rollbacks += 1; },
+    release() {},
+  };
+  return { destino, escrituras };
+}
+
+/** Conexion SIGEC sintetica con la matriz aprobada completa. */
+function crearFuenteSigec() {
+  return {
+    async query(sql) {
+      if (sql.includes('FROM planes')) {
+        return [[
+          { id: 1, nombre: 'RUBÍ', detalles: 'D1', condiciones_generales: 'C1', activo: 1 },
+          { id: 2, nombre: 'ESMERALDA', detalles: 'D2', condiciones_generales: 'C2', activo: 1 },
+          { id: 3, nombre: 'ZAFIRO', detalles: 'D3', condiciones_generales: 'C3', activo: 1 },
+          { id: 4, nombre: 'DIAMANTE', detalles: 'D4', condiciones_generales: 'C4', activo: 1 },
+          { id: 5, nombre: 'Básico', detalles: 'D5', condiciones_generales: 'C5', activo: 0 },
+        ], []];
+      }
+      if (sql.includes('FROM listas_de_precios')) return [matrixFuente(), []];
+      if (sql.includes('FROM monotributo_aportes')) return [fuenteCompleta.aportes, []];
+      throw new Error(`SQL SIGEC no contemplada: ${sql}`);
+    },
+  };
+}
+
+/** Pool destino que entrega siempre la misma conexion sintetica. */
+function crearPoolPara(destino) {
+  return { async getConnection() { return destino; } };
+}
+
+test('la carga nueva siembra el catalogo de porcentajes vinculado a la politica vigente', async () => {
+  const { destino, escrituras } = crearDestino({
+    estadoCatalogo: {
+      planes: 0, versiones: 0, tarifas: 0, aportesAbiertos: 0,
+      politicasAbiertas: 0, politicaVigenteId: null, porcentajesVigenteAbiertos: 0,
+      versionCargaInicialId: null, versionCargaInicialEstado: null, tarifasCargaInicial: 0,
+    },
+  });
+
+  const resumen = await ejecutarCargaInicial({
+    matistaPool: crearPoolPara(destino),
+    sigecConnection: crearFuenteSigec(),
+    actorLegajo: '12345678',
+  });
+
+  assert.equal(resumen.aplicada, true);
+  assert.equal(resumen.porcentajesComerciales, 9, 'la política nueva nace con catálogo completo');
+
+  const insercion = escrituras.sqls.find((escritura) => /INSERT INTO porcentajes_comerciales/.test(escritura.sql));
+  assert.ok(insercion, 'la carga debe insertar el catálogo comercial');
+  // Cada fila tiene tres parametros: politica, porcentaje y actor. La
+  // descripcion NULL y UTC_TIMESTAMP(6) son literales SQL, no parametros.
+  assert.equal(insercion.valores.length, 27);
+  assert.deepEqual(
+    insercion.valores.filter((_, indice) => indice % 3 === 1),
+    ['50.00', '45.00', '40.00', '35.00', '30.00', '25.00', '20.00', '15.00', '10.00'],
+  );
+  assert.ok(insercion.valores.filter((_, indice) => indice % 3 === 0).every((id) => id === 77),
+    'todas las filas quedan vinculadas a la política creada');
+  assert.equal(escrituras.commits, 1);
+  assert.equal(escrituras.rollbacks, 0);
+});
+
+test('una carga existente con catalogo vacio completa solo los porcentajes', async () => {
+  const { destino, escrituras } = crearDestino({
+    estadoCatalogo: {
+      planes: 4, versiones: 1, tarifas: 160, aportesAbiertos: 12,
+      politicasAbiertas: 1, politicaVigenteId: 10, porcentajesVigenteAbiertos: 0,
+      versionCargaInicialId: 41, versionCargaInicialEstado: 'ACTIVA', tarifasCargaInicial: 160,
+    },
+  });
+
+  const resumen = await ejecutarCargaInicial({
+    matistaPool: crearPoolPara(destino),
+    sigecConnection: crearFuenteSigec(),
+    actorLegajo: '12345678',
+  });
+
+  assert.equal(resumen.aplicada, false, 'el resto de la carga ya existe y no se repite');
+  assert.equal(resumen.porcentajesComerciales, 9, 'el catálogo vacío se completó');
+
+  const inserciones = escrituras.sqls.filter((escritura) => /INSERT INTO/i.test(escritura.sql));
+  assert.equal(inserciones.length, 1, 'solo se inserta el catálogo comercial');
+  assert.match(inserciones[0].sql, /INSERT INTO porcentajes_comerciales/);
+  assert.ok(inserciones[0].valores.filter((_, indice) => indice % 3 === 0).every((id) => id === 10),
+    'el backfill queda vinculado a la política vigente existente');
+  assert.equal(escrituras.commits, 1);
+  assert.equal(escrituras.rollbacks, 0);
+});
+
+test('una carga existente con catalogo propio del negocio no escribe nada', async () => {
+  const { destino, escrituras } = crearDestino({
+    estadoCatalogo: {
+      planes: 4, versiones: 1, tarifas: 160, aportesAbiertos: 12,
+      politicasAbiertas: 1, politicaVigenteId: 10, porcentajesVigenteAbiertos: 4,
+      versionCargaInicialId: 41, versionCargaInicialEstado: 'ACTIVA', tarifasCargaInicial: 160,
+    },
+  });
+
+  const resumen = await ejecutarCargaInicial({
+    matistaPool: crearPoolPara(destino),
+    sigecConnection: crearFuenteSigec(),
+    actorLegajo: '12345678',
+  });
+
+  assert.equal(resumen.aplicada, false);
+  assert.equal(resumen.porcentajesComerciales, 4, 'el catálogo del negocio se conserva tal cual');
+  assert.equal(escrituras.sqls.filter((escritura) => /INSERT INTO/i.test(escritura.sql)).length, 0,
+    'ninguna escritura sobre una carga consistente con catálogo');
+  assert.equal(escrituras.begins, 0);
+});
+
+test('evaluarEstado razona por estado VIGENTE y no por la fecha de cierre', () => {
+  // Base con carga completa y una política VIGENTE: idempotente.
+  assert.equal(
+    evaluarEstado({
+      planes: 4, versiones: 1, tarifas: 160, aportesAbiertos: 12,
+      politicasAbiertas: 1, versionCargaInicialId: 41,
+      versionCargaInicialEstado: 'ACTIVA', tarifasCargaInicial: 160,
+    }),
+    'CARGA_EXISTENTE',
+  );
+
+  // Una política CANCELADA conserva vigente_hasta NULL (migración 021):
+  // sin política VIGENTE la base no puede considerarse consistente.
+  assert.throws(
+    () => evaluarEstado({
+      planes: 4, versiones: 1, tarifas: 160, aportesAbiertos: 12,
+      politicasAbiertas: 0, versionCargaInicialId: 41,
+      versionCargaInicialEstado: 'ACTIVA', tarifasCargaInicial: 160,
+    }),
+    /intermedio o inconsistente/,
+  );
+
+  // Base realmente vacía.
+  assert.equal(
+    evaluarEstado({
+      planes: 0, versiones: 0, tarifas: 0, aportesAbiertos: 0,
+      politicasAbiertas: 0, versionCargaInicialId: null,
+      versionCargaInicialEstado: null, tarifasCargaInicial: 0,
+    }),
+    'VACIA',
   );
 });

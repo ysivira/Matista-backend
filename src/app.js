@@ -23,7 +23,9 @@ export function createApp({ env = process.env, authContext } = {}) {
       if (origin === httpPolicy.origin) return callback(null, httpPolicy.origin);
       return callback(createAppError('ORIGIN_NOT_ALLOWED', 'El origen de la solicitud no está permitido.', 403));
     },
-    credentials: true, methods: ['GET', 'POST', 'PATCH', 'OPTIONS'], allowedHeaders: ['Content-Type'],
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type'],
   }));
 
   app.use(express.json());
