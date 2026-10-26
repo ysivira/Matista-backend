@@ -1,5 +1,4 @@
 import { withConnection } from '../auth/auth.repository.js';
-import { resolverVersionVigente } from './admin.vigencia.js';
 import {
   errorConcurrencia,
   errorEstado,
@@ -13,6 +12,7 @@ import {
   esImporteValido,
   importeACentavos,
 } from './admin.money.js';
+import { obtenerEmpleado } from './employees.repository.js';
 import {
   aumentarPrecios,
   actualizarEstadoVersion,
@@ -22,6 +22,7 @@ import {
   bloquearVersion,
   bloquearVersionActiva,
   copiarTarifas,
+  contarTarifasDeVersion,
   incrementarRevision,
   insertarBorrador,
   insertarEvento,
@@ -34,6 +35,7 @@ import {
   obtenerVersionConResponsable,
   obtenerVersionPorId,
   resolverTarifaPorClave,
+  resolverVersionVigente,
 } from './tarifario.repository.js';
 import {
   validarFechaVersion,
@@ -57,6 +59,7 @@ const POSICION_CLAVE = new Map(CLAVES_EN_ORDEN.map((clave, indice) => [clave, in
 
 const DEPENDENCIAS_DEFECTO = Object.freeze({
   withConnection,
+  obtenerEmpleado,
   listarPlanesActivos,
   obtenerPlanPorId,
   listarTarifasActivas,
@@ -64,6 +67,7 @@ const DEPENDENCIAS_DEFECTO = Object.freeze({
   listarVersiones,
   obtenerVersionPorId,
   listarTarifasDeVersion,
+  contarTarifasDeVersion,
   listarEventosDeVersion,
   bloquearVersionActiva,
   bloquearBorradorAbierto,
@@ -443,16 +447,12 @@ function errorBorradorExistente(borrador) {
  * @returns {Promise<{legajo: string, nombre: string, apellido: string}>}
  *   Snapshot de identidad; nombre y apellido vacios si el legajo ya no existe.
  */
-async function snapshotActor(connection, actorLegajo) {
-  const [filas] = await connection.execute(
-    'SELECT nombre, apellido FROM empleados WHERE legajo = ?',
-    [actorLegajo],
-  );
-  const actor = filas[0];
+async function snapshotActor(dependencias, connection, actorLegajo) {
+  const empleado = await dependencias.obtenerEmpleado(connection, actorLegajo);
   return {
     legajo: actorLegajo,
-    nombre: actor?.nombre ?? '',
-    apellido: actor?.apellido ?? '',
+    nombre: empleado?.nombre ?? '',
+    apellido: empleado?.apellido ?? '',
   };
 }
 
@@ -484,7 +484,7 @@ export async function crearBorradorTarifario(
       if (borrador) {
         throw errorBorradorExistente(borrador);
       }
-      const actorInfo = await snapshotActor(connection, actor.legajo);
+      const actorInfo = await snapshotActor(dependencias, connection, actor.legajo);
       const observacion = 'Copia de la version vigente '
         + `${versionActiva.id} al crear el borrador.`;
       let versionId;
@@ -646,13 +646,13 @@ export async function aumentarVersionTarifario(
     pool,
     async (connection) => {
       await validarEdicionDeVersion(dependencias, connection, id, revision);
-      const [filas] = await connection.query(
-        `SELECT id, plan_id, tipo_ingreso, rango_clave, precio
-           FROM tarifas
-          WHERE version_id = ?${tipoIngreso ? ' AND tipo_ingreso = ?' : ''}
-          ORDER BY id`,
-        tipoIngreso ? [id, tipoIngreso] : [id],
-      );
+      // Lee el snapshot de la version por el repositorio (mismo acceso que la
+      // previsualizacion de solo lectura) y filtra la modalidad pedida en JS;
+      // el calculo de importes no depende del orden de las filas.
+      const tarifas = await dependencias.listarTarifasDeVersion(connection, id);
+      const filas = tipoIngreso
+        ? tarifas.filter((tarifa) => tarifa.tipo_ingreso === tipoIngreso)
+        : tarifas;
       if (filas.length === 0) {
         throw errorEstado(
           tipoIngreso
@@ -685,7 +685,7 @@ export async function aumentarVersionTarifario(
           tipoIngreso,
         },
       );
-      const actorInfo = await snapshotActor(connection, actor.legajo);
+      const actorInfo = await snapshotActor(dependencias, connection, actor.legajo);
       const alcance = tipoIngreso ?? 'Obligatorio y Voluntario';
       const agrupadorId = await dependencias.insertarEvento(connection, {
         versionId: id,
@@ -851,7 +851,7 @@ export async function editarTarifaVersion(
         throw errorConcurrencia();
       }
       await dependencias.actualizarPrecioTarifa(connection, { tarifaId, precio });
-      const actorInfo = await snapshotActor(connection, actor.legajo);
+      const actorInfo = await snapshotActor(dependencias, connection, actor.legajo);
       await dependencias.insertarEvento(connection, {
         versionId: id,
         tipoEvento: 'MODIFICACION',
@@ -921,7 +921,7 @@ export async function finalizarVersionTarifario(
         id,
         estado: 'LISTA_PARA_ACTIVAR',
       });
-      const actorInfo = await snapshotActor(connection, actor.legajo);
+      const actorInfo = await snapshotActor(dependencias, connection, actor.legajo);
       await dependencias.insertarEvento(connection, {
         versionId: id,
         tipoEvento: 'FINALIZACION',
@@ -1001,11 +1001,7 @@ export async function activarVersionTarifario(
       // planes y a la matriz de claves) las impone el propio esquema en
       // el UPDATE, y un plan inactivo no impide la activacion (decisión
       // del cierre funcional: sin falsos errores de cobertura).
-      const [conteo] = await connection.execute(
-        'SELECT COUNT(*) AS filas FROM tarifas WHERE version_id = ?',
-        [id],
-      );
-      if (Number(conteo[0].filas) === 0) {
+      if (await dependencias.contarTarifasDeVersion(connection, id) === 0) {
         throw errorEstado(
           'La version indicada no tiene filas de tarifas para activar.',
         );
@@ -1024,7 +1020,7 @@ export async function activarVersionTarifario(
         estado: 'ACTIVA',
         activar: true,
       });
-      const actorInfo = await snapshotActor(connection, actor.legajo);
+      const actorInfo = await snapshotActor(dependencias, connection, actor.legajo);
       const eventoId = await dependencias.insertarEvento(connection, {
         versionId: id,
         tipoEvento: 'ACTIVACION',
@@ -1095,7 +1091,7 @@ export async function reanudarEdicionVersion(
         id,
         estado: 'PREPARACION',
       });
-      const actorInfo = await snapshotActor(connection, actor.legajo);
+      const actorInfo = await snapshotActor(dependencias, connection, actor.legajo);
       const eventoId = await dependencias.insertarEvento(connection, {
         versionId: id,
         tipoEvento: 'REANUDACION',
@@ -1187,7 +1183,7 @@ export async function descartarVersionTarifario(
         id,
         estado: 'CANCELADA',
       });
-      const actorInfo = await snapshotActor(connection, actor.legajo);
+      const actorInfo = await snapshotActor(dependencias, connection, actor.legajo);
       const eventoId = await dependencias.insertarEvento(connection, {
         versionId: id,
         tipoEvento: 'DESCARTE',
@@ -1451,7 +1447,7 @@ export async function deshacerUltimoCambioEconomico(
       // para que el resumen identifique la operacion sin ambigüedad.
       let grupoId = null;
       if (objetivo.esGrupo) {
-        const actorInfo = await snapshotActor(connection, actor.legajo);
+        const actorInfo = await snapshotActor(dependencias, connection, actor.legajo);
         grupoId = await dependencias.insertarEvento(connection, {
           versionId: id,
           tipoEvento: 'MODIFICACION',
@@ -1465,7 +1461,7 @@ export async function deshacerUltimoCambioEconomico(
         });
       }
 
-      const actorInfo = await snapshotActor(connection, actor.legajo);
+      const actorInfo = await snapshotActor(dependencias, connection, actor.legajo);
       const eventosNuevos = [];
       for (const { evento, tarifa } of restauradas) {
         const precioRestaurado = String(evento.valor_anterior);
@@ -1561,7 +1557,7 @@ export async function crearBorradorDesdeHistorica(
       if (borrador) {
         throw errorBorradorExistente(borrador);
       }
-      const actorInfo = await snapshotActor(connection, actor.legajo);
+      const actorInfo = await snapshotActor(dependencias, connection, actor.legajo);
       const observacion = 'Recuperacion de la version historica '
         + `${idOrigen} al crear el borrador.`;
       let versionId;

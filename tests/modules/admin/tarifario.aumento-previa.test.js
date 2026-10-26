@@ -66,6 +66,18 @@ function entornoAumento(tarifas = TARIFAS_EQUIVALENCIA.map((fila) => ({ ...fila,
     async obtenerVersionPorId(connection, versionId) {
       return Number(estado.version.id) === Number(versionId) ? estado.version : null;
     },
+    async obtenerEmpleado(connection, legajo) {
+      return { legajo, nombre: 'Marcelo', apellido: 'Suarez' };
+    },
+    async listarTarifasDeVersion(connection, versionId) {
+      return estado.tarifas
+        .filter((fila) => Number(fila.version_id) === Number(versionId))
+        .map((fila) => ({
+          ...fila,
+          plan_nombre: `PLAN ${fila.plan_id}`,
+          rango_nota: null,
+        }));
+    },
     async listarTarifasDeVersion(connection, versionId) {
       return estado.tarifas
         .filter((fila) => Number(fila.version_id) === Number(versionId))

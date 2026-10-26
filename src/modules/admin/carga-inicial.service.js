@@ -10,9 +10,17 @@ import {
   assertActorExistente,
   leerEstadoCatalogo,
   leerFuenteSigec,
+  insertarPlanes,
+  insertarVersionCargaInicial,
+  insertarTarifasCargaInicial,
+  insertarAportesMonotributo,
+  insertarPoliticaComercial,
+  insertarCatalogoPorcentajes,
+  PORCENTAJES_COMERCIALES_INICIALES,
 } from './carga-inicial.repository.js';
 
 // Valores de politica_comercial aprobados para E2 (autorizacion, seccion 3.5).
+// Definidos en el repositorio junto al acceso de escritura del catalogo.
 const POLITICA_INICIAL = Object.freeze({
   porcentaje_aporte_reconocido: '7.00',
   tope_sueldo_bruto: '4800000.00',
@@ -30,19 +38,7 @@ const POLITICA_INICIAL = Object.freeze({
   aporte_monotributo: '23892.00',
 });
 
-// Catalogo comercial inicial aprobado para la carga (RF-D16): los nueve
-// porcentajes configurados en matista_dev por el responsable y verificados
-// en las evidencias de cierre (avance_spec3_12/13/14), todos mayores que 0
-// y dentro del tope escalonado del 50% (HU-ADM-08: lista de porcentajes
-// elegibles con 0 excluido). Cada fila queda vinculada a la version
-// VIGENTE de la politica que la crea, para que ninguna instalacion nueva
-// quede con una politica vigente incompleta.
-const PORCENTAJES_COMERCIALES_INICIALES = Object.freeze(
-  ['50.00', '45.00', '40.00', '35.00', '30.00', '25.00', '20.00', '15.00', '10.00'],
-);
-
-// Nombres de planes aprobados: la carga no inventa planes y verifica
-// exactamente esta matriz antes de escribir.
+// Catalogo comercial inicial aprobado para la carga (RF-D16):
 const PLANES_APROBADOS = Object.freeze(
   ['RUBÍ', 'ESMERALDA', 'ZAFIRO', 'DIAMANTE'],
 );
@@ -311,54 +307,15 @@ export function evaluarEstado(estado) {
   );
 }
 
-/** Genera lotes de un maximo `tamano` elementos para inserts por lotes.
- *
- *  - Parametros: `filas` (array); `tamano` (entero positivo).
- *  - Retorna: array de arrays (lotes sin solapes).
- */
-function generarLotes(filas, tamano) {
-  const lotes = [];
-
-  for (let inicio = 0; inicio < filas.length; inicio += tamano) {
-    lotes.push(filas.slice(inicio, inicio + tamano));
-  }
-
-  return lotes;
-}
-
-/** Arma el fragmento VALUES (?, ?, ...) para un insert de N filas.
- *
- *  - Parametros: `cantidadFilas`; `columnasPorFila`.
- *  - Retorna: string del tipo '(?, ?), (?, ?)' listo para concatenar.
- */
-function plantillasValues(cantidadFilas, columnasPorFila) {
-  const fila = `(${Array(columnasPorFila).fill('?').join(', ')})`;
-
-  return Array(cantidadFilas).fill(fila).join(', ');
-}
-
-/** Inserta el catalogo inicial de porcentajes comerciales de una politica.
+/** Inserta el catalogo inicial de porcentajes vinculado a la politica vigente.
  *
  *  - Parametros: `destino` conexion transaccional de la base destino;
  *    `politicaId` version propietaria del catalogo; `actorLegajo`
  *    responsable de la operacion (FK a empleados).
  *  - Retorna: nada; las filas quedan vinculadas a la politica indicada con
  *    la marca temporal de vigencia del instante de la insercion.
+ *  - Implementacion: delega en el repositorio.
  */
-async function insertarCatalogoPorcentajes(destino, politicaId, actorLegajo) {
-  const filas = PORCENTAJES_COMERCIALES_INICIALES
-    .map(() => '(?, ?, NULL, UTC_TIMESTAMP(6), ?)')
-    .join(', ');
-  await destino.query(
-    `INSERT INTO porcentajes_comerciales
-       (politica_comercial_id, porcentaje, descripcion, fecha_vigencia, actor_legajo)
-     VALUES ${filas}`,
-    PORCENTAJES_COMERCIALES_INICIALES.flatMap(
-      (porcentaje) => [politicaId, porcentaje, actorLegajo],
-    ),
-  );
-}
-
 /** Ejecuta la carga inicial completa contra MATISTA.
  *
  *  - Parametros:
@@ -442,47 +399,16 @@ export async function ejecutarCargaInicial({
 
     try {
       // 1) planes con ids originales preservados (trazabilidad con SIGEC).
-      await destino.query(
-        `INSERT INTO planes
-           (id, nombre, detalles, condiciones_generales, activa)
-         VALUES ${plantillasValues(planesActivos.length, 5)}`,
-        planesActivos.flatMap((plan) => [
-          plan.id,
-          plan.nombre.trim(),
-          plan.detalles,
-          plan.condiciones_generales,
-          1,
-        ]),
-      );
+      await insertarPlanes(destino, planesActivos);
 
       // 2) version CARGA_INICIAL: una sola, actor NULL, fecha y hora actual.
-      const [resultadoVersion] = await destino.query(
-        `INSERT INTO tarifario_versiones
-           (tipo, fecha_activacion, estado, observacion)
-         VALUES ('CARGA_INICIAL', UTC_TIMESTAMP(6), 'ACTIVA', ?)`,
-        [OBSERVACION_CARGA],
+      const versionId = await insertarVersionCargaInicial(
+        destino,
+        OBSERVACION_CARGA,
       );
-      const versionId = resultadoVersion.insertId;
 
       // 3) tarifas validas en lotes de 50 filas.
-      for (const lote of generarLotes(validas, 50)) {
-        await destino.query(
-          `INSERT INTO tarifas
-             (version_id, plan_id, tipo_ingreso, rango_etario,
-              rango_clave, rango_nota, precio, activa)
-           VALUES ${plantillasValues(lote.length, 8)}`,
-          lote.flatMap((referencia) => [
-            versionId,
-            referencia.plan_id,
-            referencia.tipo_ingreso,
-            referencia.rango_etario,
-            referencia.rango_clave,
-            referencia.rango_nota,
-            referencia.precio,
-            1,
-          ]),
-        );
-      }
+      await insertarTarifasCargaInicial(destino, versionId, validas);
 
       if (fallarTrasTarifas) {
         // Punto de inyeccion exclusivo de pruebas: un fallo aqui debe
@@ -494,55 +420,20 @@ export async function ejecutarCargaInicial({
       }
 
       // 4) aportes de monotributo: 12 filas abiertas con vigencia actual.
-      for (const aporte of aportes) {
-        await destino.query(
-          `INSERT INTO monotributo_aportes
-             (categoria, aporte, vigente_desde, vigente_hasta, actor_legajo)
-           VALUES (?, ?, UTC_TIMESTAMP(6), NULL, ?)`,
-          [aporte.categoria, aporte.aporte, actorLegajo],
-        );
-      }
+      await insertarAportesMonotributo(destino, aportes, actorLegajo);
 
       // 5) politica comercial inicial: version VIGENTE con valores aprobados
       //    y el aporte de monotributo fijo como campo versionado del snapshot.
-      const [resultadoPolitica] = await destino.query(
-        `INSERT INTO politica_comercial (
-           estado, porcentaje_aporte_reconocido, tope_sueldo_bruto,
-           joven_porcentaje, comercial_fijo_max_pct,
-           comercial_fijo_meses_max, comercial_escalonado_max_pct,
-           comercial_escalonado_tramos_max,
-           comercial_escalonado_total_meses_max,
-           primer_tramo_50_meses_max, tdc_pct, tdc_habilitado,
-           tope_comercial_tdc_pct, afinidad_pct, aporte_monotributo,
-           fecha_vigencia,
-           actor_legajo
-         ) VALUES ('VIGENTE', ?,
-           ?, ?,
-           ?, ?, ?, ?,
-           ?, ?, ?, ?, ?, ?, ?, UTC_TIMESTAMP(6), ?)`,
-        [
-          POLITICA_INICIAL.porcentaje_aporte_reconocido,
-          POLITICA_INICIAL.tope_sueldo_bruto,
-          POLITICA_INICIAL.joven_porcentaje,
-          POLITICA_INICIAL.comercial_fijo_max_pct,
-          POLITICA_INICIAL.comercial_fijo_meses_max,
-          POLITICA_INICIAL.comercial_escalonado_max_pct,
-          POLITICA_INICIAL.comercial_escalonado_tramos_max,
-          POLITICA_INICIAL.comercial_escalonado_total_meses_max,
-          POLITICA_INICIAL.primer_tramo_50_meses_max,
-          POLITICA_INICIAL.tdc_pct,
-          POLITICA_INICIAL.tdc_habilitado,
-          POLITICA_INICIAL.tope_comercial_tdc_pct,
-          POLITICA_INICIAL.afinidad_pct,
-          POLITICA_INICIAL.aporte_monotributo,
-          actorLegajo,
-        ],
+      const politicaId = await insertarPoliticaComercial(
+        destino,
+        POLITICA_INICIAL,
+        actorLegajo,
       );
 
       // 6) catalogo comercial inicial vinculado a esa politica VIGENTE: sin
       //    este paso una instalacion nueva quedaria con una politica vigente
       //    sin descuentos autorizados (hallazgo de la auditoria de cierre).
-      await insertarCatalogoPorcentajes(destino, resultadoPolitica.insertId, actorLegajo);
+      await insertarCatalogoPorcentajes(destino, politicaId, actorLegajo);
 
       if (conexionPropia) {
         await destino.commit();

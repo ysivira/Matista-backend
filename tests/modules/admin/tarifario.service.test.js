@@ -451,6 +451,23 @@ function entornoEscritura(overrides = {}) {
       };
       return operation(connection);
     },
+    async obtenerEmpleado(conexion, legajo) {
+      return { legajo, nombre: 'Marcelo', apellido: 'Suarez' };
+    },
+    async contarTarifasDeVersion(conexion, versionId) {
+      return estado.tarifas.filter(
+        (fila) => Number(fila.version_id) === Number(versionId),
+      ).length;
+    },
+    async listarTarifasDeVersion(conexion, versionId) {
+      return estado.tarifas
+        .filter((fila) => Number(fila.version_id) === Number(versionId))
+        .map((fila) => ({
+          ...fila,
+          plan_nombre: `PLAN ${fila.plan_id}`,
+          rango_nota: fila.rango_nota ?? null,
+        }));
+    },
     /** Registra la solicitud de bloqueo de la ACTIVA y devuelve la version simulada. */
     async bloquearVersionActiva() {
       estado.logBloqueos.push('SELECT ... FROM versiones WHERE estado = \'ACTIVA\' FOR UPDATE');
@@ -980,6 +997,9 @@ function entornoDeshacer(overrides = {}) {
         estado.siguienteEvento = proximoAntes;
         throw error;
       }
+    },
+    async obtenerEmpleado(conexion, legajo) {
+      return { legajo, nombre: 'Marcelo', apellido: 'Suarez' };
     },
     async bloquearVersion(conexion, id) {
       llamadas.push({ metodo: 'bloquearVersion', id });

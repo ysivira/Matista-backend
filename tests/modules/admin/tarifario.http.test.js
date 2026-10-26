@@ -351,6 +351,30 @@ function poolCicloFalso() {
           [],
         ];
       }
+      if (sql.includes('SELECT COUNT(*) AS filas')) {
+        const versionId = Number(parametros[0]);
+        return [[{
+          filas: estado.filas.filter((f) => f.version_id === versionId).length,
+        }], []];
+      }
+      if (sql.includes('FROM tarifas') && sql.includes('JOIN planes')) {
+        const versionId = Number(parametros[0]);
+        return [
+          estado.filas
+            .filter((fila) => fila.version_id === versionId)
+            .map((fila) => ({
+              ...fila,
+              plan_nombre: `PLAN ${fila.plan_id}`,
+              rango_etario: fila.rango_clave,
+              rango_nota: null,
+              activa: 1,
+            })),
+          [],
+        ];
+      }
+      if (sql.includes('FROM empleados')) {
+        return [[{ legajo: parametros[0], nombre: 'Marcelo', apellido: 'Suarez' }], []];
+      }
       if (sql.includes('WHERE v.id = ?')) {
         const id = Number(parametros[0]);
         return [[Number(id) === 1 ? estado.activa : estado.borrador], []];
@@ -626,6 +650,9 @@ function poolDeshacerFalso() {
       }
       if (sql.includes("WHERE v.estado IN ('PREPARACION', 'LISTA_PARA_ACTIVAR')")) {
         return [[estado.borradorAbierto], []];
+      }
+      if (sql.includes('FROM empleados')) {
+        return [[{ legajo: parametros[0], nombre: 'Marcelo', apellido: 'Suarez' }], []];
       }
       throw new Error(`Consulta no contemplada por el doble: ${sql}`);
     },

@@ -115,6 +115,89 @@ export async function listarTarifasDeVersion(
   return filas;
 }
 
+/**
+ * Cuenta las filas de tarifas de una version. Usada por la activacion para
+ * verificar integridad del snapshot antes de cambiar el estado.
+ * @param {object} connection Conexion transaccional de la unidad de trabajo.
+ * @param {number|string} versionId Identificador de la version.
+ * @returns {Promise<number>} Cantidad de filas de tarifas de la version.
+ */
+export async function contarTarifasDeVersion(connection, versionId) {
+  const [filas] = await connection.query(
+    'SELECT COUNT(*) AS filas FROM tarifas WHERE version_id = ?',
+    [versionId],
+  );
+  return Number(filas[0].filas);
+}
+
+/**
+ * Resuelve la version del tarifario vigente para una fecha de referencia.
+ * Regla del modelo "copia completa": gana la version efectivamente activa
+ * (ACTIVA o HISTORICA) con fecha de activacion mas reciente menor o igual
+ * al instante pedido; el borrador nunca rige.
+ * @param {object} connection Conexion mysql2.
+ * @param {string} fechaReferencia 'YYYY-MM-DD HH:MM:SS(.ffffff)' en UTC.
+ * @returns {Promise<object|null>} Fila de la version vigente o null.
+ */
+export async function resolverVersionVigente(connection, fechaReferencia) {
+  const [filas] = await connection.execute(
+    `SELECT v.id, v.tipo, v.estado, v.fecha_activacion, v.actor_legajo
+       FROM tarifario_versiones v
+      WHERE v.estado IN ('ACTIVA', 'HISTORICA')
+        AND v.fecha_activacion <= ?
+      ORDER BY v.fecha_activacion DESC, v.id DESC
+      LIMIT 1`,
+    [fechaReferencia],
+  );
+  return filas[0] ?? null;
+}
+
+/**
+ * Devuelve el estado efectivo de una version: el estado de la columna, o
+ * CANCELADA_EFECTIVA cuando existe una cancelacion abierta sin reactivar.
+ * @param {object} connection Conexion mysql2.
+ * @param {number|string} versionId Version a evaluar.
+ * @returns {Promise<string|null>} 'ACTIVA' | 'CANCELADA' | 'CANCELADA_EFECTIVA' o null.
+ */
+export async function estadoEfectivoVersion(connection, versionId) {
+  const [filas] = await connection.execute(
+    `SELECT v.estado,
+            EXISTS (
+              SELECT 1 FROM tarifario_cancelaciones c
+               WHERE c.version_id = v.id AND c.reactivada_por IS NULL
+            ) AS cancelacionAbierta
+       FROM tarifario_versiones v
+      WHERE v.id = ?`,
+    [versionId],
+  );
+  if (!filas[0]) {
+    return null;
+  }
+  const fila = filas[0];
+  if (Number(fila.cancelacionAbierta) === 1) {
+    return 'CANCELADA_EFECTIVA';
+  }
+  return fila.estado;
+}
+
+/**
+ * Obtiene el snapshot completo de tarifas de una version historica. Solo
+ * lee, preservando la inmutabilidad de las versiones pasadas.
+ * @param {object} connection Conexion mysql2.
+ * @param {number|string} versionId Version pedida.
+ * @returns {Promise<object[]>} Filas { plan_id, tipo_ingreso, rango_clave, precio }.
+ */
+export async function obtenerTarifasDeVersion(connection, versionId) {
+  const [filas] = await connection.query(
+    `SELECT plan_id, tipo_ingreso, rango_clave, precio
+       FROM tarifas
+      WHERE version_id = ?
+      ORDER BY plan_id, tipo_ingreso, rango_clave`,
+    [versionId],
+  );
+  return filas;
+}
+
 // ─────────────────────────────────────────────────────────────────────
 // SL-4/SL-5 · Persistencia del ciclo de vida (modelo "copia completa").
 // Cada funcion asume una conexion transaccional entregada por el

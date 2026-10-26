@@ -149,3 +149,186 @@ export async function assertActorExistente(matistaConnection, actorLegajo) {
 
   return true;
 }
+
+/** Genera lotes de un maximo `tamano` elementos para inserts por lotes.
+ *
+ *  - Parametros: `filas` (array); `tamano` (entero positivo).
+ *  - Retorna: array de arrays (lotes sin solapes).
+ */
+export function generarLotes(filas, tamano) {
+  const lotes = [];
+
+  for (let inicio = 0; inicio < filas.length; inicio += tamano) {
+    lotes.push(filas.slice(inicio, inicio + tamano));
+  }
+
+  return lotes;
+}
+
+/** Arma el fragmento VALUES (?, ?, ...) para un insert de N filas.
+ *
+ *  - Parametros: `cantidadFilas`; `columnasPorFila`.
+ *  - Retorna: string del tipo '(?, ?), (?, ?)' listo para concatenar.
+ */
+export function plantillasValues(cantidadFilas, columnasPorFila) {
+  const fila = `(${Array(columnasPorFila).fill('?').join(', ')})`;
+
+  return Array(cantidadFilas).fill(fila).join(', ');
+}
+
+/**
+ * Inserta los planes activos preservando sus ids originales de SIGEC.
+ * @param {object} destino Conexion transaccional de la base destino.
+ * @param {object[]} planes Planes activos validados.
+ * @returns {Promise<void>}
+ */
+export async function insertarPlanes(destino, planes) {
+  await destino.query(
+    `INSERT INTO planes
+       (id, nombre, detalles, condiciones_generales, activa)
+     VALUES ${plantillasValues(planes.length, 5)}`,
+    planes.flatMap((plan) => [
+      plan.id,
+      plan.nombre.trim(),
+      plan.detalles,
+      plan.condiciones_generales,
+      1,
+    ]),
+  );
+}
+
+/**
+ * Crea la version CARGA_INICIAL con la observacion de procedencia.
+ * @param {object} destino Conexion transaccional de la base destino.
+ * @param {string} observacion Texto de procedencia registrado en la cabecera.
+ * @returns {Promise<number>} Identificador de la version creada.
+ */
+export async function insertarVersionCargaInicial(destino, observacion) {
+  const [resultado] = await destino.query(
+    `INSERT INTO tarifario_versiones
+       (tipo, fecha_activacion, estado, observacion)
+     VALUES ('CARGA_INICIAL', UTC_TIMESTAMP(6), 'ACTIVA', ?)`,
+    [observacion],
+  );
+  return resultado.insertId;
+}
+
+/**
+ * Inserta las tarifas validadas en lotes de 50 filas.
+ * @param {object} destino Conexion transaccional de la base destino.
+ * @param {number} versionId Identificador de la version CARGA_INICIAL.
+ * @param {object[]} tarifas Tarifas validadas con rango_clave ya normalizado.
+ * @returns {Promise<void>}
+ */
+export async function insertarTarifasCargaInicial(destino, versionId, tarifas) {
+  for (const lote of generarLotes(tarifas, 50)) {
+    await destino.query(
+      `INSERT INTO tarifas
+         (version_id, plan_id, tipo_ingreso, rango_etario,
+          rango_clave, rango_nota, precio, activa)
+       VALUES ${plantillasValues(lote.length, 8)}`,
+      lote.flatMap((referencia) => [
+        versionId,
+        referencia.plan_id,
+        referencia.tipo_ingreso,
+        referencia.rango_etario,
+        referencia.rango_clave,
+        referencia.rango_nota,
+        referencia.precio,
+        1,
+      ]),
+    );
+  }
+}
+
+/**
+ * Inserta los aportes de monotributo con vigencia actual.
+ * @param {object} destino Conexion transaccional de la base destino.
+ * @param {object[]} aportes Aportes de monotributo del origen.
+ * @param {string} actorLegajo Responsable de la carga.
+ * @returns {Promise<void>}
+ */
+export async function insertarAportesMonotributo(destino, aportes, actorLegajo) {
+  for (const aporte of aportes) {
+    await destino.query(
+      `INSERT INTO monotributo_aportes
+         (categoria, aporte, vigente_desde, vigente_hasta, actor_legajo)
+       VALUES (?, ?, UTC_TIMESTAMP(6), NULL, ?)`,
+      [aporte.categoria, aporte.aporte, actorLegajo],
+    );
+  }
+}
+
+/**
+ * Inserta la politica comercial inicial vigente con los valores aprobados.
+ * @param {object} destino Conexion transaccional de la base destino.
+ * @param {object} politica Valores de politica_comercial aprobados.
+ * @param {string} actorLegajo Responsable de la carga.
+ * @returns {Promise<number>} Identificador de la politica creada.
+ */
+export async function insertarPoliticaComercial(destino, politica, actorLegajo) {
+  const [resultado] = await destino.query(
+    `INSERT INTO politica_comercial (
+       estado, porcentaje_aporte_reconocido, tope_sueldo_bruto,
+       joven_porcentaje, comercial_fijo_max_pct,
+       comercial_fijo_meses_max, comercial_escalonado_max_pct,
+       comercial_escalonado_tramos_max,
+       comercial_escalonado_total_meses_max,
+       primer_tramo_50_meses_max, tdc_pct, tdc_habilitado,
+       tope_comercial_tdc_pct, afinidad_pct, aporte_monotributo,
+       fecha_vigencia,
+       actor_legajo
+     ) VALUES ('VIGENTE', ?,
+       ?, ?,
+       ?, ?, ?, ?,
+       ?, ?, ?, ?, ?, ?, ?, UTC_TIMESTAMP(6), ?)`,
+    [
+      politica.porcentaje_aporte_reconocido,
+      politica.tope_sueldo_bruto,
+      politica.joven_porcentaje,
+      politica.comercial_fijo_max_pct,
+      politica.comercial_fijo_meses_max,
+      politica.comercial_escalonado_max_pct,
+      politica.comercial_escalonado_tramos_max,
+      politica.comercial_escalonado_total_meses_max,
+      politica.primer_tramo_50_meses_max,
+      politica.tdc_pct,
+      politica.tdc_habilitado,
+      politica.tope_comercial_tdc_pct,
+      politica.afinidad_pct,
+      politica.aporte_monotributo,
+      actorLegajo,
+    ],
+  );
+  return resultado.insertId;
+}
+
+/**
+ * Inserta el catalogo inicial de porcentajes comerciales de una politica.
+ * @param {object} destino Conexion transaccional de la base destino.
+ * @param {number} politicaId Version propietaria del catalogo.
+ * @param {string} actorLegajo Responsable de la operacion.
+ * @returns {Promise<void>}
+ */
+export async function insertarCatalogoPorcentajes(destino, politicaId, actorLegajo) {
+  const filas = PORCENTAJES_COMERCIALES_INICIALES
+    .map(() => '(?, ?, NULL, UTC_TIMESTAMP(6), ?)')
+    .join(', ');
+  await destino.query(
+    `INSERT INTO porcentajes_comerciales
+       (politica_comercial_id, porcentaje, descripcion, fecha_vigencia, actor_legajo)
+     VALUES ${filas}`,
+    PORCENTAJES_COMERCIALES_INICIALES.flatMap(
+      (porcentaje) => [politicaId, porcentaje, actorLegajo],
+    ),
+  );
+}
+
+/**
+ * Valores de politica_comercial aprobados para la carga inicial (E2,
+ * autorizacion seccion 3.5). Vive en el repositorio porque el catalogo
+ * de porcentajes se construye desde aqui.
+ */
+export const PORCENTAJES_COMERCIALES_INICIALES = Object.freeze([
+  '50.00', '45.00', '40.00', '35.00', '30.00', '25.00', '20.00', '15.00', '10.00',
+]);
