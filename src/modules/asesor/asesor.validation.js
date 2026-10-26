@@ -73,11 +73,29 @@ export function validarFechaNacimiento(valor) {
   return valor;
 }
 
-/** Valida alta/actualización de cliente: solo identidad y contacto; la familia pertenece a cada cotización. */
+/**
+ * Valida un nombre obligatorio y lo convierte a mayúsculas Unicode sin eliminar tildes ni Ñ.
+ * @param {unknown} valor Texto recibido en nombres o apellidos.
+ * @returns {string} Texto sin espacios extremos y en mayúsculas.
+ * @throws {Error} ASESOR_VALIDACION si no es texto válido o excede 100 caracteres antes/después de convertir.
+ */
+function nombreCliente(valor) {
+  const normalizado = texto(valor, 100, true).toUpperCase();
+  // Algunas letras Unicode se expanden al convertirlas: nunca exceder la capacidad del campo.
+  if (normalizado.length > 100) invalidar();
+  return normalizado;
+}
+
+/**
+ * Valida alta/actualización y normaliza solo nombres/apellidos; no se aplica a lecturas ni snapshots.
+ * @param {object} datos Identidad y contacto recibidos; la familia pertenece a cada cotización.
+ * @returns {object} Datos validados para persistencia, sin modificar el objeto de entrada.
+ * @throws {Error} ASESOR_VALIDACION ante campos no permitidos o valores inválidos.
+ */
 export function validarCliente(datos) {
   campos(datos, ['dni', 'nombres', 'apellidos', 'email', 'telefono', 'direccion', 'fecha_nacimiento', 'provincia', 'localidad', 'revision']);
   if (!/^\d{7,10}$/.test(String(datos.dni))) invalidar('DNI inválido.');
-  return { dni: String(datos.dni), nombres: texto(datos.nombres, 100, true), apellidos: texto(datos.apellidos, 100, true),
+  return { dni: String(datos.dni), nombres: nombreCliente(datos.nombres), apellidos: nombreCliente(datos.apellidos),
     ...validarContacto({ email: datos.email, telefono: datos.telefono, direccion: datos.direccion }),
     fecha_nacimiento: validarFechaNacimiento(datos.fecha_nacimiento),
     provincia: texto(datos.provincia, 80), localidad: texto(datos.localidad, 80) };

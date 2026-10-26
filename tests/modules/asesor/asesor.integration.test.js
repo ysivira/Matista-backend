@@ -110,20 +110,26 @@ test('ASESOR real: AUTH HTTP, propiedad, cálculo, emisión y trazabilidad hist�
     entrada = { cliente_id: '', plan_id: planId, modalidad: 'Voluntario', familia: { titular: { edad: 27, estado_civil: 'SOLTERO' }, miembros: [{ parentesco: 'HIJO', edad: 5 }] },
       aportes: {}, condiciones: { tramos: [], tdc: false, beneficios: { solicita_afinidad: false } } };
   });
+  /** Comprueba normalización en POST/PUT reales además de propiedad y revisión optimista. */
   await t.test('registro/búsqueda de cliente, pertenencia y acceso por ID', async () => {
     const dni = String(randomInt(10_000_000, 99_999_999));
     assert.equal((await api(`clientes/busqueda/${dni}`, undefined, 'GET')).body.encontrado, false);
-    const r = await api('clientes', { dni, nombres: 'Titular', apellidos: 'Sintetico', email: `cliente-${sufijo}@example.test`, fecha_nacimiento: nacimiento, provincia: 'Córdoba', localidad: 'Villa María' });
+    const r = await api('clientes', { dni, nombres: 'maría josé', apellidos: 'pérez muñoz', email: `cliente-${sufijo}@example.test`, fecha_nacimiento: nacimiento, provincia: 'Córdoba', localidad: 'Villa María' });
     assert.equal(r.status, 201); cliente = r.body; clientes.push(cliente.id); entrada.cliente_id = String(cliente.id);
     assert.equal(cliente.fecha_nacimiento, nacimiento); assert.equal(cliente.familia, null);
     assert.equal(cliente.provincia, 'Córdoba'); assert.equal(cliente.localidad, 'Villa María');
+    assert.equal(cliente.nombres, 'MARÍA JOSÉ'); assert.equal(cliente.apellidos, 'PÉREZ MUÑOZ');
     const otro = await api(`clientes/busqueda/${dni}`, undefined, 'GET', 1);
     assert.equal(otro.body.autorizado, false); assert.equal(otro.body.cliente, undefined); assert.ok(otro.body.asesor); assert.ok(otro.body.registrado_at);
     assert.equal((await api(`clientes/${cliente.id}`, undefined, 'GET', 1)).status, 404);
     assert.equal((await api('clientes', undefined, 'GET', 1)).body.clientes.length, 0);
     assert.equal((await api('clientes', { dni, nombres: 'Duplicado', apellidos: 'Test', email: 'duplicado@example.test', fecha_nacimiento: nacimiento }, 'POST', 1)).status, 409);
-    const body = { dni, nombres: 'Titular', apellidos: 'Actualizado', fecha_nacimiento: nacimiento, revision: cliente.revision };
-    assert.equal((await api(`clientes/${cliente.id}`, body, 'PUT')).status, 200);
+    const body = { dni, nombres: 'juan carlos', apellidos: 'pérez gómez', fecha_nacimiento: nacimiento, revision: cliente.revision };
+    const actualizado = await api(`clientes/${cliente.id}`, body, 'PUT');
+    assert.equal(actualizado.status, 200);
+    assert.equal(actualizado.body.nombres, 'JUAN CARLOS'); assert.equal(actualizado.body.apellidos, 'PÉREZ GÓMEZ');
+    const [[persistido]] = await pool.execute('SELECT nombres,apellidos FROM clientes WHERE id=?', [cliente.id]);
+    assert.equal(persistido.nombres, 'JUAN CARLOS'); assert.equal(persistido.apellidos, 'PÉREZ GÓMEZ');
     assert.equal((await api(`clientes/${cliente.id}`, body, 'PUT')).status, 409);
   });
   await t.test('cliente anterior sin fecha permanece editable y conserva familia histórica', async () => {
@@ -145,9 +151,11 @@ test('ASESOR real: AUTH HTTP, propiedad, cálculo, emisión y trazabilidad hist�
     const [[despues]] = await pool.query('SELECT (SELECT COUNT(*) FROM cotizaciones) AS cotizaciones, (SELECT COUNT(*) FROM asesor_auditoria) AS auditorias');
     assert.deepEqual(despues, antes);
   });
+  /** Verifica que el nuevo snapshot capture la identidad normalizada persistida y no la entrada HTTP. */
   await t.test('persistencia de borrador real y relectura desde conexión distinta', async () => {
     const r = await api('cotizaciones', { ...entrada, familia: { ...entrada.familia, titular: { ...entrada.familia.titular, edad: 1 } } }); assert.equal(r.status, 201); q = r.body;
     assert.equal(q.solicitud.entrada.familia.titular.edad, 1);
+    assert.equal(q.solicitud.cliente.nombres, 'JUAN CARLOS'); assert.equal(q.solicitud.cliente.apellidos, 'PÉREZ GÓMEZ');
     assert.equal(Number((await pool.execute("SELECT edad FROM miembros_cotizacion WHERE cotizacion_id=? AND parentesco='TITULAR'", [q.id]))[0][0].edad), 1);
     assert.equal(q.estado, 'BORRADOR'); assert.equal(q.resultado, null); assert.equal(q.numero, null); assert.equal(q.vence_at, null);
     const c1 = await pool.getConnection(), c2 = await pool.getConnection();
