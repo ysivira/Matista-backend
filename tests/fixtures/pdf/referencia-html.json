@@ -1,0 +1,29 @@
+{
+  "commit": "5f582e3ed6c430f449b9866a8cb294fdd38c1864",
+  "chrome": "Google Chrome 152.0.7977.82",
+  "descripcion": "Referencias capturadas antes de extraer presentación, CSS y paginación; casos sintéticos de pdf.fixtures.js.",
+  "casos": {
+    "cotizacion-rubi": { "sha256": "bc9b4c59bbc3210df7e95c28f49e060c58482cbfc8aacd52e7320533d0b827d5", "paginas": 2 },
+    "catalogo-rubi": { "sha256": "da18e8de49b87e752e3ea736035ecb06cd87e1a4be20deb159dba8bdd857b079", "paginas": 1 },
+    "cotizacion-esmeralda": { "sha256": "caac6e41f08996b7a208b887130ce4eaa93a6badf1c2dd8bcc757bbfe8371cbc", "paginas": 2 },
+    "catalogo-esmeralda": { "sha256": "67d0e6a2c381ea6015a611d14a22b1a6c95537e0795cb8c15a99b2a0269e949c", "paginas": 1 },
+    "cotizacion-zafiro": { "sha256": "0958618f299d4d73add98ede21102ea0fe3e6e2b0f7e863e1442f20f12e2bae9", "paginas": 2 },
+    "catalogo-zafiro": { "sha256": "9716ce32cf4acf2596b76ef77d1c7de9c63ec432f3a08827ff3a6d82ec068038", "paginas": 1 },
+    "cotizacion-diamante": { "sha256": "4d8488969fc089f615e44e436032741bfc4d4272eeb7d81e19d8cc9217aeb891", "paginas": 2 },
+    "catalogo-diamante": { "sha256": "58a7286a62169cdf36a2812151272e10ddf7c3f5f37b1ae2a1d79a7b65d39352", "paginas": 1 },
+    "cotizacion-historica": { "sha256": "d08f6028bda351ad3e9203ea02885aa5b3a0ef33093482e20c4b876e23fc8c86", "paginas": 2 },
+    "cotizacion-ausencias": { "sha256": "c234506cfe7fa546dc73f226f86c6502e2c095693d3354192b7720d097ce0f41", "paginas": 2 },
+    "cotizacion-escape": { "sha256": "fd2cc2ee02773eaca860aa8d15251582579ae56658956fd1817c6ae448eaefc8", "paginas": 2 },
+    "cotizacion-tablas-extensas": { "sha256": "4f6a6c30322b5709e41f328a95af3d668c1dc2e9cd6fd9bc79d8c4c3275f6bc1", "paginas": 6 },
+    "cotizacion-parrafo-extenso": { "sha256": "1746f51b1d93a7f7c64b5f88c20f41294264079ea1787ea2cb60bed239da0630", "paginas": 6 },
+    "cotizacion-beneficios-iva-tramos": { "sha256": "18afda09519fddd68791254b6e678ac3268dcbfff7378bd2a5bc6580355480c2", "paginas": 2 },
+    "lista-obligatorio": { "sha256": "4b37190b06ce86976aa3d4b3a488775f3038ed003e8ac4c62e59b8d705253512", "paginas": 1 },
+    "lista-voluntario": { "sha256": "feec55aea60282ac1b7f81c0f176225b82f772b80bf88c4dde228a711e686d97", "paginas": 1 },
+    "lista-vacia": { "sha256": "b93422f914709dcd6a1a2d1cd58fc38139a8c065b340655f6d214a982d80db40", "paginas": 1 },
+    "catalogo-vacio": { "sha256": "35099f8816b4f009b74f3bf42352d7011bf50f5ecb10f37217695df2c8d77ba3", "paginas": 1 },
+    "catalogo-cotizacion-compatible": { "sha256": "311de4cd15947952b232d34e82e3c838d2ed88d8b443ba1ff0fbd65657f9cbf6", "paginas": 1 },
+    "lista-impresion": { "sha256": "010122b373fce9eeb8fe605a47fb9c92a27d71606de3c6a137078ba5386e1c46", "paginas": 1 },
+    "catalogo-impresion": { "sha256": "4adb1df70eb58070da3bace3ad99a7860ec38fef20bcdd7d08a79a3d420d51d7", "paginas": 1 },
+    "catalogo-tablas-extensas": { "sha256": "3aadd38efd9ccdbfeb80dd99d8cd417d6bc2b0545eea081193fe89b93e466442", "paginas": 4 }
+  }
+}
