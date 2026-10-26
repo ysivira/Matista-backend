@@ -17,6 +17,8 @@ const CAMPOS_POLITICA = `
   p.tope_comercial_tdc_pct,
   p.afinidad_pct,
   p.aporte_monotributo,
+  p.aporte_adherente,
+  p.iva_voluntario_pct,
   p.fecha_vigencia,
   p.vigente_hasta,
   p.cancelada_en,
@@ -149,9 +151,9 @@ export async function insertarPoliticaComercial(connection, politica, metadatos)
        comercial_escalonado_max_pct, comercial_escalonado_tramos_max,
        comercial_escalonado_total_meses_max, primer_tramo_50_meses_max,
        tdc_pct, tdc_habilitado, tope_comercial_tdc_pct, afinidad_pct,
-       aporte_monotributo,
+       aporte_monotributo, aporte_adherente, iva_voluntario_pct,
        fecha_vigencia, actor_legajo)
-     VALUES (?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+     VALUES (?, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       metadatos.estado,
       metadatos.versionBaseId,
@@ -169,6 +171,8 @@ export async function insertarPoliticaComercial(connection, politica, metadatos)
       politica.tope_comercial_tdc_pct,
       politica.afinidad_pct,
       politica.aporte_monotributo,
+      politica.aporte_adherente ?? null,
+      politica.iva_voluntario_pct ?? null,
       metadatos.fechaVigencia,
       metadatos.actorLegajo,
     ],
@@ -222,7 +226,7 @@ export async function actualizarPoliticaProgramada(
             comercial_escalonado_tramos_max = ?,
             comercial_escalonado_total_meses_max = ?,
             primer_tramo_50_meses_max = ?, tdc_pct = ?, tdc_habilitado = ?,
-            tope_comercial_tdc_pct = ?, afinidad_pct = ?, aporte_monotributo = ?,
+            tope_comercial_tdc_pct = ?, afinidad_pct = ?, aporte_monotributo = ?, aporte_adherente = ?, iva_voluntario_pct = ?,
             fecha_vigencia = ?,
             actor_legajo = ?, revision = revision + 1
       WHERE id = ? AND estado = 'PROGRAMADA' AND revision = ?`,
@@ -241,6 +245,8 @@ export async function actualizarPoliticaProgramada(
       politica.tope_comercial_tdc_pct,
       politica.afinidad_pct,
       politica.aporte_monotributo,
+      politica.aporte_adherente ?? null,
+      politica.iva_voluntario_pct ?? null,
       metadatos.fechaVigencia,
       metadatos.actorLegajo,
       politicaId,
@@ -387,5 +393,11 @@ export async function listarEventosPolitica(connection, politicaId) {
       ORDER BY evento_en DESC, id DESC`,
     [politicaId],
   );
+  return rows;
+}
+
+/** Lee las referencias ADMIN sin crear catálogos alternativos. */
+export async function listarAportesMonotributo(c) {
+  const [rows] = await c.query('SELECT id,categoria,aporte,vigente_desde FROM monotributo_aportes WHERE vigente_hasta IS NULL ORDER BY id');
   return rows;
 }

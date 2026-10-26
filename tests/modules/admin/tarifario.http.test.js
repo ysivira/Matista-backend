@@ -963,6 +963,8 @@ function poolPoliticaComercialFalso() {
       tope_comercial_tdc_pct: '10.00',
       afinidad_pct: '3.00',
       aporte_monotributo: '23892.00',
+      aporte_adherente: null,
+      iva_voluntario_pct: null,
       fecha_vigencia: new Date('2026-10-14T12:00:00Z'),
       vigente_hasta: null,
       cancelada_en: null,
@@ -1128,7 +1130,7 @@ function poolPoliticaComercialFalso() {
         return [{ affectedRows: 1 }];
       }
       if (sql.includes('UPDATE politica_comercial') && sql.includes('revision = revision + 1')) {
-        const politica = buscarPolitica(parametros[16]);
+        const politica = buscarPolitica(parametros[18]);
         if (!politica || politica.estado !== 'PROGRAMADA') return [{ affectedRows: 0 }];
         politica.porcentaje_aporte_reconocido = parametros[0];
         politica.tope_sueldo_bruto = parametros[1];
@@ -1144,8 +1146,10 @@ function poolPoliticaComercialFalso() {
         politica.tope_comercial_tdc_pct = parametros[11];
         politica.afinidad_pct = parametros[12];
         politica.aporte_monotributo = parametros[13];
-        politica.fecha_vigencia = parametros[14];
-        politica.actor_legajo = parametros[15];
+        politica.aporte_adherente = parametros[14];
+        politica.iva_voluntario_pct = parametros[15];
+        politica.fecha_vigencia = parametros[16];
+        politica.actor_legajo = parametros[17];
         politica.revision += 1;
         return [{ affectedRows: 1 }];
       }
@@ -1157,7 +1161,7 @@ function poolPoliticaComercialFalso() {
           comercial_escalonado_max_pct, comercial_escalonado_tramos_max,
           comercial_escalonado_total_meses_max, primer_tramo_50_meses_max,
           tdc_pct, tdc_habilitado, tope_comercial_tdc_pct, afinidad_pct,
-          aporte_monotributo, fechaVigencia, actorLegajo,
+          aporte_monotributo, aporte_adherente, iva_voluntario_pct, fechaVigencia, actorLegajo,
         ] = parametros;
         if (estadoNuevo === 'VIGENTE') {
           const anterior = buscarVigente();
@@ -1187,6 +1191,8 @@ function poolPoliticaComercialFalso() {
           tope_comercial_tdc_pct,
           afinidad_pct,
           aporte_monotributo,
+          aporte_adherente,
+          iva_voluntario_pct,
           fecha_vigencia: fechaVigencia,
           vigente_hasta: null,
           cancelada_en: null,

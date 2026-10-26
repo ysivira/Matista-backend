@@ -23,22 +23,23 @@ export async function startTestServer(t, app) {
   /**
    * Envía una solicitud local con método/cuerpo/cabeceras opcionales.
    * @param {string} path Ruta interna de la aplicación de prueba.
-   * @param {object} options Método, cuerpo y cabeceras de la solicitud.
+   * @param {object} options Método, cuerpo, cabeceras y responseType=buffer para documentos binarios.
    * @returns {Promise<object>} Estado, cabeceras y cuerpo JSON.
    */
-  return async function requestJson(path, { method = 'GET', body, headers = {} } = {}) {
+  return async function requestJson(path, { method = 'GET', body, headers = {}, responseType = 'json' } = {}) {
     return new Promise((resolve, reject) => {
       /** Acumula la respuesta HTTP local sin invocar servicios externos. */
       const req = request({ host: '127.0.0.1', port: server.address().port, path, method,
         headers: { 'content-type': 'application/json', ...headers }, agent: false }, (res) => {
         let content = '';
-        res.setEncoding('utf8');
+        const chunks = [];
+        if (responseType !== 'buffer') res.setEncoding('utf8');
         /** Acumula un fragmento de respuesta de prueba. */
-        res.on('data', (chunk) => { content += chunk; });
+        res.on('data', (chunk) => { if (responseType === 'buffer') chunks.push(chunk); else content += chunk; });
         /** Devuelve el cuerpo completo; propaga respuestas JSON inválidas. */
         res.on('end', () => {
           try {
-            resolve({ status: res.statusCode, headers: res.headers, body: content ? JSON.parse(content) : null });
+            resolve({ status: res.statusCode, headers: res.headers, body: responseType === 'buffer' ? Buffer.concat(chunks) : content ? JSON.parse(content) : null });
           } catch (error) { reject(error); }
         });
         res.on('error', reject);

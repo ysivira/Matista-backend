@@ -43,6 +43,8 @@ function crearPolitica(id, estado, cambios = {}) {
     tope_comercial_tdc_pct: '10.00',
     afinidad_pct: '3.00',
     aporte_monotributo: '23892.00',
+    aporte_adherente: null,
+    iva_voluntario_pct: null,
     fecha_vigencia: `2026-10-${10 + id} 12:00:00.000000`,
     vigente_hasta: estado === 'HISTORICA' ? `2026-10-${12 + id} 12:00:00.000000` : null,
     cancelada_en: null,
@@ -173,8 +175,10 @@ function crearPoolPolitica() {
           tope_comercial_tdc_pct: params[13],
           afinidad_pct: params[14],
           aporte_monotributo: params[15],
-          fecha_vigencia: params[16],
-          actor_legajo: params[17],
+          aporte_adherente: params[16],
+          iva_voluntario_pct: params[17],
+          fecha_vigencia: params[18],
+          actor_legajo: params[19],
           revision: 0,
         }));
         return [{ insertId: id }];
@@ -255,8 +259,10 @@ function crearPoolPolitica() {
         politicaEditada.tope_comercial_tdc_pct = params[11];
         politicaEditada.afinidad_pct = params[12];
         politicaEditada.aporte_monotributo = params[13];
-        politicaEditada.fecha_vigencia = params[14];
-        politicaEditada.actor_legajo = params[15];
+        politicaEditada.aporte_adherente = params[14];
+        politicaEditada.iva_voluntario_pct = params[15];
+        politicaEditada.fecha_vigencia = params[16];
+        politicaEditada.actor_legajo = params[17];
         politicaEditada.actor_nombre = 'David';
         politicaEditada.actor_apellido = 'Diaz';
         politicaEditada.revision = Number(politicaEditada.revision) + 1;
@@ -494,4 +500,21 @@ test('agrega un aporte de monotributo configurable y versionado', async () => {
   assert.equal(nueva.aporte_monotributo, 24500.5);
   assert.equal(state.policies.filter((fila) => fila.estado === 'VIGENTE').length, 1);
   assert.equal(state.policies.find((fila) => fila.id === 2).estado, 'HISTORICA');
+});
+
+test('versiona aporte adherente e IVA y conserva intacta la política histórica al recuperar', async () => {
+  const { pool, state } = crearPoolPolitica();
+  const nueva = await actualizarPoliticaComercial(pool, 2, { aporte_adherente: 23892, iva_voluntario_pct: 10.5 }, ACTOR, AHORA);
+  assert.equal(nueva.aporte_adherente, 23892); assert.equal(nueva.iva_voluntario_pct, 10.5);
+  assert.equal(state.policies.find(p => p.id === 2).aporte_adherente, null);
+  const recuperada = await recuperarPoliticaComercial(pool, 2, {}, ACTOR, AHORA);
+  assert.equal(recuperada.aporte_adherente, null); assert.equal(recuperada.iva_voluntario_pct, null);
+  assert.ok(state.events.length >= 2);
+});
+
+test('rechaza parámetros nuevos negativos, fuera de rango o con precisión no monetaria', async () => {
+  const { pool } = crearPoolPolitica();
+  for (const datos of [{ aporte_adherente: -1 }, { aporte_adherente: 1.001 }, { iva_voluntario_pct: 100.01 }, { iva_voluntario_pct: -0.01 }]) {
+    await assert.rejects(actualizarPoliticaComercial(pool, 2, datos, ACTOR, AHORA), { code: 'ADMIN_VALIDACION' });
+  }
 });

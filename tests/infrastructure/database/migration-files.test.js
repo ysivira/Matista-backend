@@ -43,7 +43,7 @@ test('las migraciones ADMIN declaran el orden FK aprobado sin tablas extra', asy
   const migrations = await loadMigrations(migrationsDirectory);
 
   assert.deepEqual(
-    migrations.slice(5).map((migration) => [
+    migrations.slice(5, 23).map((migration) => [
       migration.version,
       migration.targetTable,
       migration.kind,

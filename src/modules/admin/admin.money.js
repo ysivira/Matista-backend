@@ -44,7 +44,7 @@ export function parseDecimal(valor) {
  * - Retorna: BigInt del cociente redondeado HALF-UP.
  * - Error: ADMIN_VALIDACION si el denominador es cero.
  */
-function dividirHalfUp(numerador, denominador) {
+export function dividirHalfUp(numerador, denominador) {
   if (denominador === 0n) {
     throw errorValidacion('Division monetaria por cero.');
   }

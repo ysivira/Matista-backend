@@ -41,6 +41,8 @@ const CAMPOS_POLITICA = Object.freeze([
   'tope_comercial_tdc_pct',
   'afinidad_pct',
   'aporte_monotributo',
+  'aporte_adherente',
+  'iva_voluntario_pct',
 ]);
 
 /**
@@ -158,6 +160,13 @@ function validarDatosPoliticaComercial(datos) {
     (v) => esImporteValido(v, { maximo: '9999999999.99', decimales: 2 }),
     'Debe ser un importe positivo con hasta dos decimales.',
   );
+
+  if (Object.hasOwn(datos, 'iva_voluntario_pct') && datos.iva_voluntario_pct !== null) {
+    validarNumero('iva_voluntario_pct', v => esImporteValido(v, { maximo: '100.00', decimales: 2 }), 'Debe ser un porcentaje entre 0 y 100 o null.');
+  }
+  if (Object.hasOwn(datos, 'aporte_adherente') && datos.aporte_adherente !== null) {
+    validarNumero('aporte_adherente', v => esImporteValido(v, { maximo: '9999999999.99', decimales: 2 }), 'Debe ser un importe no negativo con hasta dos decimales o null.');
+  }
 
   if (Object.hasOwn(datos, 'afinidad_pct') && datos.afinidad_pct !== null) {
     const valor = datos.afinidad_pct === '' ? Number.NaN : Number(datos.afinidad_pct);
@@ -285,7 +294,7 @@ function componerSnapshots(politicas, porcentajes) {
 function completarPolitica(base, datos) {
   return Object.fromEntries(CAMPOS_POLITICA.map((campo) => [
     campo,
-    Object.hasOwn(datos, campo) ? datos[campo] : base[campo],
+    Object.hasOwn(datos, campo) ? datos[campo] : (base[campo] ?? null),
   ]));
 }
 

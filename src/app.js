@@ -4,10 +4,12 @@ import { errorHandler } from './shared/errors/error-handler.js';
 import { createAppError } from './shared/errors/app-error.js';
 import { createAuthRouter } from './modules/auth/auth.routes.js';
 import { createAdminRouter } from './modules/admin/admin.routes.js';
+import { createAsesorRouter } from './modules/asesor/asesor.routes.js';
+import { createCatalogoRouter } from './modules/admin/catalogo.routes.js';
 import { loadAuthHttpPolicy } from './modules/auth/auth.constants.js';
 
 /**
- * Compone Express con AUTH y dependencias sustituibles sin inicializar MySQL o SMTP al importar.
+ * Compone Express con AUTH, ADMIN y ASESOR sin inicializar MySQL o SMTP al importar.
  * @param {object} options Entorno y contexto AUTH opcional para pruebas aisladas.
  * @returns {object} Aplicación sin listener; server.js conserva su responsabilidad de arranque.
  * @throws {Error} Si el origen HTTP configurado no cumple la política del entorno.
@@ -42,6 +44,8 @@ export function createApp({ env = process.env, authContext } = {}) {
   app.use('/api/auth', createAuthRouter({ env, httpPolicy, context: authContext }));
   /** ADMIN comparte contexto, guardias y fallback entre todos sus slices. */
   app.use('/api/admin', createAdminRouter({ env, context: authContext }));
+  app.use('/api/asesor', createAsesorRouter({ env, context: authContext }));
+  app.use('/api/catalogo', createCatalogoRouter({ env, context: authContext }));
   app.use(errorHandler);
   return app;
 }

@@ -78,7 +78,7 @@ test('crea exclusivamente las tablas AUTH y la tabla tecnica', {
   );
 });
 
-test('crea las tablas ADMIN del tarifario y la tecnica en orden FK', {
+test('crea las tablas AUTH, ADMIN y ASESOR sin tablas ajenas', {
   skip: !enabled,
 }, async () => {
   const [rows] = await pool.query(
@@ -91,11 +91,15 @@ test('crea las tablas ADMIN del tarifario y la tecnica en orden FK', {
   assert.deepEqual(
     rows.map((row) => row.tableName),
     [
+      'asesor_auditoria',
       'auth_sesiones',
       'auth_tokens',
+      'clientes',
+      'cotizaciones',
       'empleados',
       'empleados_auditoria',
       'empleados_correos',
+      'miembros_cotizacion',
       'monotributo_aportes',
       'planes',
       'politica_comercial',
@@ -289,6 +293,7 @@ test('crea las claves foraneas y restricciones CHECK ADMIN aprobadas', {
     'chk_planes_activa',
     'chk_planes_nombre',
     'chk_politica_afinidad',
+    'chk_politica_aporte_adherente',
     'chk_politica_aporte_monotributo',
     'chk_politica_aporte_reconocido',
     'chk_politica_comercial_cancelacion',
@@ -302,6 +307,7 @@ test('crea las claves foraneas y restricciones CHECK ADMIN aprobadas', {
     'chk_politica_eventos_actor_apellido',
     'chk_politica_eventos_actor_nombre',
     'chk_politica_eventos_detalle',
+    'chk_politica_iva_voluntario',
     'chk_politica_joven',
     'chk_politica_primer_tramo_meses',
     'chk_politica_tdc_habilitado',
