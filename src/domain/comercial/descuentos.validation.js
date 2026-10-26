@@ -1,4 +1,4 @@
-import { importeACentavos, centavosAImporte, esPorcentajeValido } from '../../modules/admin/admin.money.js';
+import { importeACentavos, centavosAImporte, esPorcentajeValido } from '../../shared/lib/money.js';
 
 /** Devuelve el porcentaje joven configurado para un titular elegible; familia parcial no presume elegibilidad. */
 export function porcentajeJoven(familia, politica) {

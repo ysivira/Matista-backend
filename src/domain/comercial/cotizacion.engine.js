@@ -1,5 +1,5 @@
 import { createAppError } from '../../shared/errors/app-error.js';
-import { importeACentavos, centavosAImporte, aplicarPorcentaje, dividirHalfUp } from '../../modules/admin/admin.money.js';
+import { importeACentavos, centavosAImporte, aplicarPorcentaje, dividirHalfUp } from '../../shared/lib/money.js';
 import { erroresDescuentos, porcentajeJoven } from './descuentos.validation.js';
 
 /** Rechaza una propuesta con mensaje comercial seguro, sin datos personales ni SQL. */
