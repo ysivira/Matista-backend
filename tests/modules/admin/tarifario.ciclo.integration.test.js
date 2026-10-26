@@ -2,6 +2,7 @@ import 'dotenv/config';
 
 import assert from 'node:assert/strict';
 import { after, before, test } from 'node:test';
+import { readFile } from 'node:fs/promises';
 
 import {
   createDatabasePool,
@@ -24,6 +25,7 @@ import {
 import * as repositorioTarifario
   from '../../../src/modules/admin/tarifario.repository.js';
 import { withConnection } from '../../../src/modules/auth/auth.repository.js';
+import { obtenerEmpleado } from '../../../src/modules/admin/employees.repository.js';
 import { resolverVersionVigente } from '../../../src/modules/admin/admin.vigencia.js';
 import { runMigrations } from '../../../src/infrastructure/database/migration-runner.js';
 
@@ -94,9 +96,83 @@ async function copiarTarifasAislada(connection, { origenId, destinoId }) {
 // sesion aislada sin que el codigo de negocio cambie una sola linea.
 const dependenciasAisladas = Object.freeze({
   withConnection,
+  obtenerEmpleado,
   resolverVersionVigente,
   ...repositorioTarifario,
   copiarTarifas: copiarTarifasAislada,
+});
+
+/**
+ * Extrae las claves declaradas por el servicio para detectar futuras omisiones sin duplicar su lista.
+ * Solo admite el objeto explícito de identificadores actual; un cambio de sintaxis requiere revisión.
+ * @returns {Promise<string[]>} Nombres de todas las dependencias por defecto del servicio.
+ * @throws {AssertionError} Si no se identifica inequívocamente el contrato o cambia su forma.
+ */
+async function clavesDelContratoTarifario() {
+  const fuente = await readFile(new URL('../../../src/modules/admin/tarifario.service.js', import.meta.url), 'utf8');
+  const bloques = [...fuente.matchAll(/const DEPENDENCIAS_DEFECTO = Object\.freeze\(\{([^}]+)\}\);/g)];
+  assert.equal(bloques.length, 1, 'Contrato de dependencias inequívoco');
+  const claves = bloques[0][1].split(',').map(clave => clave.trim()).filter(Boolean);
+  assert.ok(claves.length > 0);
+  for (const clave of claves) assert.match(clave, /^[a-zA-Z_$][\w$]*$/, 'Revisar la sintaxis del contrato de dependencias');
+  return claves;
+}
+
+/** Verifica sin MySQL que el arnés conserva todas las dependencias, especialmente la identidad real. */
+test('FIX19 arnés de ciclo incluye el contrato completo de dependencias productivas', async () => {
+  for (const clave of await clavesDelContratoTarifario()) {
+    assert.equal(typeof dependenciasAisladas[clave], 'function', `Dependencia obligatoria ausente: ${clave}`);
+  }
+  assert.equal(dependenciasAisladas.obtenerEmpleado, obtenerEmpleado);
+  assert.equal(dependenciasAisladas.withConnection, withConnection);
+  assert.equal(dependenciasAisladas.copiarTarifas, copiarTarifasAislada);
+});
+
+/**
+ * Ejercita con conexión doble la lectura REAL del actor y withConnection REAL del arnés.
+ * Se detiene en insertarBorrador, antes de cualquier escritura; verifica rollback y liberación.
+ */
+test('FIX19 arnés lee la identidad por la misma conexión y revierte un corte previo a persistencia', async () => {
+  const operaciones = [], legajo = '9900000001';
+  const corte = new Error('Corte de prueba anterior a persistencia');
+  const conexion = {
+    /** Acepta exclusivamente zona horaria y SELECT parametrizado del repositorio real de empleados. */
+    async query(sql, parametros) {
+      if (sql === "SET time_zone = '+00:00'") { operaciones.push('zona'); return [[], []]; }
+      assert.match(sql, /SELECT e\.legajo, e\.nombre,/);
+      assert.match(sql, /WHERE e\.legajo = \?/);
+      assert.deepEqual(parametros, [legajo]);
+      operaciones.push('identidad');
+      return [[{ legajo, nombre: 'Admin', apellido: 'Integracion' }], []];
+    },
+    /** Registra apertura transaccional sin motor ni persistencia. */
+    async beginTransaction() { operaciones.push('begin'); },
+    /** Registra un commit inesperado para que falle la comprobación de secuencia. */
+    async commit() { operaciones.push('commit'); },
+    /** Registra rollback del withConnection real ante el corte deliberado. */
+    async rollback() { operaciones.push('rollback'); },
+    /** Registra la liberación obligatoria de la única conexión del doble. */
+    release() { operaciones.push('release'); },
+  };
+  const dependencias = {
+    ...dependenciasAisladas,
+    /** Resuelve el fixture activo comprobando que se usa la conexión transaccional original. */
+    async bloquearVersionActiva(c) { assert.equal(c, conexion); return { id: 1 }; },
+    /** El doble no tiene borradores; no consulta un servidor real. */
+    async bloquearBorradorAbierto(c) { assert.equal(c, conexion); return null; },
+    /** Detiene el servicio después del snapshotActor real y antes de ejecutar un INSERT. */
+    async insertarBorrador(c, datos) {
+      assert.equal(c, conexion);
+      assert.equal(datos.actorLegajo, legajo);
+      assert.equal(operaciones.at(-1), 'identidad');
+      throw corte;
+    },
+  };
+  await assert.rejects(crearBorradorTarifario({
+    /** Entrega la misma conexión doble; nunca crea un pool MySQL. */
+    async getConnection() { return conexion; },
+  }, { legajo }, dependencias), error => error === corte);
+  assert.deepEqual(operaciones, ['zona', 'begin', 'identidad', 'rollback', 'release']);
 });
 
 /**

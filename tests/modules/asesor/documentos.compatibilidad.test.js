@@ -1,18 +1,19 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { createHash } from 'node:crypto';
 import { readFile, mkdtemp, writeFile, rm } from 'node:fs/promises';
 import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { Script } from 'node:vm';
 import { casosDocumentosPdf } from '../../helpers/pdf.fixtures.js';
+import { contratoCss, reconstruirDocumento, separarEstilos, sha256 } from '../../helpers/documentos.contratos.js';
 import { cotizacionHtml, cotizacionPdf } from '../../../src/modules/asesor/documentos.js';
 import { documentoCatalogoHtml } from '../../../src/modules/admin/catalogo.impresion.js';
 import { imprimirHtmlPdf } from '../../../src/infrastructure/pdf/html-pdf.js';
 import { html, pesos, fecha } from '../../../src/infrastructure/pdf/formato-documental.js';
 
 const referencia = JSON.parse(await readFile(new URL('../../fixtures/pdf/referencia-html.json', import.meta.url), 'utf8'));
+const contratos = JSON.parse(await readFile(new URL('../../fixtures/pdf/referencia-contratos.json', import.meta.url), 'utf8'));
 
 /**
  * Invoca únicamente los contratos documentales públicos según el caso de referencia.
@@ -25,16 +26,48 @@ function renderizarCaso(caso) {
 }
 
 for (const caso of casosDocumentosPdf()) {
-  /** Conserva todos los bytes de presentación, script y CSS y comprueba que no se altere la entrada. */
-  test(`REFACTOR11 HTML exacto, autónomo y sin mutaciones: ${caso.id}`, async () => {
+  /** Conserva exactamente el HTML no CSS y lo vincula además al hash histórico completo. */
+  test(`FIX19 HTML y scripts exactos contra historia: ${caso.id}`, async () => {
+    const partes = separarEstilos(await renderizarCaso(caso));
+    const esperado = contratos.casos[caso.id];
+    assert.equal(sha256(JSON.stringify(partes.fragmentos)), esperado.sha256SinCss);
+    const estilosHistoricos = esperado.estilos.map(id => {
+      assert.equal(sha256(contratos.estilos[id]), id, 'Integridad del CSS histórico');
+      return contratos.estilos[id];
+    });
+    // No se aprueba una referencia nueva si no reconstruye los bytes históricos originales.
+    assert.equal(sha256(reconstruirDocumento(partes, estilosHistoricos)), referencia.casos[caso.id].sha256);
+  });
+
+  /** Compara CSS por separado, sin ordenar ni descartar reglas, declaraciones o valores desconocidos. */
+  test(`FIX19 contrato CSS ordenado: ${caso.id}`, async () => {
+    const partes = separarEstilos(await renderizarCaso(caso));
+    const esperado = contratos.casos[caso.id];
+    assert.equal(partes.estilos.length, esperado.estilos.length);
+    partes.estilos.forEach((css, indice) => {
+      assert.deepEqual(contratoCss(css), contratoCss(contratos.estilos[esperado.estilos[indice]]));
+    });
+  });
+
+  /** La verificación de inmutabilidad se ejecuta aunque fallen los contratos HTML o CSS. */
+  test(`FIX19 documento sin mutaciones: ${caso.id}`, async () => {
     const antes = structuredClone(caso);
-    const documento = await renderizarCaso(caso);
-    assert.equal(createHash('sha256').update(documento).digest('hex'), referencia.casos[caso.id].sha256);
+    await renderizarCaso(caso);
     assert.deepEqual(caso, antes);
+  });
+
+  /** Comprueba recursos autónomos y ausencia de marcadores pendientes independientemente del hash. */
+  test(`FIX19 seguridad y recursos autónomos: ${caso.id}`, async () => {
+    const documento = await renderizarCaso(caso);
     assert.match(documento, /<style>/);
     assert.match(documento, /src="data:image\/png;base64,/);
     assert.doesNotMatch(documento, /<link\b|<script[^>]+src=|src="(?:file:|https?:|\/)/i);
     assert.doesNotMatch(documento, /\/\* MATISTA_/);
+  });
+
+  /** Compila el script sin ejecutarlo y exige uno solo, aunque falle otra prueba del documento. */
+  test(`FIX19 sintaxis de paginación: ${caso.id}`, async () => {
+    const documento = await renderizarCaso(caso);
     const scripts = [...documento.matchAll(/<script>([\s\S]*?)<\/script>/g)];
     assert.equal(scripts.length, 1);
     assert.doesNotThrow(() => new Script(scripts[0][1]));
@@ -54,6 +87,8 @@ test('REFACTOR11 formatos documentales conservan escape, precisión y fecha arge
 /** Valida referencias, estados rechazados y la única diferencia autorizada al solicitar impresión. */
 test('REFACTOR11 contratos de emisión e impresión permanecen iguales', async () => {
   assert.equal(casosDocumentosPdf().length, Object.keys(referencia.casos).length);
+  assert.deepEqual(Object.keys(contratos.casos), Object.keys(referencia.casos));
+  assert.equal(contratos.origen, referencia.commit);
   const cotizacion = casosDocumentosPdf().find(c => c.id === 'cotizacion-rubi').datos;
   for (const estado of ['BORRADOR', 'ANULADA']) {
     await assert.rejects(cotizacionHtml({ ...cotizacion, estado }), { code: 'ASESOR_ESTADO', status: 409 });
