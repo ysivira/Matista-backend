@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { execFileSync } from 'node:child_process';
-import { writeFile, readFile, mkdir } from 'node:fs/promises';
+import { writeFile, readFile, mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { cotizacionHtml, cotizacionPdf } from '../../../src/modules/asesor/documentos.js';
 import { calcularCotizacion } from '../../../src/domain/comercial/cotizacion.engine.js';
 import { REGLAS_COMERCIALES } from '../../../src/domain/comercial/reglas.confirmadas.js';
@@ -49,11 +51,18 @@ test('PDF usa el resultado histórico, muestra porcentajes futuros pero nunca su
   assert.ok(!html.includes('87.654,32')); assert.ok(!html.includes('87654.32'));
 });
 
-test('Chrome real: cuatro catálogos completos y continuación legible de condiciones extensas', { skip: process.env.RUN_PDF_TESTS !== '1' }, async () => {
-  const audit = JSON.parse(await readFile('/tmp/opencode/ui05/catalogo.json', 'utf8'));
-  await mkdir('/tmp/opencode/ui05/pdf', { recursive: true });
+/**
+ * Comprueba catálogos completos con un fixture local; los errores de Chrome o las aserciones hacen fallar la prueba.
+ * @param {import('node:test').TestContext} t Registra la limpieza de sus PDF privados incluso si falla.
+ */
+test('Chrome real: cuatro catálogos completos y continuación legible de condiciones extensas', { skip: process.env.RUN_PDF_TESTS !== '1' }, async (t) => {
+  const audit = JSON.parse(await readFile(new URL('../../fixtures/pdf/catalogo-planes.json', import.meta.url), 'utf8'));
+  const temporal = await mkdtemp(join(tmpdir(), 'matista-pdf-catalogos-'));
+  /** Elimina exclusivamente el directorio privado creado por esta prueba. */
+  t.after(async () => { await rm(temporal, { recursive: true, force: true }); });
+  assert.equal(audit.planes.length, 4);
   for (const plan of audit.planes) {
-    const q = emision(plan), archivo = `/tmp/opencode/ui05/pdf/plan-${plan.id}.pdf`;
+    const q = emision(plan), archivo = join(temporal, `plan-${plan.id}.pdf`);
     await writeFile(archivo, await cotizacionPdf(q));
     const paginas = Number(execFileSync('pdfinfo', [archivo], { encoding: 'utf8' }).match(/Pages:\s+(\d+)/)[1]);
     assert.ok(paginas >= 2);
@@ -65,7 +74,7 @@ test('Chrome real: cuatro catálogos completos y continuación legible de condic
     for (const celda of plan.detalles.split(/[\n|]/).filter(c => c.trim())) assert.ok(siguientes.includes(celda.replace(/\s+/g, ' ').trim()), celda);
     assert.ok(siguientes.includes(plan.condiciones_generales.replace(/\s+/g, ' ')));
   }
-  const archivo = '/tmp/opencode/ui05/pdf/condiciones-extensas.pdf';
+  const archivo = join(temporal, 'condiciones-extensas.pdf');
   await writeFile(archivo, await cotizacionPdf(emision({ nombre: 'Extenso sintético', condiciones_generales: 'Párrafo extenso que no puede omitirse.\n'.repeat(150) })));
   assert.ok(Number(execFileSync('pdfinfo', [archivo], { encoding: 'utf8' }).match(/Pages:\s+(\d+)/)[1]) > 2);
   const texto = execFileSync('pdftotext', [archivo, '-'], { encoding: 'utf8' });

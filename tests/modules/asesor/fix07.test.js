@@ -7,7 +7,9 @@ import { validarFamilia } from '../../../src/modules/asesor/asesor.validation.js
 import { solicitudMonotributo } from '../../helpers/monotributo.js';
 import { cotizacionHtml, cotizacionPdf } from '../../../src/modules/asesor/documentos.js';
 import { execFileSync } from 'node:child_process';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 /** Crea un joven sintético con porcentajes publicados independientes de MySQL para comprobar el límite acumulado. */
 function joven(comercial = '20.00', esquema = 'TRAMOS') {
@@ -90,7 +92,11 @@ test('FIX07 civil y vínculo: OTRO válido sin cónyuge; duplicados e incoherenc
   assert.throws(() => validarFamilia(familia), /Solo se admite un cónyuge/);
 });
 
-test('FIX07 PDF real usa el mismo resultado corregido sin recalcular el snapshot', { skip: process.env.RUN_PDF_TESTS !== '1' }, async () => {
+/**
+ * Comprueba los importes corregidos en Chrome sin alterar el snapshot; propaga errores de generación y aserciones.
+ * @param {import('node:test').TestContext} t Registra la limpieza de sus archivos privados al finalizar.
+ */
+test('FIX07 PDF real usa el mismo resultado corregido sin recalcular el snapshot', { skip: process.env.RUN_PDF_TESTS !== '1' }, async (t) => {
   const s = solicitudMonotributo();
   s.entrada.familia.titular.edad = 25; s.entrada.familia.miembros[0].edad = 27;
   s.catalogo.tarifas.push({ rango_clave: 'MAT 0-25', precio: '800000.00' }, { rango_clave: 'MAT 26-35', precio: '900000.00' });
@@ -99,8 +105,10 @@ test('FIX07 PDF real usa el mismo resultado corregido sin recalcular el snapshot
   const antes = JSON.stringify(q);
   assert.equal(resultado.precio_base, '1042815.32'); assert.equal(resultado.total, '606153.96');
   assert.ok((await cotizacionHtml(q)).includes('606.153,96'));
-  await mkdir('/tmp/opencode/fix07', { recursive: true });
-  const path = '/tmp/opencode/fix07/matrimonio-corregido.pdf';
+  const temporal = await mkdtemp(join(tmpdir(), 'matista-pdf-fix07-'));
+  /** Elimina exclusivamente el directorio privado creado por esta prueba. */
+  t.after(async () => { await rm(temporal, { recursive: true, force: true }); });
+  const path = join(temporal, 'matrimonio-corregido.pdf');
   await writeFile(path, await cotizacionPdf(q));
   const texto = execFileSync('pdftotext', [path, '-'], { encoding: 'utf8' });
   for (const importe of ['1.042.815,32', '606.153,96', '23.892,00', '47.784,00']) assert.ok(texto.includes(importe));

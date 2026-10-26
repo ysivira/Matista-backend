@@ -7,7 +7,9 @@ import { previsualizarPreparacion, guardarPreparacion, calcularPreparacion, emit
 import { cotizacionHtml, cotizacionPdf } from '../../../src/modules/asesor/documentos.js';
 import { solicitudMonotributo } from '../../helpers/monotributo.js';
 import { execFileSync } from 'node:child_process';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 test('SPEC: matrimonio 41 + hijo 12, dos adherentes y 35 % produce 707627.51', () => {
   const s = solicitudMonotributo(); const r = calcularCotizacion(s, REGLAS_COMERCIALES);
@@ -134,11 +136,17 @@ test('FIX07 servicios rechazan joven excedido en preview, guardado, recotizació
   assert.equal(f.filas.get('12').estado, 'BORRADOR'); assert.equal(JSON.stringify(f.filas.get('10')), antes);
 });
 
-test('PDF Monotributo real: dos páginas e importes separados del caso de aceptación', { skip: process.env.RUN_PDF_TESTS !== '1' }, async () => {
+/**
+ * Comprueba páginas e importes de aceptación en Chrome; propaga errores de generación y aserciones.
+ * @param {import('node:test').TestContext} t Registra la limpieza de sus archivos privados al finalizar.
+ */
+test('PDF Monotributo real: dos páginas e importes separados del caso de aceptación', { skip: process.env.RUN_PDF_TESTS !== '1' }, async (t) => {
   const solicitud = solicitudMonotributo();
   const q = { estado: 'EMITIDA', numero: 'MAT-MONO-TEST', emitida_at: '2026-10-24T15:00:00Z', modalidad: 'Monotributo', solicitud, resultado: calcularCotizacion(solicitud, REGLAS_COMERCIALES), contacto: {} };
-  await mkdir('/tmp/opencode/monotributo', { recursive: true });
-  const archivo = '/tmp/opencode/monotributo/caso-referencia.pdf';
+  const temporal = await mkdtemp(join(tmpdir(), 'matista-pdf-monotributo-'));
+  /** Elimina exclusivamente el directorio privado creado por esta prueba. */
+  t.after(async () => { await rm(temporal, { recursive: true, force: true }); });
+  const archivo = join(temporal, 'caso-referencia.pdf');
   await writeFile(archivo, await cotizacionPdf(q));
   assert.match(execFileSync('pdfinfo', [archivo], { encoding: 'utf8' }), /Pages:\s+2\b/);
   const texto = execFileSync('pdftotext', ['-f', '1', '-l', '1', archivo, '-'], { encoding: 'utf8' });
