@@ -19,6 +19,7 @@ import {
   listarTarifasDeLaVersion,
   listarVersionesTarifario,
   obtenerDetalleVersion,
+  previsualizarAumentoVersion,
   reconstruirTarifarioHistorico,
   resumirEventosDeVersion,
 } from './tarifario.service.js';
@@ -266,6 +267,24 @@ export async function recuperarVersion(req, res) {
 }
 
 /**
+ * Responde la previsualización del aumento masivo de una versión, calculada
+ * por el servicio con la misma función económica del aumento definitivo.
+ * Es de solo lectura: no crea versiones, no escribe precios ni registra
+ * eventos de auditoría.
+ * @param {object} req Solicitud con contexto AUTH ya inicializado y query.
+ * @param {object} res Respuesta Express sin almacenamiento.
+ * @returns {Promise<object>} JSON `{ version, porcentaje, tipo_ingreso, filas }`.
+ */
+export async function previsualizarAumento(req, res) {
+  const resultado = await previsualizarAumentoVersion(
+    req.authContext.pool,
+    req.params,
+    req.query,
+  );
+  return res.status(200).json(resultado);
+}
+
+/**
  * Aplica un aumento masivo de porcentaje a la version en preparacion.
  * Responde 200 con `{ evento, porcentaje, filas, revision }`.
  */
@@ -396,6 +415,12 @@ export function createTarifarioRouter() {
     authenticate,
     authorize('ADMIN'),
     deshacerUltimoCambio,
+  );
+  router.get(
+    '/tarifario/versiones/:id/aumentos/vista-previa',
+    authenticate,
+    authorize('ADMIN'),
+    previsualizarAumento,
   );
   router.post(
     '/tarifario/versiones/:id/aumentos',

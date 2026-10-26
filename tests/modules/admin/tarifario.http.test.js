@@ -147,8 +147,8 @@ function poolVersionesFalso() {
     },
   ];
   const tarifasCrudas = [
-    { plan_id: 1, plan_nombre: 'RUBI', tipo_ingreso: 'Obligatorio', rango_clave: '0-25', rango_etario: '0-25', rango_nota: null, precio: '10.00', activa: 1 },
-    { plan_id: 1, plan_nombre: 'RUBI', tipo_ingreso: 'Obligatorio', rango_clave: 'HIJO 0-1', rango_etario: 'HIJO 0-1(*)', rango_nota: '(*)', precio: '50.25', activa: 0 },
+    { id: 101, plan_id: 1, plan_nombre: 'RUBI', tipo_ingreso: 'Obligatorio', rango_clave: '0-25', rango_etario: '0-25', rango_nota: null, precio: '10.00', activa: 1 },
+    { id: 102, plan_id: 1, plan_nombre: 'RUBI', tipo_ingreso: 'Obligatorio', rango_clave: 'HIJO 0-1', rango_etario: 'HIJO 0-1(*)', rango_nota: '(*)', precio: '50.25', activa: 0 },
   ];
   const connection = {
     async query(sql, parametros = []) {
@@ -246,6 +246,57 @@ test('rutas SL-3 responden historial, detalle, snapshot y reconstruccion', async
   fixture.state.employees[0].rol = 'ASESOR';
   const prohibido = await request('/api/admin/tarifario/versiones', { headers: { cookie } });
   assert.equal(prohibido.status, 403);
+});
+
+test('la vista previa del aumento es de solo lectura y exige rol ADMIN', async (t) => {
+  const fixture = memoryContext({ rol: 'ADMIN' });
+  fixture.context.pool = poolVersionesFalso();
+  const signed = await fixtureSession(fixture);
+  const app = createApp({ env: localEnv, authContext: fixture.context });
+  const request = await startTestServer(t, app);
+  const cookie = `matista_session=${signed.token}`;
+  const ruta = '/api/admin/tarifario/versiones/7/aumentos/vista-previa';
+
+  const sinSesion = await request(`${ruta}?porcentaje=5`);
+  assert.equal(sinSesion.status, 401);
+
+  const previa = await request(`${ruta}?porcentaje=5`, { headers: { cookie } });
+  assert.equal(previa.status, 200);
+  assert.equal(previa.headers['cache-control'], 'no-store');
+  assert.equal(previa.body.version.id, '7');
+  assert.equal(previa.body.version.estado, 'PREPARACION');
+  assert.equal(previa.body.porcentaje, '5');
+  assert.equal(previa.body.tipo_ingreso, null);
+  assert.deepEqual(previa.body.filas.map((fila) => fila.id), ['101', '102']);
+  // Importes calculados por la misma función del aumento definitivo.
+  assert.equal(previa.body.filas[0].precio_anterior, '10.00');
+  assert.equal(previa.body.filas[0].precio_nuevo, '10.50');
+  assert.equal(previa.body.filas[0].incremento, '0.50');
+  assert.equal(previa.body.filas[1].precio_nuevo, '52.76');
+
+  const modalidad = await request(
+    `${ruta}?porcentaje=5&tipoIngreso=Voluntario`, { headers: { cookie } },
+  );
+  // El snapshot del doble solo tiene filas Obligatorio: 409 con el mismo
+  // mensaje que devolvería la aplicación definitiva.
+  assert.equal(modalidad.status, 409);
+  assert.match(modalidad.body.error.message, /no tiene filas de la modalidad Voluntario/);
+
+  const porcentajeInvalido = await request(`${ruta}?porcentaje=150`, { headers: { cookie } });
+  assert.equal(porcentajeInvalido.status, 400);
+  assert.equal(porcentajeInvalido.body.error.code, 'ADMIN_VALIDACION');
+
+  const versionInexistente = await request(
+    '/api/admin/tarifario/versiones/404/aumentos/vista-previa?porcentaje=5',
+    { headers: { cookie } },
+  );
+  assert.equal(versionInexistente.status, 404);
+  assert.equal(versionInexistente.body.error.code, 'ADMIN_NO_ENCONTRADO');
+
+  fixture.state.employees[0].rol = 'ASESOR';
+  const prohibido = await request(`${ruta}?porcentaje=5`, { headers: { cookie } });
+  assert.equal(prohibido.status, 403);
+  assert.equal(prohibido.body.error.code, 'ROLE_FORBIDDEN');
 });
 
 // ─────────────────────────────────────────────────────────────────────

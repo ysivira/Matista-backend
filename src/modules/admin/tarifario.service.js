@@ -583,6 +583,40 @@ async function validarEdicionDeVersion(
 }
 
 /**
+ * Calculo economico puro del aumento masivo: es la UNICA implementacion de
+ * importes, usada por la previsualizacion y por la aplicacion definitiva.
+ * El incremento de cada fila es el resultado HALF-UP de aplicarPorcentaje
+ * (money.js) y el precio nuevo es precio + incremento exacto en centavos.
+ * No lee ni escribe datos: recibe las filas ya consultadas.
+ * @param {object[]} filas Filas de tarifas (id, tipo_ingreso, rango_clave, precio).
+ * @param {string} porcentaje Porcentaje ya validado por validarPorcentajeAumento.
+ * @returns {{id: number, antes: string, nuevo: string, aumento: string}[]} Importes por fila.
+ * @throws {Error} 409 cuando alguna fila excederia el tope DECIMAL de la columna.
+ */
+export function calcularImportesAumento(filas, porcentaje) {
+  // Calculo previo de todos los importes con aritmetica exacta: si una
+  // fila excede DECIMAL(10,2), se aborta antes de escribir cualquier cosa.
+  return filas.map((fila) => {
+    const aumento = aplicarPorcentaje(fila.precio, porcentaje);
+    const precioNuevo = centavosAImporte(
+      importeACentavos(fila.precio) + importeACentavos(aumento),
+    );
+    if (!esImporteValido(precioNuevo, { maximo: '99999999.99', decimales: 2 })) {
+      throw errorEstado(
+        'El aumento excede el tope del esquema en alguna fila.',
+        [{
+          field: 'porcentaje',
+          message: `La fila ${Number(fila.id)} `
+            + `(${fila.tipo_ingreso}, rango ${fila.rango_clave}) pasaria de `
+            + `${fila.precio} a ${precioNuevo}, fuera del tope de la columna.`,
+        }],
+      );
+    }
+    return { id: Number(fila.id), antes: String(fila.precio), nuevo: precioNuevo, aumento };
+  });
+}
+
+/**
  * Aplica un aumento masivo (modulo conservado A) de porcentaje sobre las
  * filas de una modalidad (o de ambas). Los precios se calculan en centavos
  * con HALF-UP por aplicarPorcentaje; el evento AUMENTO_MASIVO queda como
@@ -626,30 +660,10 @@ export async function aumentarVersionTarifario(
             : 'La version no tiene filas de tarifas para aumentar.',
         );
       }
-      // Calculo previo de todos los importes con aritmetica exacta: si una
-      // fila excede DECIMAL(10,2), se aborta antes de escribir cualquier cosa.
-      // El aumento de cada fila es el incremento HALF-UP (aplicarPorcentaje)
-      // y el precio nuevo es precio + incremento exacto en centavos; cada
-      // fila guarda su valor anterior ANTES de cualquier escritura para que
-      // la auditoria registre el precio que tenia.
-      const importes = filas.map((fila) => {
-        const aumento = aplicarPorcentaje(fila.precio, porcentaje);
-        const precioNuevo = centavosAImporte(
-          importeACentavos(fila.precio) + importeACentavos(aumento),
-        );
-        if (!esImporteValido(precioNuevo, { maximo: '99999999.99', decimales: 2 })) {
-          throw errorEstado(
-            'El aumento excede el tope del esquema en alguna fila.',
-            [{
-              field: 'porcentaje',
-              message: `La fila ${Number(fila.id)} `
-                + `(${fila.tipo_ingreso}, rango ${fila.rango_clave}) pasaria de `
-                + `${fila.precio} a ${precioNuevo}, fuera del tope de la columna.`,
-            }],
-          );
-        }
-        return { id: Number(fila.id), antes: String(fila.precio), nuevo: precioNuevo };
-      });
+      // Cada fila guarda su valor anterior ANTES de cualquier escritura
+      // para que la auditoria registre el precio que tenia; los importes
+      // provienen de la unica funcion economica del aumento.
+      const importes = calcularImportesAumento(filas, porcentaje);
       const cambios = importes.filter(
         (calculo) => compararImportes(calculo.antes, calculo.nuevo) !== 0,
       );
@@ -713,6 +727,75 @@ export async function aumentarVersionTarifario(
         revision: revision + 1,
       };
   }, { transaction: true });
+}
+
+/**
+ * Previsualiza el aumento masivo de una version SIN escribir datos: usa la
+ * misma funcion economica (calcularImportesAumento) que la aplicacion
+ * definitiva y devuelve los importes por fila en el orden comercial del
+ * snapshot. Solo consulta: no crea versiones, no modifica precios ni
+ * vigencias y no registra eventos de auditoria.
+ * @param {object} pool Pool MySQL compartido por ADMIN.
+ * @param {{id: unknown}} parametros Segmento HTTP con la version.
+ * @param {{porcentaje: unknown, tipoIngreso: unknown}} consulta Query HTTP.
+ * @param {object} dependencias Repositorio sustituible para pruebas.
+ * @returns {Promise<object>} `{ version, porcentaje, tipo_ingreso, filas }`;
+ *   cada fila trae precio_anterior, precio_nuevo e incremento como DECIMAL.
+ * @throws {Error} 400 parametros invalidos; 404 version inexistente;
+ *   409 sin filas de la modalidad o tope de columna excedido.
+ */
+export async function previsualizarAumentoVersion(
+  pool,
+  parametros,
+  consulta,
+  dependencias = DEPENDENCIAS_DEFECTO,
+) {
+  const id = validarIdVersion(parametros.id);
+  const porcentaje = validarPorcentajeAumento(consulta.porcentaje);
+  const tipoIngreso = validarModalidadOpcional(consulta.tipoIngreso);
+
+  return dependencias.withConnection(pool, async (connection) => {
+    const fila = await dependencias.obtenerVersionPorId(connection, id);
+    if (!fila) {
+      throw errorNoEncontrado('La version indicada no existe.');
+    }
+
+    // Reutiliza la lectura del snapshot del repositorio, sin SQL propio:
+    // las filas y su orden comercial coinciden con el detalle de pantalla.
+    const tarifas = await dependencias.listarTarifasDeVersion(connection, id);
+    const filas = ordenarTarifasDeVersion(tarifas)
+      .filter((tarifa) => !tipoIngreso || tarifa.tipo_ingreso === tipoIngreso);
+    if (filas.length === 0) {
+      throw errorEstado(
+        tipoIngreso
+          ? `La version no tiene filas de la modalidad ${tipoIngreso}.`
+          : 'La version no tiene filas de tarifas para aumentar.',
+      );
+    }
+
+    const importes = calcularImportesAumento(filas, porcentaje);
+    return {
+      version: { id: String(fila.id), estado: fila.estado },
+      porcentaje,
+      tipo_ingreso: tipoIngreso,
+      filas: importes.map((calculo) => {
+        const filaReferencia = filas.find(
+          (tarifa) => Number(tarifa.id) === calculo.id,
+        );
+        return {
+          id: String(calculo.id),
+          plan_id: String(filaReferencia.plan_id),
+          plan_nombre: filaReferencia.plan_nombre,
+          tipo_ingreso: filaReferencia.tipo_ingreso,
+          rango_clave: filaReferencia.rango_clave,
+          rango_nota: filaReferencia.rango_nota ?? null,
+          precio_anterior: calculo.antes,
+          precio_nuevo: calculo.nuevo,
+          incremento: calculo.aumento,
+        };
+      }),
+    };
+  });
 }
 
 /**
