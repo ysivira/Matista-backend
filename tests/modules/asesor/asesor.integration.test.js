@@ -197,6 +197,7 @@ test('ASESOR real: AUTH HTTP, propiedad, cálculo, emisión y trazabilidad hist�
     const mono = await api('cotizaciones', { ...entrada, modalidad: 'Monotributo', aportes: { categoria: 'A', adherentes: 1 } });
     assert.equal(mono.status, 201); assert.equal(mono.body.solicitud.entrada.modalidad, 'Monotributo');
   });
+  /** Filtra por la identidad del snapshot del fixture actual, sin depender de apellidos de versiones anteriores del test. */
   await t.test('contacto conserva snapshot, recotización conserva origen e historial', async () => {
     const detalle = (await api(`cotizaciones/${q.id}`, undefined, 'GET')).body;
     const r = await api(`cotizaciones/${q.id}/contacto`, { revision: detalle.revision, contacto: { email: `corregido-${sufijo}@example.test` } }, 'PATCH');
@@ -210,7 +211,11 @@ test('ASESOR real: AUTH HTTP, propiedad, cálculo, emisión y trazabilidad hist�
     assert.equal(porNumero.status, 200); assert.equal(porNumero.body.cotizaciones.length, 1);
     assert.equal(porNumero.body.cotizaciones[0].total, original.resultado.total);
     assert.equal((await api('cotizaciones?estado=BORRADOR', undefined, 'GET')).body.cotizaciones.length, 2);
-    assert.equal((await api('cotizaciones?cliente=Actualizado', undefined, 'GET')).body.cotizaciones.length, 3);
+    const apellido = encodeURIComponent(original.solicitud.cliente.apellidos);
+    assert.equal((await api(`cotizaciones?cliente=${apellido}`, undefined, 'GET')).body.cotizaciones.length, 3);
+    const sinApellido = await api(`cotizaciones?cliente=${encodeURIComponent('MUÑOZ')}`, undefined, 'GET');
+    assert.equal(sinApellido.status, 200); assert.equal(sinApellido.body.cotizaciones.length, 0);
+    assert.equal((await api('cotizaciones?cliente=SinCoincidenciasSPEC21', undefined, 'GET')).body.cotizaciones.length, 0);
     assert.equal((await api('cotizaciones', undefined, 'GET', 1)).body.cotizaciones.length, 0);
     q = original;
   });

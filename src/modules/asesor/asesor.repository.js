@@ -97,8 +97,15 @@ export async function emitirCotizacion(c, fila, solicitud, resultado) {
     [solicitud.entrada.familia.titular.edad, fila.id]);
 }
 
-/** Lista historial propio y aportes capturados con filtros parametrizados, sin recalcular snapshots. */
+/**
+ * Lista historial propio y aportes capturados sin recalcular snapshots.
+ * @param {object} c Conexión mysql2 de la lectura autorizada.
+ * @param {string} actor Propietario del historial.
+ * @param {object} filtro Filtros validados, incluido texto Unicode y offset entero acotado.
+ * @returns {Promise<object[]>} Filas históricas con aportes JSON decodificados.
+ */
 export async function listarCotizaciones(c, actor, filtro) {
+  // DNI y número son ASCII: convertir solo su comparación libre admite tildes/Ñ y conserva el cotejo binario.
   const [rows] = await c.execute(`SELECT q.id,q.numero,q.origen_id,q.estado,q.modalidad,q.revision,q.created_at,q.emitida_at,q.vence_at,
     q.plan_id,c.dni,JSON_UNQUOTE(JSON_EXTRACT(q.resultado,'$.total')) AS total,JSON_UNQUOTE(JSON_EXTRACT(q.solicitud,'$.cliente.nombres')) AS nombres,
     JSON_UNQUOTE(JSON_EXTRACT(q.solicitud,'$.cliente.apellidos')) AS apellidos,
@@ -106,7 +113,7 @@ export async function listarCotizaciones(c, actor, filtro) {
     JSON_EXTRACT(q.resultado,'$.aportes') AS aportes
     FROM cotizaciones q JOIN clientes c ON c.id=q.cliente_id
     WHERE q.asesor_legajo=? AND (?='' OR q.estado=?) AND c.dni LIKE ?
-      AND (?='' OR CONCAT(c.nombres,' ',c.apellidos) LIKE ? OR c.dni LIKE ? OR q.numero LIKE ?)
+      AND (?='' OR CONCAT(c.nombres,' ',c.apellidos) LIKE ? OR CONVERT(c.dni USING utf8mb4) COLLATE utf8mb4_bin LIKE ? OR CONVERT(q.numero USING utf8mb4) COLLATE utf8mb4_bin LIKE ?)
       AND (?='' OR q.plan_id=?)
       AND (?='' OR DATE(q.created_at)>=?) AND (?='' OR DATE(q.created_at)<=?)
     ORDER BY q.id DESC LIMIT 50 OFFSET ${filtro.offset}`, [actor, filtro.estado, filtro.estado, `${filtro.dni}%`,
