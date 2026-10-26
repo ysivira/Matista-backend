@@ -101,3 +101,55 @@ export async function existePorcentajeVigente(connection, porcentaje) {
   );
   return rows.length > 0;
 }
+
+/**
+ * Obtiene un porcentaje comercial por su identificador.
+ * @param {object} connection Conexión mysql2.
+ * @param {number|string} id Identificador del porcentaje.
+ * @returns {Promise<object|undefined>} Fila encontrada o undefined.
+ */
+export async function obtenerPorcentajeComercialPorId(connection, id) {
+  const [rows] = await connection.execute(
+    `SELECT id, porcentaje, descripcion, fecha_vigencia, vigente_hasta,
+            actor_legajo, created_at
+       FROM porcentajes_comerciales
+       WHERE id = ?`,
+    [id],
+  );
+  return rows[0];
+}
+
+/**
+ * Persiste la auditoría de porcentajes en empleados_auditoria sin cambiar
+ * su formato ni su reloj NOW(6); los eventos y valores los decide el servicio.
+ * @param {object} connection Conexión transaccional mysql2.
+ * @param {{legajo: string, actor_legajo: string, evento: string, campo: string, valor_anterior: string|null, valor_nuevo: string|null}} datos Datos de auditoría.
+ * @returns {Promise<void>}
+ */
+export async function insertarEmpleadoAuditoria(connection, datos) {
+  await connection.execute(
+    `INSERT INTO empleados_auditoria
+      (legajo, actor_legajo, evento, campo, valor_anterior, valor_nuevo, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, NOW(6))`,
+    [datos.legajo, datos.actor_legajo, datos.evento, datos.campo, datos.valor_anterior, datos.valor_nuevo],
+  );
+}
+
+/**
+ * Bloquea la fila abierta antes de versionarla o cerrarla, sin cambiar límites transaccionales.
+ * @param {object} connection Misma conexión transaccional suministrada por el servicio.
+ * @param {number|string} porcentaje Valor buscado, sin convertir sus parámetros.
+ * @param {{conDescripcion?: boolean}} opciones Conserva las proyecciones anteriores de edición y baja.
+ * @returns {Promise<object|undefined>} Primera fila encontrada o undefined; propaga errores de MySQL.
+ */
+export async function bloquearPorcentajeComercialVigente(
+  connection, porcentaje, { conDescripcion = true } = {},
+) {
+  const [filas] = await connection.execute(
+    `SELECT id, porcentaje${conDescripcion ? ', descripcion' : ''}
+       FROM porcentajes_comerciales
+      WHERE porcentaje = ? AND vigente_hasta IS NULL FOR UPDATE`,
+    [porcentaje],
+  );
+  return filas[0];
+}

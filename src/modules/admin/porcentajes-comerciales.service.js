@@ -1,11 +1,15 @@
 import { withConnection } from '../auth/auth.repository.js';
 import {
   cerrarPorcentajeComercial,
+  bloquearPorcentajeComercialVigente,
   existePorcentajeVigente,
   insertarPorcentajeComercial,
   listarPorcentajesComercialesVigentes,
   obtenerHistorialPorcentajeComercial,
+  obtenerPorcentajeComercialPorId,
+  insertarEmpleadoAuditoria,
 } from './porcentajes-comerciales.repository.js';
+import { obtenerEmpleado } from './employees.repository.js';
 import {
   errorEstado,
   errorNoEncontrado,
@@ -33,20 +37,6 @@ function validarPorcentajeComercial(datos) {
   if (errores.length > 0) {
     throw errorValidacion('Datos de porcentaje comercial inválidos.', errores);
   }
-}
-
-/**
- * Captura la identidad del actor para la auditoría existente.
- * @param {object} connection Conexión transaccional.
- * @param {string} actorLegajo Legajo del ADMIN.
- * @returns {Promise<{legajo: string}>} Identidad mínima de auditoría.
- */
-async function snapshotActor(connection, actorLegajo) {
-  const [filas] = await connection.execute(
-    'SELECT nombre, apellido FROM empleados WHERE legajo = ?',
-    [actorLegajo],
-  );
-  return { legajo: actorLegajo, nombre: filas[0]?.nombre ?? '', apellido: filas[0]?.apellido ?? '' };
 }
 
 /** Lista el catálogo vigente mediante una conexión de lectura. */
@@ -81,25 +71,23 @@ export async function crearPorcentajeComercial(pool, datos, actor) {
     if (await existePorcentajeVigente(connection, porcentaje)) {
       throw errorEstado(`Ya existe un porcentaje comercial vigente con el valor ${porcentaje}%.`);
     }
-    const actorInfo = await snapshotActor(connection, actor.legajo);
+    // Conserva la lectura en la misma conexión. La auditoría usaba únicamente
+    // el legajo recibido, incluso si no existía fila de empleado; no persiste nombres.
+    await obtenerEmpleado(connection, actor.legajo);
     const nuevaId = await insertarPorcentajeComercial(connection, {
       porcentaje,
       descripcion: datos.descripcion ?? null,
       actorLegajo: actor.legajo,
     });
-    await connection.execute(
-      `INSERT INTO empleados_auditoria
-        (legajo, actor_legajo, evento, campo, valor_anterior, valor_nuevo, created_at)
-       VALUES (?, ?, 'PORCENTAJE_COMERCIAL_CREADO', 'PORCENTAJE', ?, ?, NOW(6))`,
-      [actorInfo.legajo, actorInfo.legajo, 'N/A', `porcentaje#${nuevaId}:${porcentaje}%`],
-    );
-    const [filas] = await connection.execute(
-      `SELECT id, porcentaje, descripcion, fecha_vigencia, vigente_hasta,
-              actor_legajo, created_at
-         FROM porcentajes_comerciales WHERE id = ?`,
-      [nuevaId],
-    );
-    return filas[0];
+    await insertarEmpleadoAuditoria(connection, {
+      legajo: actor.legajo,
+      actor_legajo: actor.legajo,
+      evento: 'PORCENTAJE_COMERCIAL_CREADO',
+      campo: 'PORCENTAJE',
+      valor_anterior: 'N/A',
+      valor_nuevo: `porcentaje#${nuevaId}:${porcentaje}%`,
+    });
+    return await obtenerPorcentajeComercialPorId(connection, nuevaId);
   }, { transaction: true }).catch((error) => { throw mapearErrorIntegridad(error); });
 }
 
@@ -118,34 +106,25 @@ export async function actualizarPorcentajeComercial(pool, porcentaje, datos, act
   }
   validarPorcentajeComercial({ porcentaje, descripcion: datos.descripcion });
   return withConnection(pool, async (connection) => {
-    const [filas] = await connection.execute(
-      `SELECT id, porcentaje, descripcion
-         FROM porcentajes_comerciales
-        WHERE porcentaje = ? AND vigente_hasta IS NULL FOR UPDATE`,
-      [porcentaje],
-    );
-    const actual = filas[0];
+    const actual = await bloquearPorcentajeComercialVigente(connection, porcentaje);
     if (!actual) throw errorNoEncontrado(`No existe un porcentaje comercial vigente con el valor ${porcentaje}%.`);
-    const actorInfo = await snapshotActor(connection, actor.legajo);
+    // Se mantiene la lectura transaccional; el evento conserva el legajo recibido.
+    await obtenerEmpleado(connection, actor.legajo);
     await cerrarPorcentajeComercial(connection, porcentaje);
     const nuevaId = await insertarPorcentajeComercial(connection, {
       porcentaje: actual.porcentaje,
       descripcion: datos.descripcion,
       actorLegajo: actor.legajo,
     });
-    await connection.execute(
-      `INSERT INTO empleados_auditoria
-        (legajo, actor_legajo, evento, campo, valor_anterior, valor_nuevo, created_at)
-       VALUES (?, ?, 'PORCENTAJE_COMERCIAL_ACTUALIZADO', 'DESCRIPCION', ?, ?, NOW(6))`,
-      [actorInfo.legajo, actorInfo.legajo, actual.descripcion ?? 'N/A', datos.descripcion ?? 'N/A'],
-    );
-    const [nuevas] = await connection.execute(
-      `SELECT id, porcentaje, descripcion, fecha_vigencia, vigente_hasta,
-              actor_legajo, created_at
-         FROM porcentajes_comerciales WHERE id = ?`,
-      [nuevaId],
-    );
-    return nuevas[0];
+    await insertarEmpleadoAuditoria(connection, {
+      legajo: actor.legajo,
+      actor_legajo: actor.legajo,
+      evento: 'PORCENTAJE_COMERCIAL_ACTUALIZADO',
+      campo: 'DESCRIPCION',
+      valor_anterior: actual.descripcion ?? 'N/A',
+      valor_nuevo: datos.descripcion ?? 'N/A',
+    });
+    return await obtenerPorcentajeComercialPorId(connection, nuevaId);
   }, { transaction: true }).catch((error) => { throw mapearErrorIntegridad(error); });
 }
 
@@ -158,21 +137,20 @@ export async function actualizarPorcentajeComercial(pool, porcentaje, datos, act
  */
 export async function eliminarPorcentajeComercial(pool, porcentaje, actor) {
   return withConnection(pool, async (connection) => {
-    const [filas] = await connection.execute(
-      `SELECT id, porcentaje
-         FROM porcentajes_comerciales
-        WHERE porcentaje = ? AND vigente_hasta IS NULL FOR UPDATE`,
-      [porcentaje],
+    const actual = await bloquearPorcentajeComercialVigente(
+      connection, porcentaje, { conDescripcion: false },
     );
-    const actual = filas[0];
     if (!actual) throw errorNoEncontrado(`No existe un porcentaje comercial vigente con el valor ${porcentaje}%.`);
-    const actorInfo = await snapshotActor(connection, actor.legajo);
+    // Se mantiene la lectura transaccional; el evento conserva el legajo recibido.
+    await obtenerEmpleado(connection, actor.legajo);
     await cerrarPorcentajeComercial(connection, porcentaje);
-    await connection.execute(
-      `INSERT INTO empleados_auditoria
-        (legajo, actor_legajo, evento, campo, valor_anterior, valor_nuevo, created_at)
-       VALUES (?, ?, 'PORCENTAJE_COMERCIAL_ELIMINADO', 'PORCENTAJE', ?, 'ELIMINADO', NOW(6))`,
-      [actorInfo.legajo, actorInfo.legajo, `porcentaje#${actual.id}:${actual.porcentaje}%`],
-    );
+    await insertarEmpleadoAuditoria(connection, {
+      legajo: actor.legajo,
+      actor_legajo: actor.legajo,
+      evento: 'PORCENTAJE_COMERCIAL_ELIMINADO',
+      campo: 'PORCENTAJE',
+      valor_anterior: `porcentaje#${actual.id}:${actual.porcentaje}%`,
+      valor_nuevo: 'ELIMINADO',
+    });
   }, { transaction: true }).catch((error) => { throw mapearErrorIntegridad(error); });
 }
