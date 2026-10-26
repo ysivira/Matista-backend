@@ -16,7 +16,12 @@ function banda(edad) {
   return '66+';
 }
 
-/** Resuelve el segmento de cada integrante, incluyendo matrimonio y bandas específicas de hijos. */
+/**
+ * Resuelve la clave exacta del tarifario para un integrante con edad ya validada entre 0 y 120.
+ * @param {object} miembro Parentesco y edad utilizados para seleccionar la tarifa.
+ * @param {boolean} casado Indica si el titular utiliza la lista matrimonial.
+ * @returns {string|null} Clave contractual; null para el cónyuge incluido en la tarifa matrimonial.
+ */
 export function segmentoIntegrante(miembro, casado) {
   if (miembro.parentesco === 'CONYUGE') return null;
   if (miembro.parentesco === 'ADHERENTE') return 'FAMILIAR A CARGO';
@@ -27,6 +32,8 @@ export function segmentoIntegrante(miembro, casado) {
     if (miembro.edad <= 39) return 'HIJO 30-39';
     if (miembro.edad <= 49) return 'HIJO 40-49';
   }
+  // El catálogo conserva MAT 66-00 para matrimonio, pero 66+ para el segmento individual.
+  if (miembro.parentesco === 'TITULAR' && casado && miembro.edad >= 66) return 'MAT 66-00';
   return `${miembro.parentesco === 'TITULAR' && casado ? 'MAT ' : ''}${banda(miembro.edad)}`;
 }
 
