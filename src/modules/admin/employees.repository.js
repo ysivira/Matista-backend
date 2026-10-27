@@ -43,10 +43,11 @@ export async function listarEmpleados(connection, { estado, rol, busqueda } = {}
   const donde = condiciones.length ? `WHERE ${condiciones.join(' AND ')}` : '';
   const [filas] = await connection.query(
     `SELECT e.legajo, e.nombre, e.segundo_nombre, e.apellido, e.segundo_apellido,
-            e.telefono, e.rol, e.estado, c.email
+            e.telefono, e.rol, e.estado, c.email,
+            (c.verificado_at IS NOT NULL) AS email_verificado
        FROM empleados e
          LEFT JOIN (
-              SELECT legajo, email
+              SELECT legajo, email, verificado_at
                 FROM empleados_correos
                WHERE estado = 'ACTUAL'
          ) c ON c.legajo = e.legajo
@@ -54,11 +55,19 @@ export async function listarEmpleados(connection, { estado, rol, busqueda } = {}
       ORDER BY e.apellido, e.nombre, e.legajo`,
     valores
   );
+  // MySQL entrega la expresion booleana como 1/0; el contrato publico es
+  // booleano JavaScript para que la interfaz compare con true/false. La
+  // coercion es en el mismo objeto de fila: mysql2 entrega filas nuevas
+  // por consulta y otros repositorios reutilizan la identidad del retorno.
+  for (const fila of filas) {
+    fila.email_verificado = Boolean(fila.email_verificado);
+  }
   return filas;
 }
 
 /**
- * Devuelve la fila publica de un empleado con su correo ACTUAL.
+ * Devuelve la fila publica de un empleado con su correo ACTUAL y la
+ * marca de verificacion del correo (email_verificado).
  *
  * - Parametros: `connection` conexion mysql2; `legajo` de la cuenta pedida.
  * - Retorna: fila publica sin credenciales, o undefined si no existe.
@@ -67,17 +76,22 @@ export async function listarEmpleados(connection, { estado, rol, busqueda } = {}
 export async function obtenerEmpleado(connection, legajo) {
   const [filas] = await connection.query(
     `SELECT e.legajo, e.nombre, e.segundo_nombre, e.apellido, e.segundo_apellido,
-            e.telefono, e.direccion, e.rol, e.estado, c.email
+            e.telefono, e.direccion, e.rol, e.estado, c.email,
+            (c.verificado_at IS NOT NULL) AS email_verificado
        FROM empleados e
          LEFT JOIN (
-              SELECT legajo, email
+              SELECT legajo, email, verificado_at
                 FROM empleados_correos
                WHERE estado = 'ACTUAL'
          ) c ON c.legajo = e.legajo
       WHERE e.legajo = ?`,
     [legajo]
   );
-  return filas[0];
+  const fila = filas[0];
+  // Misma coercion que el listado, en el mismo objeto (contrato de identidad
+  // reutilizado por otros repositorios, p. ej. el snapshot de auditoria).
+  if (fila) fila.email_verificado = Boolean(fila.email_verificado);
+  return fila;
 }
 
 /**

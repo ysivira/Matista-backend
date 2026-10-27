@@ -18,8 +18,8 @@ const NOW = new Date('2026-10-15T12:00:00Z');
 /** Crea un estado sintetico y su repositorio doble con rollback real.
  * `variantes` permite seeds por prueba.
  */
-function crearDoble({ empleados = [], sesiones = [] } = {}) {
-  const estado = { empleados, correos: [], sesiones, auditoria: [], escrituras: [] };
+function crearDoble({ empleados = [], sesiones = [], correos = [] } = {}) {
+  const estado = { empleados, correos, sesiones, auditoria: [], escrituras: [] };
   let sequence = 1;
   // Candado del conjunto de ADMIN activos: simula el FOR UPDATE real. La
   // operacion siguiente espera a que la anterior termine (commit o
@@ -62,6 +62,11 @@ function crearDoble({ empleados = [], sesiones = [] } = {}) {
     async findEmployee(connection, legajo, lock) {
       estado.escrituras.push({ op: 'findEmployee', legajo, lock });
       return structuredClone(estado.empleados.find((e) => e.legajo === legajo));
+    },
+    /** Igual a AUTH: correos del legajo con estado y verificacion. */
+    async findEmails(connection, legajo, lock) {
+      estado.escrituras.push({ op: 'findEmails', legajo, lock });
+      return structuredClone(estado.correos.filter((c) => c.legajo === legajo));
     },
     /** Cuenta ADMIN activos excluyendo al objetivo, como el SQL real. */
     async contarAdminsActivos(connection, legajoExcluido) {
@@ -159,11 +164,19 @@ test('la matriz de transiciones solo permite los pares aprobados', () => {
   }
 });
 
+/** Correo ACTUAL verificado sintetico del legajo dado. */
+function correoVerificado(legajo) {
+  return {
+    id: 1, legajo, email: `${legajo}@matista.test`, estado: 'ACTUAL', verificado_at: NOW,
+  };
+}
+
 test('activa PENDIENTE dejando auditoria y sin tocar sesiones', async () => {
   const doble = crearDoble({
     empleados: [empleado('0000000001', { rol: 'ADMIN' }),
       empleado('0000000099', { estado: 'PENDIENTE' })],
     sesiones: [{ jti: 'j1', legajo: '0000000099', revoked_at: null }],
+    correos: [correoVerificado('0000000099')],
   });
   const resultado = await gestionarEstado({}, '0000000001', '0000000099', 'ACTIVO', NOW, doble.repositorio);
 
@@ -175,6 +188,61 @@ test('activa PENDIENTE dejando auditoria y sin tocar sesiones', async () => {
   }]);
   assert.ok(!doble.estado.escrituras.some((e) => e.op === 'revokeSessions'),
     'la activacion no debe revocar sesiones');
+  // La regla SPEC-25 consulta los correos con lock antes de activar.
+  assert.deepEqual(doble.estado.escrituras.filter((e) => e.op === 'findEmails'), [{
+    op: 'findEmails', legajo: '0000000099', lock: true,
+  }]);
+});
+
+test('exige correo ACTUAL verificado para activar una cuenta PENDIENTE', async () => {
+  // Casos sin correo habilitante: sin correos, solo correo PENDIENTE y solo
+  // correo ANTERIOR ya verificado; ninguno reemplaza al ACTUAL verificado.
+  const casos = [
+    ['sin correos', []],
+    ['solo correo pendiente sin verificar', [
+      { id: 7, legajo: '0000000099', email: 'n@matista.test', estado: 'PENDIENTE', verificado_at: null },
+    ]],
+    ['solo correo anterior verificado', [{
+      id: 8, legajo: '0000000099', email: 'vieja@matista.test', estado: 'ANTERIOR', verificado_at: NOW,
+    }]],
+  ];
+  for (const [nombre, correos] of casos) {
+    const doble = crearDoble({
+      empleados: [empleado('0000000001', { rol: 'ADMIN' }),
+        empleado('0000000099', { estado: 'PENDIENTE' })],
+      correos,
+    });
+    await rechazaCon(
+      gestionarEstado({}, '0000000001', '0000000099', 'ACTIVO', NOW, doble.repositorio),
+      'ADMIN_ESTADO', 409,
+    );
+    assert.equal(
+      doble.estado.escrituras.filter((e) => e.op === 'actualizarEstado').length, 0,
+      `no debe escribir el estado en el caso ${nombre}`,
+    );
+    assert.equal(doble.estado.auditoria.length, 0, `sin auditoria en el caso ${nombre}`);
+    assert.equal(estadoFinal(doble, '0000000099')?.estado, 'PENDIENTE');
+  }
+});
+
+test('exige correo ACTUAL verificado para reactivar una cuenta INACTIVO', async () => {
+  const sin = crearDoble({
+    empleados: [empleado('0000000001', { rol: 'ADMIN' }),
+      empleado('0000000099', { estado: 'INACTIVO' })],
+  });
+  await rechazaCon(
+    gestionarEstado({}, '0000000001', '0000000099', 'ACTIVO', NOW, sin.repositorio),
+    'ADMIN_ESTADO', 409,
+  );
+  assert.equal(estadoFinal(sin, '0000000099')?.estado, 'INACTIVO');
+
+  const con = crearDoble({
+    empleados: [empleado('0000000001', { rol: 'ADMIN' }),
+      empleado('0000000099', { estado: 'INACTIVO' })],
+    correos: [correoVerificado('0000000099')],
+  });
+  const resultado = await gestionarEstado({}, '0000000001', '0000000099', 'ACTIVO', NOW, con.repositorio);
+  assert.equal(resultado.estado, 'ACTIVO');
 });
 
 /** Atajo de lectura del doble. */

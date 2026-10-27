@@ -11,6 +11,9 @@
  *   ACTIVO -> INACTIVO | BAJA (desactivacion y baja logica; RF-D04)
  *   INACTIVO -> ACTIVO | BAJA (reactivacion y baja; RF-D03/D04)
  *   BAJA: estado terminal, no admite reactivacion (RF-D04).
+ * Regla SPEC-25: activar o reactivar exige un correo pendiente de estado
+ * ACTUAL con verificacion confirmada (verificado_at), igual que el
+ * ingreso de AUTH; sin correo verificado la transicion se rechaza.
  * Reutiliza contratos de AUTH (withConnection, findEmployee con lock,
  * revokeSessions y audit) y los scripts propios del repositorio ADMIN,
  * sin duplicar el comportamiento AUTH. Las funciones reciben un
@@ -173,6 +176,19 @@ export async function gestionarEstado(
           `No se puede pasar de ${objetivo.estado} a ${destino}: ` +
             `destinos admisibles: ${destinoValido}.`
         );
+      }
+      if (destino === 'ACTIVO') {
+        // Regla SPEC-25: solo se activa o reactiva una cuenta cuyo correo
+        // ACTUAL esta verificado, la misma condicion que exige el ingreso.
+        // Con lock FOR UPDATE para no dejar pasar dos activaciones
+        // concurrentes con el mismo correo sin verificar.
+        const correos = await repositorio.findEmails(connection, objetivo.legajo, true);
+        if (!correos.some(c => c.estado === 'ACTUAL' && c.verificado_at)) {
+          throw errorEstado(
+            'La cuenta no tiene su correo actual verificado; la persona debe ' +
+              'verificar su correo antes de activar o reactivar la cuenta.'
+          );
+        }
       }
       await guardiaUltimoAdmin(repositorio, connection, objetivo, destino);
       await repositorio.actualizarEstado(connection, objetivo.legajo, destino);
