@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { createApp } from '../../../src/app.js';
-import { validarCliente } from '../../../src/modules/asesor/asesor.validation.js';
+import { validarCliente, validarTelefono } from '../../../src/modules/asesor/asesor.validation.js';
 import { guardarCliente, obtenerCliente } from '../../../src/modules/asesor/clientes.service.js';
 import { guardarPreparacion, calcularPreparacion, emitirPreparacion, consultarHistorial } from '../../../src/modules/asesor/cotizaciones.service.js';
 import { cotizacionHtml, cotizacionPdf } from '../../../src/modules/asesor/documentos.js';
@@ -15,7 +15,7 @@ import { solicitudMonotributo } from '../../helpers/monotributo.js';
 import { casosDocumentosPdf } from '../../helpers/pdf.fixtures.js';
 
 const entradaCliente = { dni: '12345678', nombres: 'maría josé', apellidos: 'pérez muñoz', email: 'Maria.Jose@example.test',
-  telefono: '+54 000', direccion: 'Calle Álamo', provincia: 'Córdoba', localidad: 'Villa María' };
+  telefono: '+54 11 5555-0000', direccion: 'Calle Álamo', provincia: 'Córdoba', localidad: 'Villa María' };
 
 for (const [nombre, esperado] of [['juan carlos', 'JUAN CARLOS'], ['maría josé', 'MARÍA JOSÉ'], ['muñoz', 'MUÑOZ'],
   ["ana-maría d'angelo", "ANA-MARÍA D'ANGELO"], ['MARÍA', 'MARÍA']]) {
@@ -39,6 +39,27 @@ test('SPEC20 rechaza identidad inválida antes de abrir conexión y controla exp
     }
   }
   assert.equal(validarCliente({ ...entradaCliente, nombres: ' á '.trim() }).nombres, 'Á');
+});
+
+/** SPEC-28: teléfono opcional con caracteres telefónicos y dígitos razonables. */
+test('SPEC28 acepta teléfonos válidos y el valor vacío', () => {
+  assert.equal(validarTelefono(null), null);
+  assert.equal(validarTelefono(undefined), null);
+  assert.equal(validarTelefono(''), null);
+  assert.equal(validarTelefono('  '), null);
+  assert.equal(validarTelefono('1133344444'), '1133344444');
+  assert.equal(validarTelefono('+54 11 3334-4444'), '+54 11 3334-4444');
+  assert.equal(validarTelefono('(011) 4444-0000'), '(011) 4444-0000');
+  assert.equal(validarTelefono('4444-000'), '4444-000');
+  assert.equal(validarTelefono('777-7777'), '777-7777');
+});
+
+/** SPEC-28: rechaza letras, símbolos ajenos y cantidades insuficientes de dígitos. */
+test('SPEC28 rechaza teléfonos con letras, símbolos o pocos dígitos', () => {
+  for (const valor of ['aaaa', '11abc444', '12345', '++++', '123@4567', 'a'.repeat(41), '1'.repeat(41)]) {
+    assert.throws(() => validarTelefono(valor), { code: 'ASESOR_VALIDACION' },
+      `caso ${JSON.stringify(valor)}`);
+  }
 });
 
 /**

@@ -43,9 +43,34 @@ export function validarContacto(datos) {
   if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) invalidar('Correo electrónico inválido.');
   return {
     email,
-    telefono: texto(datos.telefono, 40),
+    telefono: validarTelefono(datos.telefono),
     direccion: texto(datos.direccion, 255)
   };
+}
+
+/**
+ * Valida un teléfono opcional (SPEC-28): vacío es válido; con contenido,
+ * admite prefijo internacional, espacios, paréntesis y guiones con una
+ * cantidad razonable de dígitos, y rechaza letras y caracteres ajenos, sin
+ * imponer un formato nacional único ni alterar teléfonos históricos.
+ * @param {unknown} valor Teléfono recibido del cliente HTTP.
+ * @returns {string|null} Teléfono recortado y válido, o null si se omitió.
+ * @throws {Error} ASESOR_VALIDACION con mensaje público cuando es inválido.
+ */
+export function validarTelefono(valor) {
+  if (valor == null) return null;
+  if (typeof valor !== 'string') invalidar();
+  const limpio = valor.trim();
+  // Solo espacios equivale a omitido; un valor con contenido pasa a las reglas.
+  if (!limpio) return null;
+  const caracteres = /^\+?[0-9 ()-]{6,40}$/.test(limpio);
+  const digitos = (limpio.match(/\d/g) ?? []).length >= 7;
+  if (limpio.length > 40 || !caracteres || !digitos) {
+    invalidar(
+      'Número de teléfono inválido: use dígitos y, opcionalmente, el prefijo +, espacios, paréntesis o guiones.'
+    );
+  }
+  return limpio;
 }
 
 /** Valida vínculos, titular único y coherencia de cónyuge/CASADO en nuevas preparaciones, sin reescribir historia. */

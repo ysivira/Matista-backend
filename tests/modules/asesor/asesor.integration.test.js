@@ -222,8 +222,8 @@ test('ASESOR real: AUTH HTTP, propiedad, cálculo, emisión y trazabilidad hist�
   await t.test('dos ediciones concurrentes no sobrescriben una revisión confirmada', async () => {
     const revision = q.revision;
     const resultados = await Promise.all([
-      api(`cotizaciones/${q.id}/contacto`, { revision, contacto: { telefono: '111' } }, 'PATCH'),
-      api(`cotizaciones/${q.id}/contacto`, { revision, contacto: { telefono: '222' } }, 'PATCH'),
+      api(`cotizaciones/${q.id}/contacto`, { revision, contacto: { telefono: '1111111' } }, 'PATCH'),
+      api(`cotizaciones/${q.id}/contacto`, { revision, contacto: { telefono: '2222222' } }, 'PATCH'),
     ]);
     assert.deepEqual(resultados.map(r => r.status).sort(), [200, 409]);
     q = (await api(`cotizaciones/${q.id}`, undefined, 'GET')).body;
