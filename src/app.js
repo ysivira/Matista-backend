@@ -19,6 +19,15 @@ import { loadAuthHttpPolicy } from './modules/auth/auth.constants.js';
  */
 export function createApp({ env = process.env, authContext } = {}) {
   const app = express();
+  /** Confia unicamente en proxies de loopback: el Vite de desarrollo y el
+   *  relay del tunnel Dev Tunnels llegan al backend por 127.0.0.1. Con este
+   *  ajuste Express resuelve la IP del cliente en la primera entrada no
+   *  confiable desde la derecha de X-Forwarded-For, de modo que un cliente
+   *  remoto no puede falsear su IP y el keying por IP de express-rate-limit
+   *  funciona detras del proxy (ERR_ERL_UNEXPECTED_X_FORWARDED_FOR) sin
+   *  aceptar confianza indiscriminada en encabezados de clientes directos.
+   *  No afecta CORS, requireTrustedOrigin ni la cookie de sesion. */
+  app.set('trust proxy', 'loopback');
   const httpPolicy = loadAuthHttpPolicy(env);
   app.use(
     cors({
