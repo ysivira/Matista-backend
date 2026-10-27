@@ -1,3 +1,6 @@
+/**
+ * Construye el contrato de entrada del motor de cotización.
+ */
 import { createAppError } from '../../shared/errors/app-error.js';
 import { calcularCotizacion } from '../../domain/comercial/cotizacion.engine.js';
 import { REGLAS_COMERCIALES } from '../../domain/comercial/reglas.confirmadas.js';
@@ -9,7 +12,15 @@ import { REGLAS_COMERCIALES } from '../../domain/comercial/reglas.confirmadas.js
  * @throws {Error} Si hay datos inválidos, parámetros ausentes o decisiones comerciales pendientes.
  */
 export async function solicitarCalculo(solicitud) {
-  if (solicitud?.version_contrato !== 1 || !solicitud.catalogo?.politica || !Array.isArray(solicitud.catalogo.tarifas) || !Array.isArray(solicitud.catalogo.porcentajes) || !solicitud.entrada?.familia || !solicitud.referencias) throw createAppError('ASESOR_VALIDACION', 'Contrato de cálculo inválido.', 400);
+  if (
+    solicitud?.version_contrato !== 1 ||
+    !solicitud.catalogo?.politica ||
+    !Array.isArray(solicitud.catalogo.tarifas) ||
+    !Array.isArray(solicitud.catalogo.porcentajes) ||
+    !solicitud.entrada?.familia ||
+    !solicitud.referencias
+  )
+    throw createAppError('ASESOR_VALIDACION', 'Contrato de cálculo inválido.', 400);
   return calcularCotizacion(solicitud, REGLAS_COMERCIALES);
 }
 
@@ -22,9 +33,16 @@ export async function solicitarCalculo(solicitud) {
  */
 export function esResultadoEconomico(resultado) {
   const importe = /^\d+\.\d{2}$/;
-  return resultado?.version_contrato === 1 && typeof resultado.motor_version === 'string'
-    && importe.test(resultado.precio_base) && importe.test(resultado.total)
-    && Array.isArray(resultado.aportes) && Array.isArray(resultado.beneficios)
-    && Array.isArray(resultado.tramos) && Array.isArray(resultado.advertencias)
-    && !!resultado.referencias?.tarifa_version_id && !!resultado.referencias?.politica_id;
+  return (
+    resultado?.version_contrato === 1 &&
+    typeof resultado.motor_version === 'string' &&
+    importe.test(resultado.precio_base) &&
+    importe.test(resultado.total) &&
+    Array.isArray(resultado.aportes) &&
+    Array.isArray(resultado.beneficios) &&
+    Array.isArray(resultado.tramos) &&
+    Array.isArray(resultado.advertencias) &&
+    !!resultado.referencias?.tarifa_version_id &&
+    !!resultado.referencias?.politica_id
+  );
 }

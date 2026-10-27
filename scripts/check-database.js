@@ -1,8 +1,10 @@
+/**
+ * Comprueba la conexión y la identidad de la base de datos configurada.
+ */
 import 'dotenv/config';
-
 import {
   createDatabasePool,
-  verifyDatabaseConnection,
+  verifyDatabaseConnection
 } from '../src/infrastructure/database/connection.js';
 import { loadDatabaseConfig } from '../src/infrastructure/database/config.js';
 
@@ -11,9 +13,7 @@ const pool = createDatabasePool(config);
 
 try {
   const result = await verifyDatabaseConnection(pool, config.database);
-  console.log(
-    `Conexion verificada: ${result.databaseName} (MySQL ${result.version}).`,
-  );
+  console.log(`Conexion verificada: ${result.databaseName} (MySQL ${result.version}).`);
 } finally {
   await pool.end();
 }

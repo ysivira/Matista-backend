@@ -1,11 +1,16 @@
-// Mecanismo transaccional compartido de SPEC-03 ADMIN.
-// Toda operacion administrativa que escribe en el tarifario se ejecuta:
-// 1) con UNA conexion del pool que lleva negocio y auditoria juntas,
-// 2) dentro de la transaccion de esa conexion (sin transacciones anidadas),
-// 3) bajo el bloqueo exclusivo "matista_tarifario" (GET_LOCK en la MISMA
-//    conexion que hara el trabajo), y
-// 4) liberando siempre la conexion, con o sin commit, con o sin lock.
+/**
+ * Ejecuta operaciones administrativas con transacción y bloqueos.
+ */
 
+/*
+ * Mecanismo transaccional compartido de SPEC-03 ADMIN.
+ * Toda operacion administrativa que escribe en el tarifario se ejecuta:
+ * 1) con UNA conexion del pool que lleva negocio y auditoria juntas,
+ * 2) dentro de la transaccion de esa conexion (sin transacciones anidadas),
+ * 3) bajo el bloqueo exclusivo "matista_tarifario" (GET_LOCK en la MISMA
+ *    conexion que hara el trabajo), y
+ * 4) liberando siempre la conexion, con o sin commit, con o sin lock.
+ */
 import { errorConcurrencia } from './admin.errors.js';
 
 /** Nombre del bloqueo exclusivo de versiones del tarifario. */
@@ -82,7 +87,7 @@ export function interpretarGetLock(valor) {
 export async function withAdminVersionLock(
   pool,
   operacion,
-  { timeoutSegundos = TIMEOUT_LOCK_TARIFARIO_SEGUNDOS } = {},
+  { timeoutSegundos = TIMEOUT_LOCK_TARIFARIO_SEGUNDOS } = {}
 ) {
   const connection = await pool.getConnection();
   let bloqueoAdquirido = false;
@@ -90,10 +95,10 @@ export async function withAdminVersionLock(
   let resultadoOperacion;
   try {
     await connection.query("SET time_zone = '+00:00'");
-    const [filas] = await connection.execute(
-      'SELECT GET_LOCK(?, ?) AS resultado',
-      [NOMBRE_LOCK_TARIFARIO, timeoutSegundos],
-    );
+    const [filas] = await connection.execute('SELECT GET_LOCK(?, ?) AS resultado', [
+      NOMBRE_LOCK_TARIFARIO,
+      timeoutSegundos
+    ]);
     // Interpretacion del contrato de GET_LOCK: 1 adquirido, 0 timeout
     // de espera agotado, null error de la llamada al bloqueo.
     const adquirido = interpretarGetLock(filas?.[0]?.resultado);
@@ -101,10 +106,11 @@ export async function withAdminVersionLock(
       throw errorConcurrencia();
     }
     bloqueoAdquirido = true;
-
     await connection.beginTransaction();
     try {
-      resultadoOperacion = await operacion(connection, { bloqueoAdquirido: true });
+      resultadoOperacion = await operacion(connection, {
+        bloqueoAdquirido: true
+      });
       await connection.commit();
     } catch (error) {
       await connection.rollback();
@@ -116,10 +122,9 @@ export async function withAdminVersionLock(
       // registra en el resultado cuando la operacion termino con exito
       // y se ignora en la ruta de error para no tapar el fallo real.
       try {
-        const [filas] = await connection.execute(
-          'SELECT RELEASE_LOCK(?) AS liberado',
-          [NOMBRE_LOCK_TARIFARIO],
-        );
+        const [filas] = await connection.execute('SELECT RELEASE_LOCK(?) AS liberado', [
+          NOMBRE_LOCK_TARIFARIO
+        ]);
         const valor = filas?.[0]?.liberado;
         liberacionOk = valor === 1 || valor === '1';
       } catch {
@@ -131,5 +136,9 @@ export async function withAdminVersionLock(
 
   // El resultado se arma despues del finally de modo que refleje la
   // liberacion real del bloqueo, no su estado previo.
-  return { resultado: resultadoOperacion, bloqueoAdquirido: true, liberacionOk };
+  return {
+    resultado: resultadoOperacion,
+    bloqueoAdquirido: true,
+    liberacionOk
+  };
 }

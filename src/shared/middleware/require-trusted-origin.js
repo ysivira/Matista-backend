@@ -1,3 +1,6 @@
+/**
+ * Exige un origen confiable en las solicitudes protegidas.
+ */
 import { createAppError } from '../errors/app-error.js';
 
 /**
@@ -10,7 +13,9 @@ import { createAppError } from '../errors/app-error.js';
 export function requireTrustedOrigin(req, res, next) {
   if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) return next();
   if (req.headers.origin !== req.authHttp.origin) {
-    return next(createAppError('ORIGIN_NOT_ALLOWED', 'El origen de la solicitud no está permitido.', 403));
+    return next(
+      createAppError('ORIGIN_NOT_ALLOWED', 'El origen de la solicitud no está permitido.', 403)
+    );
   }
   return next();
 }

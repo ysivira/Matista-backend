@@ -1,3 +1,6 @@
+/**
+ * Compone la aplicación HTTP, sus módulos y el manejo central de errores.
+ */
 import express from 'express';
 import cors from 'cors';
 import { errorHandler } from './shared/errors/error-handler.js';
@@ -17,19 +20,21 @@ import { loadAuthHttpPolicy } from './modules/auth/auth.constants.js';
 export function createApp({ env = process.env, authContext } = {}) {
   const app = express();
   const httpPolicy = loadAuthHttpPolicy(env);
-
-  app.use(cors({
-    /** Permite únicamente el origen exacto; solicitudes sin Origin no reciben permiso CORS. */
-    origin(origin, callback) {
-      if (!origin) return callback(null, false);
-      if (origin === httpPolicy.origin) return callback(null, httpPolicy.origin);
-      return callback(createAppError('ORIGIN_NOT_ALLOWED', 'El origen de la solicitud no está permitido.', 403));
-    },
-    credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type'],
-  }));
-
+  app.use(
+    cors({
+      /** Permite únicamente el origen exacto; solicitudes sin Origin no reciben permiso CORS. */
+      origin(origin, callback) {
+        if (!origin) return callback(null, false);
+        if (origin === httpPolicy.origin) return callback(null, httpPolicy.origin);
+        return callback(
+          createAppError('ORIGIN_NOT_ALLOWED', 'El origen de la solicitud no está permitido.', 403)
+        );
+      },
+      credentials: true,
+      methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+      allowedHeaders: ['Content-Type']
+    })
+  );
   app.use(express.json());
 
   /** Conserva el contrato de salud; no comprueba servicios ni requiere secretos AUTH. */
@@ -37,18 +42,41 @@ export function createApp({ env = process.env, authContext } = {}) {
     res.status(200).json({
       status: 'ok',
       application: 'MATISTA',
-      service: 'backend',
+      service: 'backend'
     });
   });
-
-  app.use('/api/auth', createAuthRouter({ env, httpPolicy, context: authContext }));
+  app.use(
+    '/api/auth',
+    createAuthRouter({
+      env,
+      httpPolicy,
+      context: authContext
+    })
+  );
   /** ADMIN comparte contexto, guardias y fallback entre todos sus slices. */
-  app.use('/api/admin', createAdminRouter({ env, context: authContext }));
-  app.use('/api/asesor', createAsesorRouter({ env, context: authContext }));
-  app.use('/api/catalogo', createCatalogoRouter({ env, context: authContext }));
+  app.use(
+    '/api/admin',
+    createAdminRouter({
+      env,
+      context: authContext
+    })
+  );
+  app.use(
+    '/api/asesor',
+    createAsesorRouter({
+      env,
+      context: authContext
+    })
+  );
+  app.use(
+    '/api/catalogo',
+    createCatalogoRouter({
+      env,
+      context: authContext
+    })
+  );
   app.use(errorHandler);
   return app;
 }
-
 const app = createApp();
 export default app;

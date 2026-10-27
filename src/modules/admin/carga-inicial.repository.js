@@ -1,5 +1,7 @@
+/**
+ * Consulta e inserta los datos necesarios para la carga inicial.
+ */
 import mysql from 'mysql2/promise';
-
 import { loadSigecSourceConfig } from '../../infrastructure/database/config.js';
 
 /** Abre una conexion de SOLO LECTURA hacia sigec_db.
@@ -13,7 +15,6 @@ import { loadSigecSourceConfig } from '../../infrastructure/database/config.js';
  */
 export async function abrirConexionSigec() {
   const config = loadSigecSourceConfig(process.env);
-
   return mysql.createConnection({
     host: config.host,
     port: config.port,
@@ -21,7 +22,7 @@ export async function abrirConexionSigec() {
     user: config.user,
     password: config.password,
     timezone: 'Z',
-    multipleStatements: false,
+    multipleStatements: false
   });
 }
 
@@ -34,30 +35,23 @@ export async function abrirConexionSigec() {
  *  - Errores: si alguna consulta falla, el servicio aborta antes de escribir.
  */
 export async function leerFuenteSigec(sourceConnection) {
-  const [planes] = await sourceConnection.query(
-    `SELECT id, nombre, detalles, condiciones_generales, activo
+  const [planes] =
+    await sourceConnection.query(`SELECT id, nombre, detalles, condiciones_generales, activo
        FROM planes
-      ORDER BY id`,
-  );
-
-  const [referencias] = await sourceConnection.query(
-    `SELECT lp.id, lp.plan_id, lp.tipo_ingreso, lp.rango_etario, lp.precio,
+      ORDER BY id`);
+  const [referencias] =
+    await sourceConnection.query(`SELECT lp.id, lp.plan_id, lp.tipo_ingreso, lp.rango_etario, lp.precio,
             lp.activo, p.activo AS plan_activo
        FROM listas_de_precios AS lp
        JOIN planes AS p ON p.id = lp.plan_id
-      ORDER BY lp.id`,
-  );
-
-  const [aportes] = await sourceConnection.query(
-    `SELECT categoria, aporte
+      ORDER BY lp.id`);
+  const [aportes] = await sourceConnection.query(`SELECT categoria, aporte
        FROM monotributo_aportes
-      ORDER BY categoria`,
-  );
-
+      ORDER BY categoria`);
   return Object.freeze({
     planes: Object.freeze(planes),
     referencias: Object.freeze(referencias),
-    aportes: Object.freeze(aportes),
+    aportes: Object.freeze(aportes)
   });
 }
 
@@ -74,8 +68,7 @@ export async function leerFuenteSigec(sourceConnection) {
  *    abiertas razona por `estado = 'VIGENTE'` y no por la fecha de cierre.
  */
 export async function leerEstadoCatalogo(matistaConnection) {
-  const [conteos] = await matistaConnection.query(
-    `SELECT
+  const [conteos] = await matistaConnection.query(`SELECT
        (SELECT COUNT(*) FROM planes) AS planes,
        (SELECT COUNT(*) FROM tarifario_versiones) AS versiones,
        (SELECT COUNT(*) FROM tarifas) AS tarifas,
@@ -90,29 +83,21 @@ export async function leerEstadoCatalogo(matistaConnection) {
           FROM porcentajes_comerciales pc
           JOIN politica_comercial p ON p.id = pc.politica_comercial_id
          WHERE p.estado = 'VIGENTE' AND pc.vigente_hasta IS NULL)
-         AS porcentajesVigenteAbiertos`,
-  );
-
-  const [version] = await matistaConnection.query(
-    `SELECT id, estado
+         AS porcentajesVigenteAbiertos`);
+  const [version] = await matistaConnection.query(`SELECT id, estado
        FROM tarifario_versiones
       WHERE tipo = 'CARGA_INICIAL'
       ORDER BY id
-      LIMIT 1`,
-  );
-
+      LIMIT 1`);
   const versionCargaInicialId = version[0]?.id ?? null;
   let tarifasCargaInicial = 0;
-
   if (versionCargaInicialId !== null) {
     const [tarifas] = await matistaConnection.query(
       'SELECT COUNT(*) AS total FROM tarifas WHERE version_id = ?',
-      [versionCargaInicialId],
+      [versionCargaInicialId]
     );
-
     tarifasCargaInicial = tarifas[0].total;
   }
-
   return Object.freeze({
     planes: conteos[0].planes,
     versiones: conteos[0].versiones,
@@ -123,7 +108,7 @@ export async function leerEstadoCatalogo(matistaConnection) {
     porcentajesVigenteAbiertos: conteos[0].porcentajesVigenteAbiertos,
     versionCargaInicialId,
     versionCargaInicialEstado: version[0]?.estado ?? null,
-    tarifasCargaInicial,
+    tarifasCargaInicial
   });
 }
 
@@ -135,18 +120,15 @@ export async function leerEstadoCatalogo(matistaConnection) {
  *    todavia no tiene cuentas ADMIN.
  */
 export async function assertActorExistente(matistaConnection, actorLegajo) {
-  const [rows] = await matistaConnection.query(
-    'SELECT legajo FROM empleados WHERE legajo = ?',
-    [actorLegajo],
-  );
-
+  const [rows] = await matistaConnection.query('SELECT legajo FROM empleados WHERE legajo = ?', [
+    actorLegajo
+  ]);
   if (rows.length === 0) {
     throw new Error(
-      `El legajo ${actorLegajo} no existe en empleados; la carga requiere `
-      + 'un responsable real registrado (variable IMPORT_ACTOR_LEGAJO).',
+      `El legajo ${actorLegajo} no existe en empleados; la carga requiere ` +
+        'un responsable real registrado (variable IMPORT_ACTOR_LEGAJO).'
     );
   }
-
   return true;
 }
 
@@ -157,11 +139,9 @@ export async function assertActorExistente(matistaConnection, actorLegajo) {
  */
 export function generarLotes(filas, tamano) {
   const lotes = [];
-
   for (let inicio = 0; inicio < filas.length; inicio += tamano) {
     lotes.push(filas.slice(inicio, inicio + tamano));
   }
-
   return lotes;
 }
 
@@ -172,7 +152,6 @@ export function generarLotes(filas, tamano) {
  */
 export function plantillasValues(cantidadFilas, columnasPorFila) {
   const fila = `(${Array(columnasPorFila).fill('?').join(', ')})`;
-
   return Array(cantidadFilas).fill(fila).join(', ');
 }
 
@@ -187,13 +166,13 @@ export async function insertarPlanes(destino, planes) {
     `INSERT INTO planes
        (id, nombre, detalles, condiciones_generales, activa)
      VALUES ${plantillasValues(planes.length, 5)}`,
-    planes.flatMap((plan) => [
+    planes.flatMap(plan => [
       plan.id,
       plan.nombre.trim(),
       plan.detalles,
       plan.condiciones_generales,
-      1,
-    ]),
+      1
+    ])
   );
 }
 
@@ -208,7 +187,7 @@ export async function insertarVersionCargaInicial(destino, observacion) {
     `INSERT INTO tarifario_versiones
        (tipo, fecha_activacion, estado, observacion)
      VALUES ('CARGA_INICIAL', UTC_TIMESTAMP(6), 'ACTIVA', ?)`,
-    [observacion],
+    [observacion]
   );
   return resultado.insertId;
 }
@@ -227,7 +206,7 @@ export async function insertarTarifasCargaInicial(destino, versionId, tarifas) {
          (version_id, plan_id, tipo_ingreso, rango_etario,
           rango_clave, rango_nota, precio, activa)
        VALUES ${plantillasValues(lote.length, 8)}`,
-      lote.flatMap((referencia) => [
+      lote.flatMap(referencia => [
         versionId,
         referencia.plan_id,
         referencia.tipo_ingreso,
@@ -235,8 +214,8 @@ export async function insertarTarifasCargaInicial(destino, versionId, tarifas) {
         referencia.rango_clave,
         referencia.rango_nota,
         referencia.precio,
-        1,
-      ]),
+        1
+      ])
     );
   }
 }
@@ -254,7 +233,7 @@ export async function insertarAportesMonotributo(destino, aportes, actorLegajo) 
       `INSERT INTO monotributo_aportes
          (categoria, aporte, vigente_desde, vigente_hasta, actor_legajo)
        VALUES (?, ?, UTC_TIMESTAMP(6), NULL, ?)`,
-      [aporte.categoria, aporte.aporte, actorLegajo],
+      [aporte.categoria, aporte.aporte, actorLegajo]
     );
   }
 }
@@ -297,8 +276,8 @@ export async function insertarPoliticaComercial(destino, politica, actorLegajo) 
       politica.tope_comercial_tdc_pct,
       politica.afinidad_pct,
       politica.aporte_monotributo,
-      actorLegajo,
-    ],
+      actorLegajo
+    ]
   );
   return resultado.insertId;
 }
@@ -311,16 +290,14 @@ export async function insertarPoliticaComercial(destino, politica, actorLegajo) 
  * @returns {Promise<void>}
  */
 export async function insertarCatalogoPorcentajes(destino, politicaId, actorLegajo) {
-  const filas = PORCENTAJES_COMERCIALES_INICIALES
-    .map(() => '(?, ?, NULL, UTC_TIMESTAMP(6), ?)')
-    .join(', ');
+  const filas = PORCENTAJES_COMERCIALES_INICIALES.map(
+    () => '(?, ?, NULL, UTC_TIMESTAMP(6), ?)'
+  ).join(', ');
   await destino.query(
     `INSERT INTO porcentajes_comerciales
        (politica_comercial_id, porcentaje, descripcion, fecha_vigencia, actor_legajo)
      VALUES ${filas}`,
-    PORCENTAJES_COMERCIALES_INICIALES.flatMap(
-      (porcentaje) => [politicaId, porcentaje, actorLegajo],
-    ),
+    PORCENTAJES_COMERCIALES_INICIALES.flatMap(porcentaje => [politicaId, porcentaje, actorLegajo])
   );
 }
 
@@ -330,5 +307,13 @@ export async function insertarCatalogoPorcentajes(destino, politicaId, actorLega
  * de porcentajes se construye desde aqui.
  */
 export const PORCENTAJES_COMERCIALES_INICIALES = Object.freeze([
-  '50.00', '45.00', '40.00', '35.00', '30.00', '25.00', '20.00', '15.00', '10.00',
+  '50.00',
+  '45.00',
+  '40.00',
+  '35.00',
+  '30.00',
+  '25.00',
+  '20.00',
+  '15.00',
+  '10.00'
 ]);

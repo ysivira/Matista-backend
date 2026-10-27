@@ -4,7 +4,13 @@
  * @returns {string} Texto seguro para contenido y atributos HTML entre comillas.
  */
 export function html(valor) {
-  return String(valor ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+  return String(valor ?? '').replace(/[&<>"']/g, c => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;'
+  })[c]);
 }
 
 /**
@@ -23,5 +29,10 @@ export function pesos(valor) {
  * @returns {string} Fecha localizada como día, mes y año.
  */
 export function fecha(valor) {
-  return new Date(valor).toLocaleDateString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires', day: '2-digit', month: '2-digit', year: 'numeric' });
+  return new Date(valor).toLocaleDateString('es-AR', {
+    timeZone: 'America/Argentina/Buenos_Aires',
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric'
+  });
 }

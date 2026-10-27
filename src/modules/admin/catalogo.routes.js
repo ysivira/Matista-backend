@@ -1,3 +1,6 @@
+/**
+ * Expone las consultas HTTP del catálogo administrativo.
+ */
 import { Router } from 'express';
 import cookieParser from 'cookie-parser';
 import { loadAuthHttpPolicy } from '../auth/auth.constants.js';
@@ -25,7 +28,7 @@ export function createCatalogoRouter({ env, context } = {}) {
   /** Reutiliza la sesión y el pool AUTH sin habilitar escrituras por este router. */
   router.use(async (req, res, next) => {
     res.set('Cache-Control', 'no-store');
-    req.authContext = context ?? await initializeRuntime(env, httpPolicy);
+    req.authContext = context ?? (await initializeRuntime(env, httpPolicy));
     next();
   });
   router.use(authenticate, authorize('ADMIN', 'ASESOR'));
@@ -33,27 +36,44 @@ export function createCatalogoRouter({ env, context } = {}) {
   router.get('/tarifario/planes/:planId/:tipoIngreso', consultarTarifario);
   /** Descarga ficha completa de un plan activo, conservando el contenido de ADMIN. */
   router.get('/planes/:id/:formato', async (req, res) => {
-    if (!['pdf', 'impresion'].includes(req.params.formato)) throw createAppError('CATALOGO_NO_ENCONTRADO', 'Formato no disponible.', 404);
+    if (!['pdf', 'impresion'].includes(req.params.formato))
+      throw createAppError('CATALOGO_NO_ENCONTRADO', 'Formato no disponible.', 404);
     validarIdVersion(req.params.id);
     const planes = await gestionarPlanes(req.authContext.pool);
     const plan = planes.find(p => String(p.id) === req.params.id);
     if (!plan) throw createAppError('CATALOGO_NO_ENCONTRADO', 'El plan no está disponible.', 404);
     const documento = await documentoCatalogoHtml(plan, 'plan', req.params.formato === 'impresion');
     if (req.params.formato === 'impresion') return res.type('html').send(documento);
-    return res.attachment('matista-detalle-plan.pdf').type('application/pdf').send(await imprimirHtmlPdf(documento));
+    return res
+      .attachment('matista-detalle-plan.pdf')
+      .type('application/pdf')
+      .send(await imprimirHtmlPdf(documento));
   });
   /** Documenta precios reales vigentes; no aplica aportes ni descuentos. */
   router.get('/listas/:planId/:tipoIngreso/:formato', async (req, res) => {
-    if (!['pdf', 'csv', 'impresion'].includes(req.params.formato)) throw createAppError('CATALOGO_NO_ENCONTRADO', 'Formato no disponible.', 404);
+    if (!['pdf', 'csv', 'impresion'].includes(req.params.formato))
+      throw createAppError('CATALOGO_NO_ENCONTRADO', 'Formato no disponible.', 404);
     const lista = await gestionarTarifario(req.authContext.pool, req.params, req.authContext.now());
-    if (req.params.formato === 'csv') return res.attachment('matista-lista-precios.csv').type('text/csv').send(listaCsv(lista));
-    const documento = await documentoCatalogoHtml(lista, 'precios', req.params.formato === 'impresion');
+    if (req.params.formato === 'csv')
+      return res.attachment('matista-lista-precios.csv').type('text/csv').send(listaCsv(lista));
+    const documento = await documentoCatalogoHtml(
+      lista,
+      'precios',
+      req.params.formato === 'impresion'
+    );
     if (req.params.formato === 'impresion') return res.type('html').send(documento);
-    return res.attachment('matista-lista-precios.pdf').type('application/pdf').send(await imprimirHtmlPdf(documento));
+    return res
+      .attachment('matista-lista-precios.pdf')
+      .type('application/pdf')
+      .send(await imprimirHtmlPdf(documento));
   });
   /** Consulta política y aportes publicados mediante los contratos existentes. */
-  router.get('/condiciones', async (req, res) => res.json(await consultarCondiciones(req.authContext.pool)));
+  router.get('/condiciones', async (req, res) =>
+    res.json(await consultarCondiciones(req.authContext.pool))
+  );
   /** Rechaza métodos o rutas sin contrato con el mismo formato JSON que AUTH/ADMIN. */
-  router.use((req, res, next) => next(createAppError('CATALOGO_ROUTE_NOT_FOUND', 'La ruta de consulta no existe.', 404)));
+  router.use((req, res, next) =>
+    next(createAppError('CATALOGO_ROUTE_NOT_FOUND', 'La ruta de consulta no existe.', 404))
+  );
   return router;
 }

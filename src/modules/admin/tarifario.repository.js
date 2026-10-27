@@ -1,15 +1,16 @@
 /**
+ * Consulta tarifas y persiste versiones, revisiones y eventos del tarifario.
+ */
+/**
  * Lista el catalogo publico de planes activos en su orden persistido.
  * @param {object} connection Conexion mysql2 de la unidad de lectura.
  * @returns {Promise<object[]>} Planes activos sin campos internos.
  */
 export async function listarPlanesActivos(connection) {
-  const [filas] = await connection.execute(
-    `SELECT id, nombre, detalles, condiciones_generales
+  const [filas] = await connection.execute(`SELECT id, nombre, detalles, condiciones_generales
        FROM planes
       WHERE activa = 1
-      ORDER BY id`,
-  );
+      ORDER BY id`);
   return filas;
 }
 
@@ -20,10 +21,9 @@ export async function listarPlanesActivos(connection) {
  * @returns {Promise<object|undefined>} Plan interno o undefined si no existe.
  */
 export async function obtenerPlanPorId(connection, planId) {
-  const [filas] = await connection.execute(
-    'SELECT id, nombre, activa FROM planes WHERE id = ?',
-    [planId],
-  );
+  const [filas] = await connection.execute('SELECT id, nombre, activa FROM planes WHERE id = ?', [
+    planId
+  ]);
   return filas[0];
 }
 
@@ -33,10 +33,7 @@ export async function obtenerPlanPorId(connection, planId) {
  * @param {object} filtro Version, plan y modalidad ya validados.
  * @returns {Promise<object[]>} Rangos, notas y precios DECIMAL sin conversion numerica.
  */
-export async function listarTarifasActivas(
-  connection,
-  { versionId, planId, tipoIngreso },
-) {
+export async function listarTarifasActivas(connection, { versionId, planId, tipoIngreso }) {
   const [filas] = await connection.execute(
     `SELECT rango_clave, rango_etario, rango_nota, precio
        FROM tarifas
@@ -45,7 +42,7 @@ export async function listarTarifasActivas(
         AND tipo_ingreso = ?
         AND activa = 1
       ORDER BY id`,
-    [versionId, planId, tipoIngreso],
+    [versionId, planId, tipoIngreso]
   );
   return filas;
 }
@@ -59,13 +56,12 @@ export async function listarTarifasActivas(
  * @returns {Promise<object[]>} Cabeceras con identidad del responsable.
  */
 export async function listarVersiones(connection) {
-  const [filas] = await connection.query(
-    `SELECT v.id, v.tipo, v.estado, v.revision, v.fecha_activacion, v.version_base_id,
+  const [filas] =
+    await connection.query(`SELECT v.id, v.tipo, v.estado, v.revision, v.fecha_activacion, v.version_base_id,
             v.actor_legajo, v.created_at, empleados.nombre, empleados.apellido
        FROM tarifario_versiones v
        LEFT JOIN empleados ON empleados.legajo = v.actor_legajo
-      ORDER BY v.created_at ASC, v.id ASC`,
-  );
+      ORDER BY v.created_at ASC, v.id ASC`);
   return filas;
 }
 
@@ -83,7 +79,7 @@ export async function obtenerVersionPorId(connection, versionId) {
        FROM tarifario_versiones v
        LEFT JOIN empleados ON empleados.legajo = v.actor_legajo
       WHERE v.id = ?`,
-    [versionId],
+    [versionId]
   );
   return filas[0];
 }
@@ -97,11 +93,7 @@ export async function obtenerVersionPorId(connection, versionId) {
  * @param {{soloActivas: boolean?}} opciones Filtrado del snapshot.
  * @returns {Promise<object[]>} Filas con nombre de plan y DECIMAL sin convertir.
  */
-export async function listarTarifasDeVersion(
-  connection,
-  versionId,
-  { soloActivas = false } = {},
-) {
+export async function listarTarifasDeVersion(connection, versionId, { soloActivas = false } = {}) {
   const [filas] = await connection.query(
     `SELECT t.id, t.plan_id, planes.nombre AS plan_nombre, t.tipo_ingreso,
             t.rango_clave, t.rango_etario, t.rango_nota, t.precio, t.activa
@@ -110,7 +102,7 @@ export async function listarTarifasDeVersion(
       WHERE t.version_id = ?
         ${soloActivas ? 'AND t.activa = 1' : ''}
       ORDER BY t.plan_id, t.tipo_ingreso, t.id`,
-    [versionId],
+    [versionId]
   );
   return filas;
 }
@@ -125,7 +117,7 @@ export async function listarTarifasDeVersion(
 export async function contarTarifasDeVersion(connection, versionId) {
   const [filas] = await connection.query(
     'SELECT COUNT(*) AS filas FROM tarifas WHERE version_id = ?',
-    [versionId],
+    [versionId]
   );
   return Number(filas[0].filas);
 }
@@ -147,7 +139,7 @@ export async function resolverVersionVigente(connection, fechaReferencia) {
         AND v.fecha_activacion <= ?
       ORDER BY v.fecha_activacion DESC, v.id DESC
       LIMIT 1`,
-    [fechaReferencia],
+    [fechaReferencia]
   );
   return filas[0] ?? null;
 }
@@ -168,7 +160,7 @@ export async function estadoEfectivoVersion(connection, versionId) {
             ) AS cancelacionAbierta
        FROM tarifario_versiones v
       WHERE v.id = ?`,
-    [versionId],
+    [versionId]
   );
   if (!filas[0]) {
     return null;
@@ -193,7 +185,7 @@ export async function obtenerTarifasDeVersion(connection, versionId) {
        FROM tarifas
       WHERE version_id = ?
       ORDER BY plan_id, tipo_ingreso, rango_clave`,
-    [versionId],
+    [versionId]
   );
   return filas;
 }
@@ -215,14 +207,13 @@ export async function obtenerTarifasDeVersion(connection, versionId) {
  * @returns {Promise<object|undefined>} Cabecera ACTIVA bloqueada o undefined.
  */
 export async function bloquearVersionActiva(connection) {
-  const [filas] = await connection.execute(
-    `SELECT id, tipo, estado, fecha_activacion, version_base_id,
+  const [filas] =
+    await connection.execute(`SELECT id, tipo, estado, fecha_activacion, version_base_id,
             actor_legajo, revision
        FROM tarifario_versiones
       WHERE estado = 'ACTIVA'
       LIMIT 1
-      FOR UPDATE`,
-  );
+      FOR UPDATE`);
   return filas[0];
 }
 
@@ -237,15 +228,13 @@ export async function bloquearVersionActiva(connection) {
  * @returns {Promise<object|undefined>} Borrador con responsable o undefined.
  */
 export async function bloquearBorradorAbierto(connection) {
-  const [filas] = await connection.query(
-    `SELECT v.id, v.estado, v.actor_legajo, v.created_at,
+  const [filas] = await connection.query(`SELECT v.id, v.estado, v.actor_legajo, v.created_at,
             empleados.nombre, empleados.apellido
        FROM tarifario_versiones v
        LEFT JOIN empleados ON empleados.legajo = v.actor_legajo
       WHERE v.estado IN ('PREPARACION', 'LISTA_PARA_ACTIVAR')
       LIMIT 1
-      FOR UPDATE`,
-  );
+      FOR UPDATE`);
   return filas[0];
 }
 
@@ -258,15 +247,12 @@ export async function bloquearBorradorAbierto(connection) {
  *          observacion: string}} datos Datos de la nueva cabecera.
  * @returns {Promise<number>} Identificador autogenerado del borrador.
  */
-export async function insertarBorrador(
-  connection,
-  { versionBaseId, actorLegajo, observacion },
-) {
+export async function insertarBorrador(connection, { versionBaseId, actorLegajo, observacion }) {
   const [resultado] = await connection.execute(
     `INSERT INTO tarifario_versiones
         (tipo, estado, version_base_id, actor_legajo, observacion)
      VALUES ('EDICION_LISTA', 'PREPARACION', ?, ?, ?)`,
-    [versionBaseId, actorLegajo, observacion],
+    [versionBaseId, actorLegajo, observacion]
   );
   return resultado.insertId;
 }
@@ -289,7 +275,7 @@ export async function copiarTarifas(connection, { origenId, destinoId }) {
             rango_nota, precio, activa
        FROM tarifas
       WHERE version_id = ?`,
-    [destinoId, origenId],
+    [destinoId, origenId]
   );
   return resultado.affectedRows;
 }
@@ -308,7 +294,7 @@ export async function bloquearVersion(connection, versionId) {
        FROM tarifario_versiones
       WHERE id = ?
       FOR UPDATE`,
-    [versionId],
+    [versionId]
   );
   return filas[0];
 }
@@ -326,7 +312,7 @@ export async function bloquearTarifa(connection, { versionId, tarifaId }) {
        FROM tarifas
       WHERE id = ? AND version_id = ?
       FOR UPDATE`,
-    [tarifaId, versionId],
+    [tarifaId, versionId]
   );
   return filas[0];
 }
@@ -338,10 +324,10 @@ export async function bloquearTarifa(connection, { versionId, tarifaId }) {
  * @returns {Promise<number>} Filas afectadas (0 si la fila desaparecio).
  */
 export async function actualizarPrecioTarifa(connection, { tarifaId, precio }) {
-  const [resultado] = await connection.execute(
-    'UPDATE tarifas SET precio = ? WHERE id = ?',
-    [precio, tarifaId],
-  );
+  const [resultado] = await connection.execute('UPDATE tarifas SET precio = ? WHERE id = ?', [
+    precio,
+    tarifaId
+  ]);
   return resultado.affectedRows;
 }
 
@@ -353,15 +339,12 @@ export async function actualizarPrecioTarifa(connection, { tarifaId, precio }) {
  *          tipoIngreso: string|null}} aumento Filas ya calculadas por el servicio.
  * @returns {Promise<number>} Filas efectivamente aumentadas.
  */
-export async function aumentarPrecios(
-  connection,
-  { versionId, importes, tipoIngreso },
-) {
+export async function aumentarPrecios(connection, { versionId, importes, tipoIngreso }) {
   let filasAfectadas = 0;
   for (const [tarifaId, precioNuevo] of importes) {
     const [resultado] = await connection.execute(
       'UPDATE tarifas SET precio = ? WHERE id = ? AND version_id = ?',
-      [precioNuevo, tarifaId, versionId],
+      [precioNuevo, tarifaId, versionId]
     );
     filasAfectadas += resultado.affectedRows;
   }
@@ -377,15 +360,12 @@ export async function aumentarPrecios(
  *          activar: boolean?}} transicion Nuevo estado del ciclo.
  * @returns {Promise<number>} Filas afectadas.
  */
-export async function actualizarEstadoVersion(
-  connection,
-  { id, estado, activar = false },
-) {
+export async function actualizarEstadoVersion(connection, { id, estado, activar = false }) {
   const [resultado] = await connection.execute(
     `UPDATE tarifario_versiones
        SET estado = ?${activar ? ', fecha_activacion = NOW(6)' : ''}
      WHERE id = ?`,
-    [estado, id],
+    [estado, id]
   );
   return resultado.affectedRows;
 }
@@ -400,7 +380,7 @@ export async function actualizarEstadoVersion(
 export async function incrementarRevision(connection, { id, revision }) {
   const [resultado] = await connection.execute(
     'UPDATE tarifario_versiones SET revision = revision + 1 WHERE id = ? AND revision = ?',
-    [id, revision],
+    [id, revision]
   );
   return resultado.affectedRows;
 }
@@ -428,11 +408,21 @@ export async function insertarEvento(connection, evento) {
          actor_nombre, actor_apellido, plan_id, tipo_ingreso, rango_clave,
          valor_anterior, valor_nuevo, detalle)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [evento.versionId, evento.agrupadorId ?? null, evento.tipoEvento,
-      evento.tipoOperacion ?? null, evento.actorLegajo, evento.actorNombre,
-      evento.actorApellido, evento.planId ?? null, evento.tipoIngreso ?? null,
-      evento.rangoClave ?? null, evento.valorAnterior ?? null,
-      evento.valorNuevo ?? null, evento.detalle],
+    [
+      evento.versionId,
+      evento.agrupadorId ?? null,
+      evento.tipoEvento,
+      evento.tipoOperacion ?? null,
+      evento.actorLegajo,
+      evento.actorNombre,
+      evento.actorApellido,
+      evento.planId ?? null,
+      evento.tipoIngreso ?? null,
+      evento.rangoClave ?? null,
+      evento.valorAnterior ?? null,
+      evento.valorNuevo ?? null,
+      evento.detalle
+    ]
   );
   return resultado.insertId;
 }
@@ -452,7 +442,7 @@ export async function obtenerVersionConResponsable(connection, versionId) {
        LEFT JOIN empleados ON empleados.legajo = v.actor_legajo
       WHERE v.id = ?
       FOR UPDATE`,
-    [versionId],
+    [versionId]
   );
   return filas[0];
 }
@@ -479,7 +469,7 @@ export async function listarEventosDeVersion(connection, versionId) {
        FROM tarifario_versiones_eventos
       WHERE version_id = ?
       ORDER BY evento_en ASC, id ASC`,
-    [versionId],
+    [versionId]
   );
   return filas;
 }
@@ -494,14 +484,14 @@ export async function listarEventosDeVersion(connection, versionId) {
  */
 export async function resolverTarifaPorClave(
   connection,
-  { versionId, planId, tipoIngreso, rangoClave },
+  { versionId, planId, tipoIngreso, rangoClave }
 ) {
   const [filas] = await connection.execute(
     `SELECT id, precio
        FROM tarifas
       WHERE version_id = ? AND plan_id = ? AND tipo_ingreso = ? AND rango_clave = ?
       FOR UPDATE`,
-    [versionId, planId, tipoIngreso, rangoClave],
+    [versionId, planId, tipoIngreso, rangoClave]
   );
   return filas[0];
 }

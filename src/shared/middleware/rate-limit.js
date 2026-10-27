@@ -1,3 +1,6 @@
+/**
+ * Limita solicitudes por ventana temporal con almacenamiento acotado.
+ */
 import { rateLimit } from 'express-rate-limit';
 import { RATE_LIMIT_POLICIES } from '../../infrastructure/security/config.js';
 import { createAppError } from '../errors/app-error.js';
@@ -13,17 +16,34 @@ export function createAuthRateLimiter(operation, overrides = {}) {
   if (!Object.hasOwn(RATE_LIMIT_POLICIES, operation)) {
     throw new Error('Operación de rate limiting inválida.');
   }
-  const { windowMs, limit } = { ...RATE_LIMIT_POLICIES[operation], ...overrides };
-  if (!Number.isInteger(windowMs) || windowMs < 1 || windowMs > 2_147_483_647
-      || !Number.isSafeInteger(limit) || limit < 1) {
+  const { windowMs, limit } = {
+    ...RATE_LIMIT_POLICIES[operation],
+    ...overrides
+  };
+  if (
+    !Number.isInteger(windowMs) ||
+    windowMs < 1 ||
+    windowMs > 2_147_483_647 ||
+    !Number.isSafeInteger(limit) ||
+    limit < 1
+  ) {
     throw new Error('Ventana o límite de solicitudes inválidos.');
   }
   return rateLimit({
-    windowMs, limit, standardHeaders: 'draft-7', legacyHeaders: false,
-    ...(overrides.store ? { store: overrides.store } : {}),
+    windowMs,
+    limit,
+    standardHeaders: 'draft-7',
+    legacyHeaders: false,
+    ...(overrides.store
+      ? {
+          store: overrides.store
+        }
+      : {}),
     /** Entrega un error público uniforme; req/res/options pertenecen al middleware. */
     handler(req, res, next) {
-      next(createAppError('RATE_LIMIT_EXCEEDED', 'Demasiadas solicitudes. Intente más tarde.', 429));
-    },
+      next(
+        createAppError('RATE_LIMIT_EXCEEDED', 'Demasiadas solicitudes. Intente más tarde.', 429)
+      );
+    }
   });
 }

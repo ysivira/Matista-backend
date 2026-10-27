@@ -1,3 +1,6 @@
+/**
+ * Gestiona los porcentajes comerciales y sus versiones.
+ */
 import { withConnection } from '../auth/auth.repository.js';
 import {
   cerrarPorcentajeComercial,
@@ -7,14 +10,14 @@ import {
   listarPorcentajesComercialesVigentes,
   obtenerHistorialPorcentajeComercial,
   obtenerPorcentajeComercialPorId,
-  insertarEmpleadoAuditoria,
+  insertarEmpleadoAuditoria
 } from './porcentajes-comerciales.repository.js';
 import { obtenerEmpleado } from './employees.repository.js';
 import {
   errorEstado,
   errorNoEncontrado,
   errorValidacion,
-  mapearErrorIntegridad,
+  mapearErrorIntegridad
 } from './admin.errors.js';
 
 /**
@@ -26,13 +29,28 @@ import {
 function validarPorcentajeComercial(datos) {
   const errores = [];
   const valor = Number(datos?.porcentaje);
-  if (datos?.porcentaje === undefined || datos.porcentaje === null || datos.porcentaje === ''
-      || !Number.isFinite(valor) || valor <= 0 || valor > 100) {
-    errores.push({ field: 'porcentaje', message: 'Debe ser un número entre 0 y 100 (excluido 0).' });
+  if (
+    datos?.porcentaje === undefined ||
+    datos.porcentaje === null ||
+    datos.porcentaje === '' ||
+    !Number.isFinite(valor) ||
+    valor <= 0 ||
+    valor > 100
+  ) {
+    errores.push({
+      field: 'porcentaje',
+      message: 'Debe ser un número entre 0 y 100 (excluido 0).'
+    });
   }
-  if (datos?.descripcion !== undefined && datos.descripcion !== null
-      && (typeof datos.descripcion !== 'string' || datos.descripcion.length > 100)) {
-    errores.push({ field: 'descripcion', message: 'La descripción no debe exceder 100 caracteres.' });
+  if (
+    datos?.descripcion !== undefined &&
+    datos.descripcion !== null &&
+    (typeof datos.descripcion !== 'string' || datos.descripcion.length > 100)
+  ) {
+    errores.push({
+      field: 'descripcion',
+      message: 'La descripción no debe exceder 100 caracteres.'
+    });
   }
   if (errores.length > 0) {
     throw errorValidacion('Datos de porcentaje comercial inválidos.', errores);
@@ -51,9 +69,8 @@ export async function listarPorcentajesComerciales(pool) {
  * @returns {Promise<object[]>} Historial persistido.
  */
 export async function obtenerHistorialPorcentaje(pool, porcentaje) {
-  return withConnection(
-    pool,
-    (connection) => obtenerHistorialPorcentajeComercial(connection, porcentaje),
+  return withConnection(pool, connection =>
+    obtenerHistorialPorcentajeComercial(connection, porcentaje)
   );
 }
 
@@ -67,28 +84,36 @@ export async function obtenerHistorialPorcentaje(pool, porcentaje) {
 export async function crearPorcentajeComercial(pool, datos, actor) {
   validarPorcentajeComercial(datos);
   const porcentaje = Number(datos.porcentaje);
-  return withConnection(pool, async (connection) => {
-    if (await existePorcentajeVigente(connection, porcentaje)) {
-      throw errorEstado(`Ya existe un porcentaje comercial vigente con el valor ${porcentaje}%.`);
+  return withConnection(
+    pool,
+    async connection => {
+      if (await existePorcentajeVigente(connection, porcentaje)) {
+        throw errorEstado(`Ya existe un porcentaje comercial vigente con el valor ${porcentaje}%.`);
+      }
+      // Conserva la lectura en la misma conexión. La auditoría usaba únicamente
+      // el legajo recibido, incluso si no existía fila de empleado; no persiste nombres.
+      await obtenerEmpleado(connection, actor.legajo);
+      const nuevaId = await insertarPorcentajeComercial(connection, {
+        porcentaje,
+        descripcion: datos.descripcion ?? null,
+        actorLegajo: actor.legajo
+      });
+      await insertarEmpleadoAuditoria(connection, {
+        legajo: actor.legajo,
+        actor_legajo: actor.legajo,
+        evento: 'PORCENTAJE_COMERCIAL_CREADO',
+        campo: 'PORCENTAJE',
+        valor_anterior: 'N/A',
+        valor_nuevo: `porcentaje#${nuevaId}:${porcentaje}%`
+      });
+      return await obtenerPorcentajeComercialPorId(connection, nuevaId);
+    },
+    {
+      transaction: true
     }
-    // Conserva la lectura en la misma conexión. La auditoría usaba únicamente
-    // el legajo recibido, incluso si no existía fila de empleado; no persiste nombres.
-    await obtenerEmpleado(connection, actor.legajo);
-    const nuevaId = await insertarPorcentajeComercial(connection, {
-      porcentaje,
-      descripcion: datos.descripcion ?? null,
-      actorLegajo: actor.legajo,
-    });
-    await insertarEmpleadoAuditoria(connection, {
-      legajo: actor.legajo,
-      actor_legajo: actor.legajo,
-      evento: 'PORCENTAJE_COMERCIAL_CREADO',
-      campo: 'PORCENTAJE',
-      valor_anterior: 'N/A',
-      valor_nuevo: `porcentaje#${nuevaId}:${porcentaje}%`,
-    });
-    return await obtenerPorcentajeComercialPorId(connection, nuevaId);
-  }, { transaction: true }).catch((error) => { throw mapearErrorIntegridad(error); });
+  ).catch(error => {
+    throw mapearErrorIntegridad(error);
+  });
 }
 
 /**
@@ -100,32 +125,49 @@ export async function crearPorcentajeComercial(pool, datos, actor) {
  * @returns {Promise<object>} Nueva fila vigente.
  */
 export async function actualizarPorcentajeComercial(pool, porcentaje, datos, actor) {
-  if (!datos || Object.keys(datos).some((campo) => campo !== 'descripcion')
-      || !Object.hasOwn(datos, 'descripcion')) {
+  if (
+    !datos ||
+    Object.keys(datos).some(campo => campo !== 'descripcion') ||
+    !Object.hasOwn(datos, 'descripcion')
+  ) {
     throw errorValidacion('Solo se permite actualizar la descripción del porcentaje comercial.');
   }
-  validarPorcentajeComercial({ porcentaje, descripcion: datos.descripcion });
-  return withConnection(pool, async (connection) => {
-    const actual = await bloquearPorcentajeComercialVigente(connection, porcentaje);
-    if (!actual) throw errorNoEncontrado(`No existe un porcentaje comercial vigente con el valor ${porcentaje}%.`);
-    // Se mantiene la lectura transaccional; el evento conserva el legajo recibido.
-    await obtenerEmpleado(connection, actor.legajo);
-    await cerrarPorcentajeComercial(connection, porcentaje);
-    const nuevaId = await insertarPorcentajeComercial(connection, {
-      porcentaje: actual.porcentaje,
-      descripcion: datos.descripcion,
-      actorLegajo: actor.legajo,
-    });
-    await insertarEmpleadoAuditoria(connection, {
-      legajo: actor.legajo,
-      actor_legajo: actor.legajo,
-      evento: 'PORCENTAJE_COMERCIAL_ACTUALIZADO',
-      campo: 'DESCRIPCION',
-      valor_anterior: actual.descripcion ?? 'N/A',
-      valor_nuevo: datos.descripcion ?? 'N/A',
-    });
-    return await obtenerPorcentajeComercialPorId(connection, nuevaId);
-  }, { transaction: true }).catch((error) => { throw mapearErrorIntegridad(error); });
+  validarPorcentajeComercial({
+    porcentaje,
+    descripcion: datos.descripcion
+  });
+  return withConnection(
+    pool,
+    async connection => {
+      const actual = await bloquearPorcentajeComercialVigente(connection, porcentaje);
+      if (!actual)
+        throw errorNoEncontrado(
+          `No existe un porcentaje comercial vigente con el valor ${porcentaje}%.`
+        );
+      // Se mantiene la lectura transaccional; el evento conserva el legajo recibido.
+      await obtenerEmpleado(connection, actor.legajo);
+      await cerrarPorcentajeComercial(connection, porcentaje);
+      const nuevaId = await insertarPorcentajeComercial(connection, {
+        porcentaje: actual.porcentaje,
+        descripcion: datos.descripcion,
+        actorLegajo: actor.legajo
+      });
+      await insertarEmpleadoAuditoria(connection, {
+        legajo: actor.legajo,
+        actor_legajo: actor.legajo,
+        evento: 'PORCENTAJE_COMERCIAL_ACTUALIZADO',
+        campo: 'DESCRIPCION',
+        valor_anterior: actual.descripcion ?? 'N/A',
+        valor_nuevo: datos.descripcion ?? 'N/A'
+      });
+      return await obtenerPorcentajeComercialPorId(connection, nuevaId);
+    },
+    {
+      transaction: true
+    }
+  ).catch(error => {
+    throw mapearErrorIntegridad(error);
+  });
 }
 
 /**
@@ -136,21 +178,32 @@ export async function actualizarPorcentajeComercial(pool, porcentaje, datos, act
  * @returns {Promise<void>}
  */
 export async function eliminarPorcentajeComercial(pool, porcentaje, actor) {
-  return withConnection(pool, async (connection) => {
-    const actual = await bloquearPorcentajeComercialVigente(
-      connection, porcentaje, { conDescripcion: false },
-    );
-    if (!actual) throw errorNoEncontrado(`No existe un porcentaje comercial vigente con el valor ${porcentaje}%.`);
-    // Se mantiene la lectura transaccional; el evento conserva el legajo recibido.
-    await obtenerEmpleado(connection, actor.legajo);
-    await cerrarPorcentajeComercial(connection, porcentaje);
-    await insertarEmpleadoAuditoria(connection, {
-      legajo: actor.legajo,
-      actor_legajo: actor.legajo,
-      evento: 'PORCENTAJE_COMERCIAL_ELIMINADO',
-      campo: 'PORCENTAJE',
-      valor_anterior: `porcentaje#${actual.id}:${actual.porcentaje}%`,
-      valor_nuevo: 'ELIMINADO',
-    });
-  }, { transaction: true }).catch((error) => { throw mapearErrorIntegridad(error); });
+  return withConnection(
+    pool,
+    async connection => {
+      const actual = await bloquearPorcentajeComercialVigente(connection, porcentaje, {
+        conDescripcion: false
+      });
+      if (!actual)
+        throw errorNoEncontrado(
+          `No existe un porcentaje comercial vigente con el valor ${porcentaje}%.`
+        );
+      // Se mantiene la lectura transaccional; el evento conserva el legajo recibido.
+      await obtenerEmpleado(connection, actor.legajo);
+      await cerrarPorcentajeComercial(connection, porcentaje);
+      await insertarEmpleadoAuditoria(connection, {
+        legajo: actor.legajo,
+        actor_legajo: actor.legajo,
+        evento: 'PORCENTAJE_COMERCIAL_ELIMINADO',
+        campo: 'PORCENTAJE',
+        valor_anterior: `porcentaje#${actual.id}:${actual.porcentaje}%`,
+        valor_nuevo: 'ELIMINADO'
+      });
+    },
+    {
+      transaction: true
+    }
+  ).catch(error => {
+    throw mapearErrorIntegridad(error);
+  });
 }

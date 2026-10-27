@@ -1,6 +1,11 @@
-// Endpoints de solo lectura para RF-D06/D07; la infraestructura compartida
-// de cookie, contexto y fallback pertenece al router agregador ADMIN.
+/**
+ * Adapta las solicitudes HTTP del tarifario a sus casos de uso.
+ */
 
+/*
+ * Endpoints de solo lectura para RF-D06/D07; la infraestructura compartida
+ * de cookie, contexto y fallback pertenece al router agregador ADMIN.
+ */
 import { Router } from 'express';
 import { authenticate } from '../../shared/middleware/authenticate.js';
 import { authorize } from '../../shared/middleware/authorize.js';
@@ -21,7 +26,7 @@ import {
   obtenerDetalleVersion,
   previsualizarAumentoVersion,
   reconstruirTarifarioHistorico,
-  resumirEventosDeVersion,
+  resumirEventosDeVersion
 } from './tarifario.service.js';
 import {
   actualizarPoliticaComercial,
@@ -30,7 +35,7 @@ import {
   listarHistorialPoliticaComercial,
   obtenerDetallePoliticaComercial,
   obtenerPoliticaComercial,
-  recuperarPoliticaComercial,
+  recuperarPoliticaComercial
 } from './politica-comercial.service.js';
 
 /**
@@ -41,7 +46,9 @@ import {
  */
 export async function listarPlanes(req, res) {
   const planes = await gestionarPlanes(req.authContext.pool);
-  return res.status(200).json({ planes });
+  return res.status(200).json({
+    planes
+  });
 }
 
 /**
@@ -54,7 +61,7 @@ export async function consultarTarifario(req, res) {
   const resultado = await gestionarTarifario(
     req.authContext.pool,
     req.params,
-    req.authContext.now(),
+    req.authContext.now()
   );
   return res.status(200).json(resultado);
 }
@@ -88,10 +95,7 @@ export async function consultarDetalleVersion(req, res) {
  * @returns {Promise<object>} JSON `{ version, tarifas }`.
  */
 export async function consultarTarifasVersion(req, res) {
-  const resultado = await listarTarifasDeLaVersion(
-    req.authContext.pool,
-    req.params,
-  );
+  const resultado = await listarTarifasDeLaVersion(req.authContext.pool, req.params);
   return res.status(200).json(resultado);
 }
 
@@ -103,10 +107,7 @@ export async function consultarTarifasVersion(req, res) {
  * @returns {Promise<object>} JSON `{ version, eventos }`.
  */
 export async function consultarEventosVersion(req, res) {
-  const resultado = await resumirEventosDeVersion(
-    req.authContext.pool,
-    req.params,
-  );
+  const resultado = await resumirEventosDeVersion(req.authContext.pool, req.params);
   return res.status(200).json(resultado);
 }
 
@@ -123,7 +124,9 @@ export async function deshacerUltimoCambio(req, res) {
     req.authContext.pool,
     req.params,
     req.body ?? {},
-    { legajo: req.auth.user.legajo },
+    {
+      legajo: req.auth.user.legajo
+    }
   );
   return res.status(200).json(resultado);
 }
@@ -135,10 +138,7 @@ export async function deshacerUltimoCambio(req, res) {
  * @returns {Promise<object>} JSON `{ fecha, version, tarifas }`.
  */
 export async function reconstruirTarifario(req, res) {
-  const resultado = await reconstruirTarifarioHistorico(
-    req.authContext.pool,
-    req.query,
-  );
+  const resultado = await reconstruirTarifarioHistorico(req.authContext.pool, req.query);
   return res.status(200).json(resultado);
 }
 
@@ -164,7 +164,9 @@ export async function actualizarPolitica(req, res) {
     req.authContext.pool,
     req.params.id,
     req.body ?? {},
-    { legajo: req.auth.user.legajo },
+    {
+      legajo: req.auth.user.legajo
+    }
   );
   return res.status(200).json(resultado);
 }
@@ -187,10 +189,7 @@ export async function consultarHistorialPolitica(req, res) {
  * @returns {Promise<object>} JSON con el detalle completo de la versión.
  */
 export async function consultarDetallePolitica(req, res) {
-  const resultado = await obtenerDetallePoliticaComercial(
-    req.authContext.pool,
-    req.params.id,
-  );
+  const resultado = await obtenerDetallePoliticaComercial(req.authContext.pool, req.params.id);
   return res.status(200).json(resultado);
 }
 
@@ -205,7 +204,9 @@ export async function recuperarPolitica(req, res) {
     req.authContext.pool,
     req.params.id,
     req.body ?? {},
-    { legajo: req.auth.user.legajo },
+    {
+      legajo: req.auth.user.legajo
+    }
   );
   return res.status(201).json(resultado);
 }
@@ -221,7 +222,9 @@ export async function cancelarProgramacionPolitica(req, res) {
     req.authContext.pool,
     req.params.id,
     req.body ?? {},
-    { legajo: req.auth.user.legajo },
+    {
+      legajo: req.auth.user.legajo
+    }
   );
   return res.status(200).json(resultado);
 }
@@ -233,11 +236,10 @@ export async function cancelarProgramacionPolitica(req, res) {
  * @returns {Promise<object>} JSON `{ eventos }` desde el más reciente.
  */
 export async function consultarEventosPolitica(req, res) {
-  const eventos = await listarEventosPoliticaComercial(
-    req.authContext.pool,
-    req.params.id,
-  );
-  return res.status(200).json({ eventos });
+  const eventos = await listarEventosPoliticaComercial(req.authContext.pool, req.params.id);
+  return res.status(200).json({
+    eventos
+  });
 }
 
 /**
@@ -245,10 +247,9 @@ export async function consultarEventosPolitica(req, res) {
  * Responde 201 con `{ version }` o 409 si ya existe un borrador abierto.
  */
 export async function crearBorrador(req, res) {
-  const resultado = await crearBorradorTarifario(
-    req.authContext.pool,
-    { legajo: req.auth.user.legajo },
-  );
+  const resultado = await crearBorradorTarifario(req.authContext.pool, {
+    legajo: req.auth.user.legajo
+  });
   return res.status(201).json(resultado);
 }
 
@@ -258,11 +259,9 @@ export async function crearBorrador(req, res) {
  * existe un borrador abierto o el origen no es una version historica.
  */
 export async function recuperarVersion(req, res) {
-  const resultado = await crearBorradorDesdeHistorica(
-    req.authContext.pool,
-    req.params,
-    { legajo: req.auth.user.legajo },
-  );
+  const resultado = await crearBorradorDesdeHistorica(req.authContext.pool, req.params, {
+    legajo: req.auth.user.legajo
+  });
   return res.status(201).json(resultado);
 }
 
@@ -276,11 +275,7 @@ export async function recuperarVersion(req, res) {
  * @returns {Promise<object>} JSON `{ version, porcentaje, tipo_ingreso, filas }`.
  */
 export async function previsualizarAumento(req, res) {
-  const resultado = await previsualizarAumentoVersion(
-    req.authContext.pool,
-    req.params,
-    req.query,
-  );
+  const resultado = await previsualizarAumentoVersion(req.authContext.pool, req.params, req.query);
   return res.status(200).json(resultado);
 }
 
@@ -293,7 +288,9 @@ export async function aumentarVersion(req, res) {
     req.authContext.pool,
     req.params,
     req.body ?? {},
-    { legajo: req.auth.user.legajo },
+    {
+      legajo: req.auth.user.legajo
+    }
   );
   return res.status(200).json(resultado);
 }
@@ -303,12 +300,9 @@ export async function aumentarVersion(req, res) {
  * Responde 200 con `{ tarifa, revision }`.
  */
 export async function editarTarifa(req, res) {
-  const resultado = await editarTarifaVersion(
-    req.authContext.pool,
-    req.params,
-    req.body ?? {},
-    { legajo: req.auth.user.legajo },
-  );
+  const resultado = await editarTarifaVersion(req.authContext.pool, req.params, req.body ?? {}, {
+    legajo: req.auth.user.legajo
+  });
   return res.status(200).json(resultado);
 }
 
@@ -321,7 +315,9 @@ export async function finalizarVersion(req, res) {
     req.authContext.pool,
     req.params,
     req.body ?? {},
-    { legajo: req.auth.user.legajo },
+    {
+      legajo: req.auth.user.legajo
+    }
   );
   return res.status(200).json(resultado);
 }
@@ -332,11 +328,9 @@ export async function finalizarVersion(req, res) {
  * `{ version, evento }` o 409 si el estado no lo permite.
  */
 export async function reanudarVersion(req, res) {
-  const resultado = await reanudarEdicionVersion(
-    req.authContext.pool,
-    req.params,
-    { legajo: req.auth.user.legajo },
-  );
+  const resultado = await reanudarEdicionVersion(req.authContext.pool, req.params, {
+    legajo: req.auth.user.legajo
+  });
   return res.status(200).json(resultado);
 }
 
@@ -345,11 +339,9 @@ export async function reanudarVersion(req, res) {
  * Responde 200 con `{ version, versionReemplazada, evento }`.
  */
 export async function activarVersion(req, res) {
-  const resultado = await activarVersionTarifario(
-    req.authContext.pool,
-    req.params,
-    { legajo: req.auth.user.legajo },
-  );
+  const resultado = await activarVersionTarifario(req.authContext.pool, req.params, {
+    legajo: req.auth.user.legajo
+  });
   return res.status(200).json(resultado);
 }
 
@@ -365,7 +357,9 @@ export async function descartarVersion(req, res) {
     req.authContext.pool,
     req.params,
     req.body ?? {},
-    { legajo: req.auth.user.legajo },
+    {
+      legajo: req.auth.user.legajo
+    }
   );
   return res.status(200).json(resultado);
 }
@@ -381,26 +375,21 @@ export function createTarifarioRouter() {
     '/tarifario/planes/:planId/:tipoIngreso',
     authenticate,
     authorize('ADMIN'),
-    consultarTarifario,
+    consultarTarifario
   );
   router.get('/tarifario/versiones', authenticate, authorize('ADMIN'), listarVersiones);
-  router.get(
-    '/tarifario/versiones/:id',
-    authenticate,
-    authorize('ADMIN'),
-    consultarDetalleVersion,
-  );
+  router.get('/tarifario/versiones/:id', authenticate, authorize('ADMIN'), consultarDetalleVersion);
   router.get(
     '/tarifario/versiones/:id/tarifas',
     authenticate,
     authorize('ADMIN'),
-    consultarTarifasVersion,
+    consultarTarifasVersion
   );
   router.get(
     '/tarifario/versiones/:id/eventos',
     authenticate,
     authorize('ADMIN'),
-    consultarEventosVersion,
+    consultarEventosVersion
   );
   router.get('/tarifario', authenticate, authorize('ADMIN'), reconstruirTarifario);
   router.post('/tarifario/versiones', authenticate, authorize('ADMIN'), crearBorrador);
@@ -408,92 +397,82 @@ export function createTarifarioRouter() {
     '/tarifario/versiones/:id/recuperacion',
     authenticate,
     authorize('ADMIN'),
-    recuperarVersion,
+    recuperarVersion
   );
   router.post(
     '/tarifario/versiones/:id/deshacer',
     authenticate,
     authorize('ADMIN'),
-    deshacerUltimoCambio,
+    deshacerUltimoCambio
   );
   router.get(
     '/tarifario/versiones/:id/aumentos/vista-previa',
     authenticate,
     authorize('ADMIN'),
-    previsualizarAumento,
+    previsualizarAumento
   );
   router.post(
     '/tarifario/versiones/:id/aumentos',
     authenticate,
     authorize('ADMIN'),
-    aumentarVersion,
+    aumentarVersion
   );
   router.patch(
     '/tarifario/versiones/:id/tarifas/:tarifaId',
     authenticate,
     authorize('ADMIN'),
-    editarTarifa,
+    editarTarifa
   );
   router.post(
     '/tarifario/versiones/:id/finalizacion',
     authenticate,
     authorize('ADMIN'),
-    finalizarVersion,
+    finalizarVersion
   );
   router.post(
     '/tarifario/versiones/:id/reanudacion',
     authenticate,
     authorize('ADMIN'),
-    reanudarVersion,
+    reanudarVersion
   );
   router.post(
     '/tarifario/versiones/:id/activacion',
     authenticate,
     authorize('ADMIN'),
-    activarVersion,
+    activarVersion
   );
   router.post(
     '/tarifario/versiones/:id/descarte',
     authenticate,
     authorize('ADMIN'),
-    descartarVersion,
+    descartarVersion
   );
   router.get('/politica-comercial', authenticate, authorize('ADMIN'), consultarPolitica);
   router.get(
     '/politica-comercial/historial',
     authenticate,
     authorize('ADMIN'),
-    consultarHistorialPolitica,
+    consultarHistorialPolitica
   );
-  router.get(
-    '/politica-comercial/:id',
-    authenticate,
-    authorize('ADMIN'),
-    consultarDetallePolitica,
-  );
-  router.put(
-    '/politica-comercial/:id',
-    authenticate,
-    authorize('ADMIN'),
-    actualizarPolitica,
-  );
+  router.get('/politica-comercial/:id', authenticate, authorize('ADMIN'), consultarDetallePolitica);
+  router.put('/politica-comercial/:id', authenticate, authorize('ADMIN'), actualizarPolitica);
   router.post(
     '/politica-comercial/:id/recuperacion',
     authenticate,
     authorize('ADMIN'),
-    recuperarPolitica,
+    recuperarPolitica
   );
   router.post(
     '/politica-comercial/:id/cancelacion',
     authenticate,
     authorize('ADMIN'),
-    cancelarProgramacionPolitica,
+    cancelarProgramacionPolitica
   );
   router.get(
     '/politica-comercial/:id/eventos',
     authenticate,
     authorize('ADMIN'),
-    consultarEventosPolitica,
+    consultarEventosPolitica
   );
   return router;
 }

@@ -1,11 +1,16 @@
-// Servicio de la carga inicial controlada E2: lee el catalogo de SIGEC
-// (solo SELECT), valida el origen contra los criterios estructurales
-// aprobados, normaliza rangos canonicos y escribe planes, la version
-// CARGA_INICIAL, las tarifas validas, los aportes de monotributo y la
-// politica comercial en una unica transaccion de MATISTA, con rollback
-// completo ante cualquier error. Es idempotente: si la carga ya existe y
-// es consistente, verifica conteos y no vuelve a escribir.
+/**
+ * Coordina las validaciones y la transacción de carga inicial.
+ */
 
+/*
+ * Servicio de la carga inicial controlada E2: lee el catalogo de SIGEC
+ * (solo SELECT), valida el origen contra los criterios estructurales
+ * aprobados, normaliza rangos canonicos y escribe planes, la version
+ * CARGA_INICIAL, las tarifas validas, los aportes de monotributo y la
+ * politica comercial en una unica transaccion de MATISTA, con rollback
+ * completo ante cualquier error. Es idempotente: si la carga ya existe y
+ * es consistente, verifica conteos y no vuelve a escribir.
+ */
 import {
   assertActorExistente,
   leerEstadoCatalogo,
@@ -16,7 +21,7 @@ import {
   insertarAportesMonotributo,
   insertarPoliticaComercial,
   insertarCatalogoPorcentajes,
-  PORCENTAJES_COMERCIALES_INICIALES,
+  PORCENTAJES_COMERCIALES_INICIALES
 } from './carga-inicial.repository.js';
 
 // Valores de politica_comercial aprobados para E2 (autorizacion, seccion 3.5).
@@ -35,19 +40,18 @@ const POLITICA_INICIAL = Object.freeze({
   tdc_habilitado: 1,
   tope_comercial_tdc_pct: '55.00',
   afinidad_pct: null,
-  aporte_monotributo: '23892.00',
+  aporte_monotributo: '23892.00'
 });
 
 // Catalogo comercial inicial aprobado para la carga (RF-D16):
-const PLANES_APROBADOS = Object.freeze(
-  ['RUBÍ', 'ESMERALDA', 'ZAFIRO', 'DIAMANTE'],
-);
+const PLANES_APROBADOS = Object.freeze(['RUBÍ', 'ESMERALDA', 'ZAFIRO', 'DIAMANTE']);
 
 // Observacion de procedencia registrada en la cabecera de la version.
-const OBSERVACION_CARGA = 'Carga inicial controlada desde SIGEC (E2): '
-  + 'planes activos y tarifas validadas; 10 registros excluidos por '
-  + 'criterio estructural (6 inactivas, 2 de planes inactivos, '
-  + '2 monotributo).';
+const OBSERVACION_CARGA =
+  'Carga inicial controlada desde SIGEC (E2): ' +
+  'planes activos y tarifas validadas; 10 registros excluidos por ' +
+  'criterio estructural (6 inactivas, 2 de planes inactivos, ' +
+  '2 monotributo).';
 
 // Total de tarifas validas y composicion aprobada de la matriz.
 const TARIFAS_ESPERADAS = 160;
@@ -65,10 +69,9 @@ const PLANES_ESPERADOS = 4;
 export function normalizarRangoClave(rangoEtario) {
   const tieneAnotacion = rangoEtario.includes('(*)');
   const base = rangoEtario.replaceAll('(*)', '').trim();
-
   return Object.freeze({
     clave: base === '66-00' ? '66+' : base,
-    nota: tieneAnotacion ? '(*)' : null,
+    nota: tieneAnotacion ? '(*)' : null
   });
 }
 
@@ -86,12 +89,11 @@ export function normalizarRangoClave(rangoEtario) {
 export function seleccionarReferenciasValidas(referencias) {
   const validas = [];
   const excluidos = [];
-
   for (const referencia of referencias) {
     if (referencia.tipo_ingreso === 'monotributo') {
       excluidos.push({
         id: referencia.id,
-        motivo: 'Referencia monotributo huérfana (código muerto del origen)',
+        motivo: 'Referencia monotributo huérfana (código muerto del origen)'
       });
       continue;
     }
@@ -99,28 +101,30 @@ export function seleccionarReferenciasValidas(referencias) {
     // El vocabulario de la auditoria aprobada agrupa como inactivas las
     // filas activo=0 aunque su plan tambien este inactivo (6 registros).
     if (!referencia.activo) {
-      excluidos.push({ id: referencia.id, motivo: 'Referencia inactiva' });
-      continue;
-    }
-
-    if (!referencia.plan_activo) {
       excluidos.push({
         id: referencia.id,
-        motivo: 'Pertenece a un plan inactivo en SIGEC',
+        motivo: 'Referencia inactiva'
       });
       continue;
     }
-
+    if (!referencia.plan_activo) {
+      excluidos.push({
+        id: referencia.id,
+        motivo: 'Pertenece a un plan inactivo en SIGEC'
+      });
+      continue;
+    }
     const { clave, nota } = normalizarRangoClave(referencia.rango_etario);
-
     validas.push({
       ...referencia,
       rango_clave: clave,
-      rango_nota: nota,
+      rango_nota: nota
     });
   }
-
-  return Object.freeze({ validas, excluidos });
+  return Object.freeze({
+    validas,
+    excluidos
+  });
 }
 
 /** Detecta la primera duplicacion por clave canonica entre referencias.
@@ -130,18 +134,13 @@ export function seleccionarReferenciasValidas(referencias) {
  */
 function buscarDuplicada(validas) {
   const vistas = new Map();
-
   for (const referencia of validas) {
-    const clave = `${referencia.plan_id}|${referencia.tipo_ingreso}`
-      + `|${referencia.rango_clave}`;
-
+    const clave = `${referencia.plan_id}|${referencia.tipo_ingreso}` + `|${referencia.rango_clave}`;
     if (vistas.has(clave)) {
       return clave;
     }
-
     vistas.set(clave, referencia.id);
   }
-
   return null;
 }
 
@@ -157,111 +156,82 @@ function buscarDuplicada(validas) {
  *    error con detalle si alguna regla no se cumple.
  */
 export function validarOrigen(fuente) {
-  const planesActivos = fuente.planes.filter((plan) => plan.activo === 1);
-
+  const planesActivos = fuente.planes.filter(plan => plan.activo === 1);
   if (planesActivos.length !== PLANES_ESPERADOS) {
     throw new Error(
-      `SIGEC: se esperaban exactamente ${PLANES_ESPERADOS} planes activos; `
-      + `se encontraron ${planesActivos.length}.`,
+      `SIGEC: se esperaban exactamente ${PLANES_ESPERADOS} planes activos; ` +
+        `se encontraron ${planesActivos.length}.`
     );
   }
-
-  const nombresFuera = planesActivos.filter(
-    (plan) => !PLANES_APROBADOS.includes(plan.nombre.trim()),
-  );
-
+  const nombresFuera = planesActivos.filter(plan => !PLANES_APROBADOS.includes(plan.nombre.trim()));
   if (nombresFuera.length > 0) {
     throw new Error(
-      'SIGEC: los planes activos no coinciden con la matriz aprobada '
-      + `(fuera de matriz: ${nombresFuera.map((p) => p.nombre).join(', ')}).`,
+      'SIGEC: los planes activos no coinciden con la matriz aprobada ' +
+        `(fuera de matriz: ${nombresFuera.map(p => p.nombre).join(', ')}).`
     );
   }
-
-  const { validas, excluidos } = seleccionarReferenciasValidas(
-    fuente.referencias,
-  );
-
+  const { validas, excluidos } = seleccionarReferenciasValidas(fuente.referencias);
   if (validas.length !== TARIFAS_ESPERADAS) {
     throw new Error(
-      `SIGEC: se esperaban ${TARIFAS_ESPERADAS} tarifas validas; `
-      + `se obtuvieron ${validas.length}. No se carga: la matriz no es la `
-      + 'aprobada y los importes no se inventan.',
+      `SIGEC: se esperaban ${TARIFAS_ESPERADAS} tarifas validas; ` +
+        `se obtuvieron ${validas.length}. No se carga: la matriz no es la ` +
+        'aprobada y los importes no se inventan.'
     );
   }
-
-  if (validas.some((referencia) => Number(referencia.precio) <= 0)) {
-    throw new Error(
-      'SIGEC: existe al menos una tarifa valida con precio no positivo.',
-    );
+  if (validas.some(referencia => Number(referencia.precio) <= 0)) {
+    throw new Error('SIGEC: existe al menos una tarifa valida con precio no positivo.');
   }
-
   const duplicada = buscarDuplicada(validas);
-
   if (duplicada !== null) {
     throw new Error(
-      `SIGEC: referencia duplicada por clave canonica (${duplicada}); `
-      + 'no se carga hasta resolver el origen.',
+      `SIGEC: referencia duplicada por clave canonica (${duplicada}); ` +
+        'no se carga hasta resolver el origen.'
     );
   }
 
   // Cobertura de matriz: cada combinacion plan/modalidad debe tener 20 claves.
   const grupos = new Map();
   const clavesUnicas = new Set();
-
   for (const referencia of validas) {
     const grupo = `${referencia.plan_id}|${referencia.tipo_ingreso}`;
-
     grupos.set(grupo, (grupos.get(grupo) ?? 0) + 1);
     clavesUnicas.add(`${grupo}|${referencia.rango_clave}`);
   }
-
-  const gruposIncorrectos = [...grupos.entries()].filter(
-    ([, total]) => total !== CLAVES_POR_GRUPO,
-  );
-
+  const gruposIncorrectos = [...grupos.entries()].filter(([, total]) => total !== CLAVES_POR_GRUPO);
   if (grupos.size !== PLANES_ESPERADOS * 2 || gruposIncorrectos.length > 0) {
     throw new Error(
-      'SIGEC: la matriz por plan/modalidad no cumple 20 claves por grupo '
-      + `(grupos: ${grupos.size}, desviados: `
-      + `${gruposIncorrectos.map(([clave]) => clave).join(', ') || 'ninguno'}).`,
+      'SIGEC: la matriz por plan/modalidad no cumple 20 claves por grupo ' +
+        `(grupos: ${grupos.size}, desviados: ` +
+        `${gruposIncorrectos.map(([clave]) => clave).join(', ') || 'ninguno'}).`
     );
   }
-
   if (clavesUnicas.size !== TARIFAS_ESPERADAS) {
     throw new Error(
-      `SIGEC: claves unicas incoherentes (${clavesUnicas.size} `
-      + `de ${TARIFAS_ESPERADAS}); no se carga.`,
+      `SIGEC: claves unicas incoherentes (${clavesUnicas.size} ` +
+        `de ${TARIFAS_ESPERADAS}); no se carga.`
     );
   }
-
   const categorias = new Set();
-
   if (fuente.aportes.length !== APORTES_ESPERADOS) {
     throw new Error(
-      `SIGEC: se esperaban ${APORTES_ESPERADOS} aportes de monotributo; `
-      + `se obtuvieron ${fuente.aportes.length}.`,
+      `SIGEC: se esperaban ${APORTES_ESPERADOS} aportes de monotributo; ` +
+        `se obtuvieron ${fuente.aportes.length}.`
     );
   }
-
   for (const aporte of fuente.aportes) {
     if (Number(aporte.aporte) <= 0) {
-      throw new Error(
-        `SIGEC: el aporte de la categoria ${aporte.categoria} no es positivo.`,
-      );
+      throw new Error(`SIGEC: el aporte de la categoria ${aporte.categoria} no es positivo.`);
     }
-
     categorias.add(aporte.categoria);
   }
-
   if (categorias.size !== fuente.aportes.length) {
     throw new Error('SIGEC: categorias de monotributo duplicadas en el origen.');
   }
-
   return Object.freeze({
     planesActivos,
     validas,
     excluidos,
-    aportes: fuente.aportes,
+    aportes: fuente.aportes
   });
 }
 
@@ -274,36 +244,34 @@ export function validarOrigen(fuente) {
  *    nunca compone parciales.
  */
 export function evaluarEstado(estado) {
-  const catalogoVacio = estado.planes === 0
-    && estado.versiones === 0
-    && estado.tarifas === 0
-    && estado.aportesAbiertos === 0
-    && estado.politicasAbiertas === 0;
-
+  const catalogoVacio =
+    estado.planes === 0 &&
+    estado.versiones === 0 &&
+    estado.tarifas === 0 &&
+    estado.aportesAbiertos === 0 &&
+    estado.politicasAbiertas === 0;
   if (catalogoVacio) {
     return 'VACIA';
   }
-
-  const consistente = estado.versionCargaInicialId !== null
-    && estado.versionCargaInicialEstado === 'ACTIVA'
-    && estado.planes === PLANES_ESPERADOS
-    && estado.tarifasCargaInicial === TARIFAS_ESPERADAS
-    && estado.versiones >= 1
-    && estado.aportesAbiertos >= APORTES_ESPERADOS
-    && estado.politicasAbiertas >= 1;
-
+  const consistente =
+    estado.versionCargaInicialId !== null &&
+    estado.versionCargaInicialEstado === 'ACTIVA' &&
+    estado.planes === PLANES_ESPERADOS &&
+    estado.tarifasCargaInicial === TARIFAS_ESPERADAS &&
+    estado.versiones >= 1 &&
+    estado.aportesAbiertos >= APORTES_ESPERADOS &&
+    estado.politicasAbiertas >= 1;
   if (consistente) {
     return 'CARGA_EXISTENTE';
   }
-
   throw new Error(
-    'El catalogo ADMIN esta en un estado intermedio o inconsistente; '
-    + 'la carga inicial no repara estados parciales. Conteos: '
-    + `planes=${estado.planes}, versiones=${estado.versiones}, `
-    + `tarifas=${estado.tarifas} `
-    + `(en CARGA_INICIAL: ${estado.tarifasCargaInicial}), `
-    + `aportes abiertos=${estado.aportesAbiertos}, `
-    + `politicas abiertas=${estado.politicasAbiertas}.`,
+    'El catalogo ADMIN esta en un estado intermedio o inconsistente; ' +
+      'la carga inicial no repara estados parciales. Conteos: ' +
+      `planes=${estado.planes}, versiones=${estado.versiones}, ` +
+      `tarifas=${estado.tarifas} ` +
+      `(en CARGA_INICIAL: ${estado.tarifasCargaInicial}), ` +
+      `aportes abiertos=${estado.aportesAbiertos}, ` +
+      `politicas abiertas=${estado.politicasAbiertas}.`
   );
 }
 
@@ -340,18 +308,14 @@ export async function ejecutarCargaInicial({
   matistaConnection,
   sigecConnection,
   actorLegajo,
-  fallarTrasTarifas = false,
+  fallarTrasTarifas = false
 }) {
-  const conexionPropia = matistaConnection
-    ? null
-    : await matistaPool.getConnection();
+  const conexionPropia = matistaConnection ? null : await matistaPool.getConnection();
   const destino = matistaConnection ?? conexionPropia;
-
   try {
     await assertActorExistente(destino, actorLegajo);
     const estado = await leerEstadoCatalogo(destino);
     const clasificacion = evaluarEstado(estado);
-
     if (clasificacion === 'CARGA_EXISTENTE') {
       // Carga preexistente de bases inicializadas antes de esta correccion:
       // la politica vigente puede carecer de catalogo comercial (caso de
@@ -364,11 +328,7 @@ export async function ejecutarCargaInicial({
           await destino.beginTransaction();
         }
         try {
-          await insertarCatalogoPorcentajes(
-            destino,
-            estado.politicaVigenteId,
-            actorLegajo,
-          );
+          await insertarCatalogoPorcentajes(destino, estado.politicaVigenteId, actorLegajo);
           if (conexionPropia) {
             await destino.commit();
           }
@@ -386,36 +346,29 @@ export async function ejecutarCargaInicial({
         tarifas: estado.tarifas,
         aportesMonotributo: estado.aportesAbiertos,
         politicaComercial: estado.politicasAbiertas,
-        porcentajesComerciales,
+        porcentajesComerciales
       });
     }
-
     const fuente = await leerFuenteSigec(sigecConnection);
     const { planesActivos, validas, excluidos, aportes } = validarOrigen(fuente);
-
     if (conexionPropia) {
       await destino.beginTransaction();
     }
-
     try {
       // 1) planes con ids originales preservados (trazabilidad con SIGEC).
       await insertarPlanes(destino, planesActivos);
 
       // 2) version CARGA_INICIAL: una sola, actor NULL, fecha y hora actual.
-      const versionId = await insertarVersionCargaInicial(
-        destino,
-        OBSERVACION_CARGA,
-      );
+      const versionId = await insertarVersionCargaInicial(destino, OBSERVACION_CARGA);
 
       // 3) tarifas validas en lotes de 50 filas.
       await insertarTarifasCargaInicial(destino, versionId, validas);
-
       if (fallarTrasTarifas) {
         // Punto de inyeccion exclusivo de pruebas: un fallo aqui debe
         // revertir planes, version y tarifas en bloque.
         throw new Error(
-          'Falla simulada para verificar el rollback de la carga '
-          + '(parametro fallarTrasTarifas).',
+          'Falla simulada para verificar el rollback de la carga ' +
+            '(parametro fallarTrasTarifas).'
         );
       }
 
@@ -424,21 +377,15 @@ export async function ejecutarCargaInicial({
 
       // 5) politica comercial inicial: version VIGENTE con valores aprobados
       //    y el aporte de monotributo fijo como campo versionado del snapshot.
-      const politicaId = await insertarPoliticaComercial(
-        destino,
-        POLITICA_INICIAL,
-        actorLegajo,
-      );
+      const politicaId = await insertarPoliticaComercial(destino, POLITICA_INICIAL, actorLegajo);
 
       // 6) catalogo comercial inicial vinculado a esa politica VIGENTE: sin
       //    este paso una instalacion nueva quedaria con una politica vigente
       //    sin descuentos autorizados (hallazgo de la auditoria de cierre).
       await insertarCatalogoPorcentajes(destino, politicaId, actorLegajo);
-
       if (conexionPropia) {
         await destino.commit();
       }
-
       return Object.freeze({
         aplicada: true,
         versionCargaInicialId: versionId,
@@ -447,7 +394,7 @@ export async function ejecutarCargaInicial({
         aportesMonotributo: aportes.length,
         politicaComercial: 1,
         porcentajesComerciales: PORCENTAJES_COMERCIALES_INICIALES.length,
-        excluidos,
+        excluidos
       });
     } catch (error) {
       // Rollback completo solo si la conexion (y su transaccion) es del

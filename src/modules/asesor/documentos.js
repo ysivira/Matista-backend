@@ -11,12 +11,25 @@ import { renderizarCotizacion } from './documentos/cotizacion.plantilla.js';
  * @throws {Error} ASESOR_ESTADO si no es una emisión válida.
  */
 export async function cotizacionHtml(q, contexto = {}) {
-  if (q.estado !== 'EMITIDA' || !q.numero || !q.emitida_at || !esResultadoEconomico(q.resultado)) throw createAppError('ASESOR_ESTADO', 'El PDF requiere una cotización emitida válida y no anulada.', 409);
-  const r = q.resultado, solicitud = q.solicitud;
+  if (
+    q.estado !== 'EMITIDA' ||
+    !q.numero ||
+    !q.emitida_at ||
+    !esResultadoEconomico(q.resultado)
+  )
+    throw createAppError(
+      'ASESOR_ESTADO',
+      'El PDF requiere una cotización emitida válida y no anulada.',
+      409
+    );
+  const r = q.resultado,
+    solicitud = q.solicitud;
   const asesor = solicitud.asesor ?? contexto.asesor;
   const tieneCondiciones = Object.hasOwn(solicitud.plan, 'condiciones_generales');
   const tieneDetalles = Object.hasOwn(solicitud.plan, 'detalles');
-  const condiciones = tieneCondiciones ? solicitud.plan.condiciones_generales : contexto.plan?.condiciones_generales;
+  const condiciones = tieneCondiciones
+    ? solicitud.plan.condiciones_generales
+    : contexto.plan?.condiciones_generales;
   const detalles = tieneDetalles ? solicitud.plan.detalles : contexto.plan?.detalles;
   const lineas = [
     ['Valor base del plan', r.precio_base],
@@ -25,7 +38,16 @@ export async function cotizacionHtml(q, contexto = {}) {
     ...(r.impuestos ?? []).filter(i => Number(i.importe) > 0).map(i => [`${i.concepto.startsWith('IVA') ? 'IVA' : i.concepto} (${Number(i.porcentaje).toLocaleString('es-AR')} %)`, i.importe]),
   ];
   const periodos = r.tramos.filter(t => Number(t.porcentaje_comercial) > 0);
-  return renderizarCotizacion({ q, asesor, tieneCondiciones, tieneDetalles, condiciones, detalles, lineas, periodos });
+  return renderizarCotizacion({
+    q,
+    asesor,
+    tieneCondiciones,
+    tieneDetalles,
+    condiciones,
+    detalles,
+    lineas,
+    periodos
+  });
 }
 
 /**
@@ -36,5 +58,11 @@ export async function cotizacionHtml(q, contexto = {}) {
  * @throws {Error} ASESOR_ESTADO, PDF_CONTENIDO_EXTENSO o PDF_NO_DISPONIBLE según el contrato existente.
  */
 export async function cotizacionPdf(cotizacion, contexto = {}) {
-  return imprimirHtmlPdf(await cotizacionHtml(cotizacion, contexto), { errorDesbordamiento: createAppError('PDF_CONTENIDO_EXTENSO', 'Un elemento del catálogo excede el área imprimible. No se omitió contenido; revise su organización para permitir una paginación legible.', 422) });
+  return imprimirHtmlPdf(await cotizacionHtml(cotizacion, contexto), {
+    errorDesbordamiento: createAppError(
+      'PDF_CONTENIDO_EXTENSO',
+      'Un elemento del catálogo excede el área imprimible. No se omitió contenido; revise su organización para permitir una paginación legible.',
+      422
+    )
+  });
 }

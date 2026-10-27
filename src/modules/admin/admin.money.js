@@ -1,4 +1,11 @@
-// Compatibilidad de la interfaz pública ADMIN: las funciones tienen una única implementación neutral.
+/**
+ * Adapta la aritmética monetaria exacta a las operaciones de ADMIN.
+ */
+
+/*
+ * Compatibilidad de la interfaz pública ADMIN: las funciones tienen una única implementación
+ * neutral.
+ */
 export {
   parseDecimal,
   dividirHalfUp,
@@ -8,5 +15,5 @@ export {
   aplicarPorcentaje,
   compararImportes,
   esImporteValido,
-  esPorcentajeValido,
+  esPorcentajeValido
 } from '../../shared/lib/money.js';

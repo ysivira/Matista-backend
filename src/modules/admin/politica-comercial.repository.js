@@ -1,3 +1,6 @@
+/**
+ * Persiste versiones y eventos de la política comercial.
+ */
 const CAMPOS_POLITICA = `
   p.id,
   p.estado,
@@ -28,7 +31,6 @@ const CAMPOS_POLITICA = `
   p.created_at,
   e.nombre AS actor_nombre,
   e.apellido AS actor_apellido`;
-
 const JOIN_RESPONSABLE = 'LEFT JOIN empleados e ON e.legajo = p.actor_legajo';
 
 /**
@@ -37,17 +39,12 @@ const JOIN_RESPONSABLE = 'LEFT JOIN empleados e ON e.legajo = p.actor_legajo';
  * @param {{forUpdate?: boolean}} opciones Activa el bloqueo de fila al escribir.
  * @returns {Promise<object|undefined>} Versión vigente o undefined.
  */
-export async function obtenerPoliticaComercialVigente(
-  connection,
-  { forUpdate = false } = {},
-) {
-  const [rows] = await connection.query(
-    `SELECT ${CAMPOS_POLITICA}
+export async function obtenerPoliticaComercialVigente(connection, { forUpdate = false } = {}) {
+  const [rows] = await connection.query(`SELECT ${CAMPOS_POLITICA}
        FROM politica_comercial p
        ${JOIN_RESPONSABLE}
       WHERE p.estado = 'VIGENTE'
-      LIMIT 1${forUpdate ? ' FOR UPDATE' : ''}`,
-  );
+      LIMIT 1${forUpdate ? ' FOR UPDATE' : ''}`);
   return rows[0];
 }
 
@@ -57,17 +54,12 @@ export async function obtenerPoliticaComercialVigente(
  * @param {{forUpdate?: boolean}} opciones Activa el bloqueo de fila al escribir.
  * @returns {Promise<object|undefined>} Versión programada o undefined.
  */
-export async function obtenerPoliticaComercialProgramada(
-  connection,
-  { forUpdate = false } = {},
-) {
-  const [rows] = await connection.query(
-    `SELECT ${CAMPOS_POLITICA}
+export async function obtenerPoliticaComercialProgramada(connection, { forUpdate = false } = {}) {
+  const [rows] = await connection.query(`SELECT ${CAMPOS_POLITICA}
        FROM politica_comercial p
        ${JOIN_RESPONSABLE}
       WHERE p.estado = 'PROGRAMADA'
-      LIMIT 1${forUpdate ? ' FOR UPDATE' : ''}`,
-  );
+      LIMIT 1${forUpdate ? ' FOR UPDATE' : ''}`);
   return rows[0];
 }
 
@@ -81,7 +73,7 @@ export async function obtenerPoliticaComercialProgramada(
 export async function obtenerPoliticaComercialPorId(
   connection,
   politicaId,
-  { forUpdate = false } = {},
+  { forUpdate = false } = {}
 ) {
   const [rows] = await connection.query(
     `SELECT ${CAMPOS_POLITICA}
@@ -89,7 +81,7 @@ export async function obtenerPoliticaComercialPorId(
        ${JOIN_RESPONSABLE}
       WHERE p.id = ?
       LIMIT 1${forUpdate ? ' FOR UPDATE' : ''}`,
-    [politicaId],
+    [politicaId]
   );
   return rows[0];
 }
@@ -100,12 +92,10 @@ export async function obtenerPoliticaComercialPorId(
  * @returns {Promise<object[]>} Versiones desde la creación más reciente.
  */
 export async function listarPoliticasComerciales(connection) {
-  const [rows] = await connection.query(
-    `SELECT ${CAMPOS_POLITICA}
+  const [rows] = await connection.query(`SELECT ${CAMPOS_POLITICA}
        FROM politica_comercial p
        ${JOIN_RESPONSABLE}
-      ORDER BY p.created_at DESC, p.id DESC`,
-  );
+      ORDER BY p.created_at DESC, p.id DESC`);
   return rows;
 }
 
@@ -119,7 +109,7 @@ export async function listarPoliticasComerciales(connection) {
 export async function listarPorcentajesDePoliticas(
   connection,
   politicaIds,
-  { forUpdate = false } = {},
+  { forUpdate = false } = {}
 ) {
   if (politicaIds.length === 0) return [];
   const placeholders = politicaIds.map(() => '?').join(', ');
@@ -129,7 +119,7 @@ export async function listarPorcentajesDePoliticas(
        FROM porcentajes_comerciales
       WHERE politica_comercial_id IN (${placeholders})
       ORDER BY porcentaje DESC, id DESC${forUpdate ? ' FOR UPDATE' : ''}`,
-    politicaIds,
+    politicaIds
   );
   return rows;
 }
@@ -174,8 +164,8 @@ export async function insertarPoliticaComercial(connection, politica, metadatos)
       politica.aporte_adherente ?? null,
       politica.iva_voluntario_pct ?? null,
       metadatos.fechaVigencia,
-      metadatos.actorLegajo,
-    ],
+      metadatos.actorLegajo
+    ]
   );
   return resultado.insertId;
 }
@@ -192,14 +182,14 @@ export async function insertarPorcentajesComerciales(
   connection,
   politicaId,
   porcentajes,
-  metadatos,
+  metadatos
 ) {
   for (const porcentaje of porcentajes) {
     await connection.execute(
       `INSERT INTO porcentajes_comerciales
         (politica_comercial_id, porcentaje, descripcion, fecha_vigencia, actor_legajo)
        VALUES (?, ?, NULL, ?, ?)`,
-      [politicaId, porcentaje, metadatos.fechaVigencia, metadatos.actorLegajo],
+      [politicaId, porcentaje, metadatos.fechaVigencia, metadatos.actorLegajo]
     );
   }
 }
@@ -212,12 +202,7 @@ export async function insertarPorcentajesComerciales(
  * @param {{revision: number, fechaVigencia: string, actorLegajo: string}} metadatos Edición.
  * @returns {Promise<number>} Cantidad de filas actualizadas.
  */
-export async function actualizarPoliticaProgramada(
-  connection,
-  politicaId,
-  politica,
-  metadatos,
-) {
+export async function actualizarPoliticaProgramada(connection, politicaId, politica, metadatos) {
   const [resultado] = await connection.execute(
     `UPDATE politica_comercial
         SET porcentaje_aporte_reconocido = ?, tope_sueldo_bruto = ?,
@@ -250,8 +235,8 @@ export async function actualizarPoliticaProgramada(
       metadatos.fechaVigencia,
       metadatos.actorLegajo,
       politicaId,
-      metadatos.revision,
-    ],
+      metadatos.revision
+    ]
   );
   return resultado.affectedRows;
 }
@@ -268,12 +253,11 @@ export async function reemplazarPorcentajesProgramados(
   connection,
   politicaId,
   porcentajes,
-  metadatos,
+  metadatos
 ) {
-  await connection.execute(
-    'DELETE FROM porcentajes_comerciales WHERE politica_comercial_id = ?',
-    [politicaId],
-  );
+  await connection.execute('DELETE FROM porcentajes_comerciales WHERE politica_comercial_id = ?', [
+    politicaId
+  ]);
   await insertarPorcentajesComerciales(connection, politicaId, porcentajes, metadatos);
 }
 
@@ -289,13 +273,13 @@ export async function cerrarPoliticaVigente(connection, politicaId, fechaCierre)
     `UPDATE porcentajes_comerciales
         SET vigente_hasta = ?
       WHERE politica_comercial_id = ? AND vigente_hasta IS NULL`,
-    [fechaCierre, politicaId],
+    [fechaCierre, politicaId]
   );
   await connection.execute(
     `UPDATE politica_comercial
         SET estado = 'HISTORICA', vigente_hasta = ?
       WHERE id = ? AND estado = 'VIGENTE'`,
-    [fechaCierre, politicaId],
+    [fechaCierre, politicaId]
   );
 }
 
@@ -310,7 +294,7 @@ export async function activarPoliticaProgramada(connection, politicaId) {
     `UPDATE politica_comercial
         SET estado = 'VIGENTE'
       WHERE id = ? AND estado = 'PROGRAMADA'`,
-    [politicaId],
+    [politicaId]
   );
   return resultado.affectedRows;
 }
@@ -331,7 +315,7 @@ export async function cancelarPoliticaProgramada(connection, politicaId, datos) 
       WHERE id = ? AND estado = 'PROGRAMADA'${revisar ? ' AND revision = ?' : ''}`,
     revisar
       ? [datos.actorLegajo, datos.motivo, politicaId, datos.revision]
-      : [datos.actorLegajo, datos.motivo, politicaId],
+      : [datos.actorLegajo, datos.motivo, politicaId]
   );
   return resultado.affectedRows;
 }
@@ -345,19 +329,20 @@ export async function cancelarPoliticaProgramada(connection, politicaId, datos) 
 export async function obtenerSnapshotActor(connection, actorLegajo) {
   const [rows] = await connection.execute(
     'SELECT nombre, apellido FROM empleados WHERE legajo = ?',
-    [actorLegajo],
+    [actorLegajo]
   );
   return {
     legajo: actorLegajo,
     nombre: rows[0]?.nombre ?? '',
-    apellido: rows[0]?.apellido ?? '',
+    apellido: rows[0]?.apellido ?? ''
   };
 }
 
 /**
  * Registra un evento de ciclo de vida con identidad inmutable del responsable.
  * @param {object} connection Conexión transaccional mysql2.
- * @param {{politicaId: number, tipoEvento: string, actor: object, detalle: string}} evento Datos auditables.
+ * @param {{politicaId: number, tipoEvento: string, actor: object, detalle: string}} evento Datos
+ * auditables.
  * @returns {Promise<number>} Identificador del evento.
  */
 export async function insertarEventoPolitica(connection, evento) {
@@ -372,8 +357,8 @@ export async function insertarEventoPolitica(connection, evento) {
       evento.actor.legajo,
       evento.actor.nombre,
       evento.actor.apellido,
-      evento.detalle,
-    ],
+      evento.detalle
+    ]
   );
   return resultado.insertId;
 }
@@ -391,13 +376,15 @@ export async function listarEventosPolitica(connection, politicaId) {
        FROM politica_comercial_eventos
       WHERE politica_comercial_id = ?
       ORDER BY evento_en DESC, id DESC`,
-    [politicaId],
+    [politicaId]
   );
   return rows;
 }
 
 /** Lee las referencias ADMIN sin crear catálogos alternativos. */
 export async function listarAportesMonotributo(c) {
-  const [rows] = await c.query('SELECT id,categoria,aporte,vigente_desde FROM monotributo_aportes WHERE vigente_hasta IS NULL ORDER BY id');
+  const [rows] = await c.query(
+    'SELECT id,categoria,aporte,vigente_desde FROM monotributo_aportes WHERE vigente_hasta IS NULL ORDER BY id'
+  );
   return rows;
 }

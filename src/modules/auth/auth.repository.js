@@ -1,3 +1,6 @@
+/**
+ * Persiste cuentas, correos, sesiones y tokens en unidades de trabajo.
+ */
 import { createAppError } from '../../shared/errors/app-error.js';
 import { PROFILE_FIELDS } from './auth.constants.js';
 
@@ -38,7 +41,8 @@ export async function withConnection(pool, operation, { transaction = false } = 
 /** Busca identidad por DNI y opcionalmente la bloquea; retorna fila interna o undefined. */
 export async function findEmployee(connection, legajo, lock = false) {
   const [rows] = await connection.execute(
-    `SELECT ${EMPLOYEE_COLUMNS} FROM empleados WHERE legajo = ?${lock ? ' FOR UPDATE' : ''}`, [legajo],
+    `SELECT ${EMPLOYEE_COLUMNS} FROM empleados WHERE legajo = ?${lock ? ' FOR UPDATE' : ''}`,
+    [legajo]
   );
   return rows[0];
 }
@@ -47,7 +51,8 @@ export async function findEmployee(connection, legajo, lock = false) {
 export async function findReservedEmail(connection, email) {
   const [rows] = await connection.execute(
     `SELECT id, legajo, email, estado, verificado_at FROM empleados_correos
-     WHERE email_reservado = ?`, [email],
+     WHERE email_reservado = ?`,
+    [email]
   );
   return rows[0];
 }
@@ -56,7 +61,8 @@ export async function findReservedEmail(connection, email) {
 export async function findEmails(connection, legajo, lock = false) {
   const [rows] = await connection.execute(
     `SELECT id, legajo, email, estado, verificado_at FROM empleados_correos
-     WHERE legajo = ? ORDER BY id${lock ? ' FOR UPDATE' : ''}`, [legajo],
+     WHERE legajo = ? ORDER BY id${lock ? ' FOR UPDATE' : ''}`,
+    [legajo]
   );
   return rows;
 }
@@ -67,8 +73,18 @@ export async function insertEmployee(connection, data, passwordHash, now) {
     `INSERT INTO empleados (legajo, nombre, segundo_nombre, apellido, segundo_apellido,
      telefono, direccion, password_hash, rol, estado, password_changed_at, created_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'ASESOR', 'PENDIENTE', ?, ?)`,
-    [data.legajo, data.nombre, data.segundo_nombre ?? null, data.apellido,
-      data.segundo_apellido ?? null, data.telefono ?? null, data.direccion ?? null, passwordHash, now, now],
+    [
+      data.legajo,
+      data.nombre,
+      data.segundo_nombre ?? null,
+      data.apellido,
+      data.segundo_apellido ?? null,
+      data.telefono ?? null,
+      data.direccion ?? null,
+      passwordHash,
+      now,
+      now
+    ]
   );
 }
 
@@ -76,7 +92,8 @@ export async function insertEmployee(connection, data, passwordHash, now) {
 export async function insertEmail(connection, legajo, email, now) {
   const [result] = await connection.execute(
     `INSERT INTO empleados_correos (legajo, email, estado, created_at)
-     VALUES (?, ?, 'PENDIENTE', ?)`, [legajo, email, now],
+     VALUES (?, ?, 'PENDIENTE', ?)`,
+    [legajo, email, now]
   );
   return result.insertId;
 }
@@ -85,7 +102,8 @@ export async function insertEmail(connection, legajo, email, now) {
 export async function cancelPendingEmails(connection, legajo, now) {
   await connection.execute(
     `UPDATE empleados_correos SET estado = 'CANCELADO', cerrado_at = ?
-     WHERE legajo = ? AND estado = 'PENDIENTE'`, [now, legajo],
+     WHERE legajo = ? AND estado = 'PENDIENTE'`,
+    [now, legajo]
   );
 }
 
@@ -93,11 +111,13 @@ export async function cancelPendingEmails(connection, legajo, now) {
 export async function confirmEmail(connection, legajo, correoId, now) {
   await connection.execute(
     `UPDATE empleados_correos SET estado = 'ANTERIOR', cerrado_at = ?
-     WHERE legajo = ? AND estado = 'ACTUAL'`, [now, legajo],
+     WHERE legajo = ? AND estado = 'ACTUAL'`,
+    [now, legajo]
   );
   await connection.execute(
     `UPDATE empleados_correos SET estado = 'ACTUAL', verificado_at = ?
-     WHERE id = ? AND legajo = ? AND estado = 'PENDIENTE'`, [now, correoId, legajo],
+     WHERE id = ? AND legajo = ? AND estado = 'PENDIENTE'`,
+    [now, correoId, legajo]
   );
 }
 
@@ -105,7 +125,8 @@ export async function confirmEmail(connection, legajo, correoId, now) {
 export async function findToken(connection, tokenHash, lock = false) {
   const [rows] = await connection.execute(
     `SELECT id, legajo, correo_id, tipo, expires_at, consumed_at, revoked_at
-     FROM auth_tokens WHERE token_hash = ?${lock ? ' FOR UPDATE' : ''}`, [tokenHash],
+     FROM auth_tokens WHERE token_hash = ?${lock ? ' FOR UPDATE' : ''}`,
+    [tokenHash]
   );
   return rows[0];
 }
@@ -114,7 +135,8 @@ export async function findToken(connection, tokenHash, lock = false) {
 export async function revokeTokens(connection, legajo, type, now) {
   await connection.execute(
     `UPDATE auth_tokens SET revoked_at = ? WHERE legajo = ? AND tipo = ?
-     AND consumed_at IS NULL AND revoked_at IS NULL`, [now, legajo, type],
+     AND consumed_at IS NULL AND revoked_at IS NULL`,
+    [now, legajo, type]
   );
 }
 
@@ -122,7 +144,8 @@ export async function revokeTokens(connection, legajo, type, now) {
 export async function insertToken(connection, legajo, correoId, type, generated, now) {
   await connection.execute(
     `INSERT INTO auth_tokens (legajo, correo_id, tipo, token_hash, expires_at, created_at)
-     VALUES (?, ?, ?, ?, ?, ?)`, [legajo, correoId, type, generated.tokenHash, generated.expiresAt, now],
+     VALUES (?, ?, ?, ?, ?, ?)`,
+    [legajo, correoId, type, generated.tokenHash, generated.expiresAt, now]
   );
 }
 
@@ -135,7 +158,8 @@ export async function consumeToken(connection, id, now) {
 export async function insertSession(connection, legajo, signed) {
   await connection.execute(
     `INSERT INTO auth_sesiones (jti, legajo, issued_at, expires_at, created_at)
-     VALUES (?, ?, ?, ?, ?)`, [signed.jti, legajo, signed.issuedAt, signed.expiresAt, signed.issuedAt],
+     VALUES (?, ?, ?, ?, ?)`,
+    [signed.jti, legajo, signed.issuedAt, signed.expiresAt, signed.issuedAt]
   );
 }
 
@@ -143,7 +167,8 @@ export async function insertSession(connection, legajo, signed) {
 export async function findSession(connection, jti, legajo, lock = false) {
   const [rows] = await connection.execute(
     `SELECT jti, legajo, issued_at, expires_at, revoked_at FROM auth_sesiones
-     WHERE jti = ? AND legajo = ?${lock ? ' FOR UPDATE' : ''}`, [jti, legajo],
+     WHERE jti = ? AND legajo = ?${lock ? ' FOR UPDATE' : ''}`,
+    [jti, legajo]
   );
   return rows[0];
 }
@@ -153,7 +178,9 @@ export async function revokeSessions(connection, legajo, reason, now, jti = null
   await connection.execute(
     `UPDATE auth_sesiones SET revoked_at = ?, revocation_reason = ?
      WHERE legajo = ? AND revoked_at IS NULL${jti ? ' AND jti = ?' : ''}`,
-    jti ? [now, reason, legajo, jti] : [now, reason, legajo],
+    jti ?
+      [now, reason, legajo, jti] :
+      [now, reason, legajo]
   );
 }
 
@@ -161,17 +188,17 @@ export async function revokeSessions(connection, legajo, reason, now, jti = null
 export async function updatePassword(connection, legajo, passwordHash, now) {
   await connection.execute(
     'UPDATE empleados SET password_hash = ?, password_changed_at = ? WHERE legajo = ?',
-    [passwordHash, now, legajo],
+    [passwordHash, now, legajo]
   );
 }
 
 /** Actualiza solo columnas personales permitidas; identificadores SQL proceden de una lista cerrada. */
 export async function updateProfile(connection, legajo, data) {
-  const fields = PROFILE_FIELDS.filter((field) => Object.hasOwn(data, field));
+  const fields = PROFILE_FIELDS.filter(field => Object.hasOwn(data, field));
   if (!fields.length) return;
   await connection.execute(
-    `UPDATE empleados SET ${fields.map((field) => `${field} = ?`).join(', ')} WHERE legajo = ?`,
-    [...fields.map((field) => data[field]), legajo],
+    `UPDATE empleados SET ${fields.map(field => `${field} = ?`).join(', ')} WHERE legajo = ?`,
+    [...fields.map(field => data[field]), legajo]
   );
 }
 
@@ -180,6 +207,7 @@ export async function audit(connection, legajo, actor, event, field, previous, n
   await connection.execute(
     `INSERT INTO empleados_auditoria
      (legajo, actor_legajo, evento, campo, valor_anterior, valor_nuevo, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?)`, [legajo, actor, event, field, previous, next, now],
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    [legajo, actor, event, field, previous, next, now]
   );
 }

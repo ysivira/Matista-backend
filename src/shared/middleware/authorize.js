@@ -1,3 +1,6 @@
+/**
+ * Restringe la solicitud a los roles autorizados.
+ */
 import { createAppError } from '../errors/app-error.js';
 
 /**
@@ -8,8 +11,10 @@ import { createAppError } from '../errors/app-error.js';
 export function authorize(...roles) {
   /** Comprueba req.auth.user y continúa sin utilizar claims JWT para decidir permisos. */
   return function authorizeCurrentRole(req, res, next) {
-    if (!req.auth?.user) return next(createAppError('SESSION_REQUIRED', 'Debe iniciar sesión para continuar.', 401));
-    if (!roles.includes(req.auth.user.rol)) return next(createAppError('ROLE_FORBIDDEN', 'No tiene permisos para esta operación.', 403));
+    if (!req.auth?.user)
+      return next(createAppError('SESSION_REQUIRED', 'Debe iniciar sesión para continuar.', 401));
+    if (!roles.includes(req.auth.user.rol))
+      return next(createAppError('ROLE_FORBIDDEN', 'No tiene permisos para esta operación.', 403));
     return next();
   };
 }

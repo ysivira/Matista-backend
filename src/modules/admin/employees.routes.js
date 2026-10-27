@@ -1,14 +1,22 @@
-// Rutas ADMIN de gestion de empleados (SL-1, SPEC-03 ADMIN).
-// Endpoints aprobados en el plan §0: listado, detalle, estado y rol,
-// exclusivamente para cuentas con rol ADMIN y sesion revalidada en cada
-// acceso por el middleware AUTH existente (authenticate + authorize).
-// El runtime de dependencias se reutiliza de AUTH sin duplicarlo.
+/**
+ * Expone la gestión HTTP del directorio de empleados.
+ */
 
+/*
+ * Rutas ADMIN de gestion de empleados (SL-1, SPEC-03 ADMIN).
+ * Endpoints aprobados en el plan §0: listado, detalle, estado y rol,
+ * exclusivamente para cuentas con rol ADMIN y sesion revalidada en cada
+ * acceso por el middleware AUTH existente (authenticate + authorize).
+ * El runtime de dependencias se reutiliza de AUTH sin duplicarlo.
+ */
 import { Router } from 'express';
 import { authenticate } from '../../shared/middleware/authenticate.js';
 import { authorize } from '../../shared/middleware/authorize.js';
 import {
-  gestionarListado, gestionarDetalle, gestionarEstado, gestionarRol,
+  gestionarListado,
+  gestionarDetalle,
+  gestionarEstado,
+  gestionarRol
 } from './employees.service.js';
 
 /**
@@ -21,11 +29,15 @@ export async function listar(req, res) {
   const empleados = await gestionarListado(req.authContext.pool, {
     estado: req.query.estado && req.query.estado !== 'todos' ? String(req.query.estado) : null,
     rol: req.query.rol && req.query.rol !== 'todos' ? String(req.query.rol) : null,
-    busqueda: typeof req.query.busqueda === 'string' && req.query.busqueda.trim()
-      ? req.query.busqueda : null,
+    busqueda:
+      typeof req.query.busqueda === 'string' && req.query.busqueda.trim()
+        ? req.query.busqueda
+        : null
   });
   res.set('Cache-Control', 'no-store');
-  return res.status(200).json({ empleados });
+  return res.status(200).json({
+    empleados
+  });
 }
 
 /**
@@ -37,7 +49,9 @@ export async function listar(req, res) {
 export async function detalle(req, res) {
   const empleado = await gestionarDetalle(req.authContext.pool, req.params.legajo);
   res.set('Cache-Control', 'no-store');
-  return res.status(200).json({ empleado });
+  return res.status(200).json({
+    empleado
+  });
 }
 
 /**
@@ -52,10 +66,12 @@ export async function cambiarEstado(req, res) {
     req.auth.user.legajo,
     req.params.legajo,
     req.body?.estado,
-    req.authContext.now(),
+    req.authContext.now()
   );
   res.set('Cache-Control', 'no-store');
-  return res.status(200).json({ empleado: resultado });
+  return res.status(200).json({
+    empleado: resultado
+  });
 }
 
 /**
@@ -70,10 +86,12 @@ export async function cambiarRol(req, res) {
     req.auth.user.legajo,
     req.params.legajo,
     req.body?.rol,
-    req.authContext.now(),
+    req.authContext.now()
   );
   res.set('Cache-Control', 'no-store');
-  return res.status(200).json({ empleado: resultado });
+  return res.status(200).json({
+    empleado: resultado
+  });
 }
 
 /**
@@ -88,6 +106,5 @@ export function createEmployeesRouter() {
   router.get('/employees/:legajo', authenticate, authorize('ADMIN'), detalle);
   router.patch('/employees/:legajo/estado', authenticate, authorize('ADMIN'), cambiarEstado);
   router.patch('/employees/:legajo/rol', authenticate, authorize('ADMIN'), cambiarRol);
-
   return router;
 }

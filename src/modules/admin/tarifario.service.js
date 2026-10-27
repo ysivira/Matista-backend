@@ -1,16 +1,19 @@
+/**
+ * Gestiona tarifas, versiones y cambios económicos con control de concurrencia.
+ */
 import { withConnection } from '../auth/auth.repository.js';
 import {
   errorConcurrencia,
   errorEstado,
   errorNoEncontrado,
-  errorTransicion,
+  errorTransicion
 } from './admin.errors.js';
 import {
   aplicarPorcentaje,
   centavosAImporte,
   compararImportes,
   esImporteValido,
-  importeACentavos,
+  importeACentavos
 } from './admin.money.js';
 import { obtenerEmpleado } from './employees.repository.js';
 import {
@@ -35,7 +38,7 @@ import {
   obtenerVersionConResponsable,
   obtenerVersionPorId,
   resolverTarifaPorClave,
-  resolverVersionVigente,
+  resolverVersionVigente
 } from './tarifario.repository.js';
 import {
   validarFechaVersion,
@@ -45,18 +48,32 @@ import {
   validarParametrosTarifario,
   validarPorcentajeAumento,
   validarPrecioEdicion,
-  validarRevision,
+  validarRevision
 } from './tarifario.validators.js';
 
 const CLAVES_EN_ORDEN = Object.freeze([
-  '0-25', '26-35', '36-40', '41-50', '51-60', '61-65', '66+',
+  '0-25',
+  '26-35',
+  '36-40',
+  '41-50',
+  '51-60',
+  '61-65',
+  '66+',
   'FAMILIAR A CARGO',
-  'HIJO 0-1', 'HIJO 2-20', 'HIJO 21-29', 'HIJO 30-39', 'HIJO 40-49',
-  'MAT 0-25', 'MAT 26-35', 'MAT 36-40', 'MAT 41-50', 'MAT 51-60',
-  'MAT 61-65', 'MAT 66-00',
+  'HIJO 0-1',
+  'HIJO 2-20',
+  'HIJO 21-29',
+  'HIJO 30-39',
+  'HIJO 40-49',
+  'MAT 0-25',
+  'MAT 26-35',
+  'MAT 36-40',
+  'MAT 41-50',
+  'MAT 51-60',
+  'MAT 61-65',
+  'MAT 66-00'
 ]);
 const POSICION_CLAVE = new Map(CLAVES_EN_ORDEN.map((clave, indice) => [clave, indice]));
-
 const DEPENDENCIAS_DEFECTO = Object.freeze({
   withConnection,
   obtenerEmpleado,
@@ -81,7 +98,7 @@ const DEPENDENCIAS_DEFECTO = Object.freeze({
   incrementarRevision,
   insertarEvento,
   obtenerVersionConResponsable,
-  resolverTarifaPorClave,
+  resolverTarifaPorClave
 });
 
 /**
@@ -120,7 +137,7 @@ function presentarVersion(version) {
     id: String(version.id),
     tipo: version.tipo,
     estado: version.estado,
-    fecha_activacion: new Date(version.fecha_activacion).toISOString(),
+    fecha_activacion: new Date(version.fecha_activacion).toISOString()
   };
 }
 
@@ -134,7 +151,7 @@ function presentarTarifa(tarifa) {
     rango_clave: tarifa.rango_clave,
     rango_etario: tarifa.rango_etario,
     rango_nota: tarifa.rango_nota ?? null,
-    precio: String(tarifa.precio),
+    precio: String(tarifa.precio)
   };
 }
 
@@ -145,9 +162,8 @@ function presentarTarifa(tarifa) {
  * @returns {Promise<object[]>} Catalogo publico, posiblemente vacio.
  */
 export async function gestionarPlanes(pool, dependencias = DEPENDENCIAS_DEFECTO) {
-  return dependencias.withConnection(
-    pool,
-    (connection) => dependencias.listarPlanesActivos(connection),
+  return dependencias.withConnection(pool, connection =>
+    dependencias.listarPlanesActivos(connection)
   );
 }
 
@@ -164,11 +180,10 @@ export async function gestionarTarifario(
   pool,
   parametros,
   fechaReferencia,
-  dependencias = DEPENDENCIAS_DEFECTO,
+  dependencias = DEPENDENCIAS_DEFECTO
 ) {
   const filtro = validarParametrosTarifario(parametros);
-
-  return dependencias.withConnection(pool, async (connection) => {
+  return dependencias.withConnection(pool, async connection => {
     const plan = await dependencias.obtenerPlanPorId(connection, filtro.planId);
     if (!plan) {
       throw errorNoEncontrado('El plan indicado no existe.');
@@ -176,25 +191,25 @@ export async function gestionarTarifario(
     if (Number(plan.activa) !== 1) {
       throw errorEstado('El plan indicado esta inactivo.');
     }
-
     const version = await dependencias.resolverVersionVigente(
       connection,
-      fechaMysqlUtc(fechaReferencia),
+      fechaMysqlUtc(fechaReferencia)
     );
     if (!version) {
       throw errorEstado('No existe una version vigente del tarifario.');
     }
-
     const tarifas = await dependencias.listarTarifasActivas(connection, {
       versionId: version.id,
-      ...filtro,
+      ...filtro
     });
-
     return {
-      plan: { id: plan.id, nombre: plan.nombre },
+      plan: {
+        id: plan.id,
+        nombre: plan.nombre
+      },
       tipo_ingreso: filtro.tipoIngreso,
       version: presentarVersion(version),
-      tarifas: ordenarTarifas(tarifas).map(presentarTarifa),
+      tarifas: ordenarTarifas(tarifas).map(presentarTarifa)
     };
   });
 }
@@ -219,16 +234,12 @@ function presentarVersionHistoria(fila) {
     // Revision optimista visible para la pantalla: el AUTH de escritura
     // SL-4 la exige en el cuerpo y 409 de concurrencia pide releerla.
     revision: fila.revision == null ? null : Number(fila.revision),
-    fecha_activacion: fila.fecha_activacion
-      ? new Date(fila.fecha_activacion).toISOString()
-      : null,
-    version_base_id: fila.version_base_id == null
-      ? null
-      : String(fila.version_base_id),
+    fecha_activacion: fila.fecha_activacion ? new Date(fila.fecha_activacion).toISOString() : null,
+    version_base_id: fila.version_base_id == null ? null : String(fila.version_base_id),
     created_at: fila.created_at ? new Date(fila.created_at).toISOString() : null,
     actor_legajo: fila.actor_legajo ?? null,
     actor_nombre: fila.nombre ?? null,
-    actor_apellido: fila.apellido ?? null,
+    actor_apellido: fila.apellido ?? null
   };
 }
 
@@ -240,12 +251,14 @@ function presentarVersionHistoria(fila) {
  * @returns {object[]} Copia ordenada de forma estable.
  */
 function ordenarTarifasDeVersion(tarifas) {
-  return [...tarifas].sort((a, b) =>
-    (Number(a.plan_id) - Number(b.plan_id))
-    || a.tipo_ingreso.localeCompare(b.tipo_ingreso, 'es')
-    || ((POSICION_CLAVE.get(a.rango_clave) ?? Number.MAX_SAFE_INTEGER)
-      - (POSICION_CLAVE.get(b.rango_clave) ?? Number.MAX_SAFE_INTEGER))
-    || a.rango_clave.localeCompare(b.rango_clave, 'es'));
+  return [...tarifas].sort(
+    (a, b) =>
+      Number(a.plan_id) - Number(b.plan_id) ||
+      a.tipo_ingreso.localeCompare(b.tipo_ingreso, 'es') ||
+      (POSICION_CLAVE.get(a.rango_clave) ?? Number.MAX_SAFE_INTEGER) -
+        (POSICION_CLAVE.get(b.rango_clave) ?? Number.MAX_SAFE_INTEGER) ||
+      a.rango_clave.localeCompare(b.rango_clave, 'es')
+  );
 }
 
 /**
@@ -266,7 +279,7 @@ function presentarTarifaVersion(tarifa) {
     rango_etario: tarifa.rango_etario,
     rango_nota: tarifa.rango_nota ?? null,
     precio: String(tarifa.precio),
-    activa: Number(tarifa.activa) === 1,
+    activa: Number(tarifa.activa) === 1
   };
 }
 
@@ -276,17 +289,10 @@ function presentarTarifaVersion(tarifa) {
  * @param {object} dependencias Repositorio sustituible para pruebas unitarias.
  * @returns {Promise<object>} `{ versiones }`; historial vacio es 200 valido.
  */
-export async function listarVersionesTarifario(
-  pool,
-  dependencias = DEPENDENCIAS_DEFECTO,
-) {
-  return dependencias.withConnection(
-    pool,
-    async (connection) => ({
-      versiones: (await dependencias.listarVersiones(connection))
-        .map(presentarVersionHistoria),
-    }),
-  );
+export async function listarVersionesTarifario(pool, dependencias = DEPENDENCIAS_DEFECTO) {
+  return dependencias.withConnection(pool, async connection => ({
+    versiones: (await dependencias.listarVersiones(connection)).map(presentarVersionHistoria)
+  }));
 }
 
 /**
@@ -297,19 +303,16 @@ export async function listarVersionesTarifario(
  * @returns {Promise<object>} `{ version }` con responsable y fechas.
  * @throws {Error} 400 si el id no es un entero valido; 404 si no existe.
  */
-export async function obtenerDetalleVersion(
-  pool,
-  parametros,
-  dependencias = DEPENDENCIAS_DEFECTO,
-) {
+export async function obtenerDetalleVersion(pool, parametros, dependencias = DEPENDENCIAS_DEFECTO) {
   const id = validarIdVersion(parametros.id);
-
-  return dependencias.withConnection(pool, async (connection) => {
+  return dependencias.withConnection(pool, async connection => {
     const fila = await dependencias.obtenerVersionPorId(connection, id);
     if (!fila) {
       throw errorNoEncontrado('La version indicada no existe.');
     }
-    return { version: presentarVersionHistoria(fila) };
+    return {
+      version: presentarVersionHistoria(fila)
+    };
   });
 }
 
@@ -325,24 +328,22 @@ export async function obtenerDetalleVersion(
 export async function listarTarifasDeLaVersion(
   pool,
   parametros,
-  dependencias = DEPENDENCIAS_DEFECTO,
+  dependencias = DEPENDENCIAS_DEFECTO
 ) {
   const id = validarIdVersion(parametros.id);
-
-  return dependencias.withConnection(pool, async (connection) => {
+  return dependencias.withConnection(pool, async connection => {
     const fila = await dependencias.obtenerVersionPorId(connection, id);
     if (!fila) {
       throw errorNoEncontrado('La version indicada no existe.');
     }
-
     const tarifas = await dependencias.listarTarifasDeVersion(connection, id);
     return {
       version: {
         id: String(fila.id),
         tipo: fila.tipo,
-        estado: fila.estado,
+        estado: fila.estado
       },
-      tarifas: ordenarTarifasDeVersion(tarifas).map(presentarTarifaVersion),
+      tarifas: ordenarTarifasDeVersion(tarifas).map(presentarTarifaVersion)
     };
   });
 }
@@ -362,31 +363,21 @@ export async function listarTarifasDeLaVersion(
 export async function reconstruirTarifarioHistorico(
   pool,
   consulta,
-  dependencias = DEPENDENCIAS_DEFECTO,
+  dependencias = DEPENDENCIAS_DEFECTO
 ) {
   const fecha = validarFechaVersion(consulta.fecha);
-
-  return dependencias.withConnection(pool, async (connection) => {
-    const version = await dependencias.resolverVersionVigente(
-      connection,
-      fechaMysqlUtc(fecha),
-    );
+  return dependencias.withConnection(pool, async connection => {
+    const version = await dependencias.resolverVersionVigente(connection, fechaMysqlUtc(fecha));
     if (!version) {
-      throw errorEstado(
-        'No existia una version del tarifario activa en la fecha pedida.',
-      );
+      throw errorEstado('No existia una version del tarifario activa en la fecha pedida.');
     }
-
-    const tarifas = await dependencias.listarTarifasDeVersion(
-      connection,
-      version.id,
-      { soloActivas: true },
-    );
-
+    const tarifas = await dependencias.listarTarifasDeVersion(connection, version.id, {
+      soloActivas: true
+    });
     return {
       fecha: fecha.toISOString(),
       version: presentarVersion(version),
-      tarifas: ordenarTarifasDeVersion(tarifas).map(presentarTarifaVersion),
+      tarifas: ordenarTarifasDeVersion(tarifas).map(presentarTarifaVersion)
     };
   });
 }
@@ -411,9 +402,15 @@ const ESTADOS_EDITABLES = Object.freeze(['PREPARACION']);
 function formatearFechaBuenosAires(created_at) {
   return new Intl.DateTimeFormat('es-AR', {
     timeZone: 'America/Argentina/Buenos_Aires',
-    day: '2-digit', month: '2-digit', year: 'numeric',
-    hour: '2-digit', minute: '2-digit', hour12: false,
-  }).format(new Date(created_at)).replace(', ', ' ');
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false
+  })
+    .format(new Date(created_at))
+    .replace(', ', ' ');
 }
 
 /**
@@ -425,15 +422,16 @@ function formatearFechaBuenosAires(created_at) {
  */
 function errorBorradorExistente(borrador) {
   return errorEstado(
-    'Ya existe una version de precios en preparacion, iniciada por '
-    + `${borrador.nombre ?? ''} ${borrador.apellido ?? ''}, `
-    + `legajo ${borrador.actor_legajo ?? 'desconocido'}, con fecha y hora `
-    + `${formatearFechaBuenosAires(borrador.created_at)}.`,
-    [{
-      field: 'version',
-      message: 'La version existente debe ser activada o descartada '
-        + 'antes de iniciar otra.',
-    }],
+    'Ya existe una version de precios en preparacion, iniciada por ' +
+      `${borrador.nombre ?? ''} ${borrador.apellido ?? ''}, ` +
+      `legajo ${borrador.actor_legajo ?? 'desconocido'}, con fecha y hora ` +
+      `${formatearFechaBuenosAires(borrador.created_at)}.`,
+    [
+      {
+        field: 'version',
+        message: 'La version existente debe ser activada o descartada ' + 'antes de iniciar otra.'
+      }
+    ]
   );
 }
 
@@ -452,7 +450,7 @@ async function snapshotActor(dependencias, connection, actorLegajo) {
   return {
     legajo: actorLegajo,
     nombre: empleado?.nombre ?? '',
-    apellido: empleado?.apellido ?? '',
+    apellido: empleado?.apellido ?? ''
   };
 }
 
@@ -468,14 +466,10 @@ async function snapshotActor(dependencias, connection, actorLegajo) {
  * @returns {Promise<object>} `{ version }` del borrador creado (PREPARACION).
  * @throws {Error} 409 sin version activa, borrador existente o carrera 1062.
  */
-export async function crearBorradorTarifario(
-  pool,
-  actor,
-  dependencias = DEPENDENCIAS_DEFECTO,
-) {
+export async function crearBorradorTarifario(pool, actor, dependencias = DEPENDENCIAS_DEFECTO) {
   return dependencias.withConnection(
     pool,
-    async (connection) => {
+    async connection => {
       const versionActiva = await dependencias.bloquearVersionActiva(connection);
       if (!versionActiva) {
         throw errorEstado('No hay una version activa del tarifario de la cual copiar.');
@@ -485,14 +479,14 @@ export async function crearBorradorTarifario(
         throw errorBorradorExistente(borrador);
       }
       const actorInfo = await snapshotActor(dependencias, connection, actor.legajo);
-      const observacion = 'Copia de la version vigente '
-        + `${versionActiva.id} al crear el borrador.`;
+      const observacion =
+        'Copia de la version vigente ' + `${versionActiva.id} al crear el borrador.`;
       let versionId;
       try {
         versionId = await dependencias.insertarBorrador(connection, {
           versionBaseId: Number(versionActiva.id),
           actorLegajo: actor.legajo,
-          observacion,
+          observacion
         });
       } catch (error) {
         // Carrera concurrente contra uq_guard_borrador_version: recupera
@@ -504,15 +498,15 @@ export async function crearBorradorTarifario(
             throw errorBorradorExistente(ganador);
           }
           throw errorEstado(
-            'Otro administrador creo una version de precios al mismo tiempo. '
-            + 'Recarga el historial antes de continuar.',
+            'Otro administrador creo una version de precios al mismo tiempo. ' +
+              'Recarga el historial antes de continuar.'
           );
         }
         throw error;
       }
       const filasCopiadas = await dependencias.copiarTarifas(connection, {
         origenId: versionActiva.id,
-        destinoId: versionId,
+        destinoId: versionId
       });
       const eventoId = await dependencias.insertarEvento(connection, {
         versionId,
@@ -522,10 +516,10 @@ export async function crearBorradorTarifario(
         actorLegajo: actorInfo.legajo,
         actorNombre: actorInfo.nombre,
         actorApellido: actorInfo.apellido,
-        detalle: `Copia de la version vigente ${versionActiva.id} `
-          + `con ${filasCopiadas} filas de tarifas.`,
+        detalle:
+          `Copia de la version vigente ${versionActiva.id} ` +
+          `con ${filasCopiadas} filas de tarifas.`
       });
-
       return {
         version: {
           id: String(versionId),
@@ -533,10 +527,17 @@ export async function crearBorradorTarifario(
           estado: 'PREPARACION',
           version_base_id: String(versionActiva.id),
           actor_legajo: actor.legajo,
-          evento: { id: String(eventoId), tipo: 'CREACION' },
-        },
+          evento: {
+            id: String(eventoId),
+            tipo: 'CREACION'
+          }
+        }
       };
-  }, { transaction: true });
+    },
+    {
+      transaction: true
+    }
+  );
 }
 
 /**
@@ -559,7 +560,7 @@ async function validarEdicionDeVersion(
   connection,
   id,
   revision,
-  { incrementar = true } = {},
+  { incrementar = true } = {}
 ) {
   const version = await dependencias.bloquearVersion(connection, id);
   if (!version) {
@@ -569,14 +570,19 @@ async function validarEdicionDeVersion(
     throw errorTransicion(
       version.estado === 'LISTA_PARA_ACTIVAR'
         ? 'La version ya esta lista para activar y ya no acepta ediciones.'
-        : `La version en estado ${version.estado} no acepta ediciones.`,
+        : `La version en estado ${version.estado} no acepta ediciones.`
     );
   }
   if (Number(version.revision) !== revision) {
     throw errorConcurrencia();
   }
-  if (incrementar
-    && (await dependencias.incrementarRevision(connection, { id, revision })) === 0) {
+  if (
+    incrementar &&
+    (await dependencias.incrementarRevision(connection, {
+      id,
+      revision
+    })) === 0
+  ) {
     throw errorConcurrencia();
   }
   return version;
@@ -596,23 +602,31 @@ async function validarEdicionDeVersion(
 export function calcularImportesAumento(filas, porcentaje) {
   // Calculo previo de todos los importes con aritmetica exacta: si una
   // fila excede DECIMAL(10,2), se aborta antes de escribir cualquier cosa.
-  return filas.map((fila) => {
+  return filas.map(fila => {
     const aumento = aplicarPorcentaje(fila.precio, porcentaje);
-    const precioNuevo = centavosAImporte(
-      importeACentavos(fila.precio) + importeACentavos(aumento),
-    );
-    if (!esImporteValido(precioNuevo, { maximo: '99999999.99', decimales: 2 })) {
-      throw errorEstado(
-        'El aumento excede el tope del esquema en alguna fila.',
-        [{
+    const precioNuevo = centavosAImporte(importeACentavos(fila.precio) + importeACentavos(aumento));
+    if (
+      !esImporteValido(precioNuevo, {
+        maximo: '99999999.99',
+        decimales: 2
+      })
+    ) {
+      throw errorEstado('El aumento excede el tope del esquema en alguna fila.', [
+        {
           field: 'porcentaje',
-          message: `La fila ${Number(fila.id)} `
-            + `(${fila.tipo_ingreso}, rango ${fila.rango_clave}) pasaria de `
-            + `${fila.precio} a ${precioNuevo}, fuera del tope de la columna.`,
-        }],
-      );
+          message:
+            `La fila ${Number(fila.id)} ` +
+            `(${fila.tipo_ingreso}, rango ${fila.rango_clave}) pasaria de ` +
+            `${fila.precio} a ${precioNuevo}, fuera del tope de la columna.`
+        }
+      ]);
     }
-    return { id: Number(fila.id), antes: String(fila.precio), nuevo: precioNuevo, aumento };
+    return {
+      id: Number(fila.id),
+      antes: String(fila.precio),
+      nuevo: precioNuevo,
+      aumento
+    };
   });
 }
 
@@ -635,29 +649,28 @@ export async function aumentarVersionTarifario(
   parametros,
   cuerpo,
   actor,
-  dependencias = DEPENDENCIAS_DEFECTO,
+  dependencias = DEPENDENCIAS_DEFECTO
 ) {
   const id = validarIdVersion(parametros.id);
   const porcentaje = validarPorcentajeAumento(cuerpo.porcentaje);
   const tipoIngreso = validarModalidadOpcional(cuerpo.tipoIngreso);
   const revision = validarRevision(cuerpo.revision);
-
   return dependencias.withConnection(
     pool,
-    async (connection) => {
+    async connection => {
       await validarEdicionDeVersion(dependencias, connection, id, revision);
       // Lee el snapshot de la version por el repositorio (mismo acceso que la
       // previsualizacion de solo lectura) y filtra la modalidad pedida en JS;
       // el calculo de importes no depende del orden de las filas.
       const tarifas = await dependencias.listarTarifasDeVersion(connection, id);
       const filas = tipoIngreso
-        ? tarifas.filter((tarifa) => tarifa.tipo_ingreso === tipoIngreso)
+        ? tarifas.filter(tarifa => tarifa.tipo_ingreso === tipoIngreso)
         : tarifas;
       if (filas.length === 0) {
         throw errorEstado(
           tipoIngreso
             ? `La version no tiene filas de la modalidad ${tipoIngreso}.`
-            : 'La version no tiene filas de tarifas para aumentar.',
+            : 'La version no tiene filas de tarifas para aumentar.'
         );
       }
       // Cada fila guarda su valor anterior ANTES de cualquier escritura
@@ -665,26 +678,25 @@ export async function aumentarVersionTarifario(
       // provienen de la unica funcion economica del aumento.
       const importes = calcularImportesAumento(filas, porcentaje);
       const cambios = importes.filter(
-        (calculo) => compararImportes(calculo.antes, calculo.nuevo) !== 0,
+        calculo => compararImportes(calculo.antes, calculo.nuevo) !==
+          0
       );
       if (cambios.length === 0) {
         throw errorEstado(
           'El porcentaje indicado no modifica ningun precio despues del redondeo monetario.',
-          [{
-            field: 'porcentaje',
-            message: 'Indica un porcentaje que produzca al menos un cambio de un centavo.',
-          }],
+          [
+            {
+              field: 'porcentaje',
+              message: 'Indica un porcentaje que produzca al menos un cambio de un centavo.'
+            }
+          ]
         );
       }
-
-      const filasAfectadas = await dependencias.aumentarPrecios(
-        connection,
-        {
-          versionId: id,
-          importes: cambios.map((calculo) => [calculo.id, calculo.nuevo]),
-          tipoIngreso,
-        },
-      );
+      const filasAfectadas = await dependencias.aumentarPrecios(connection, {
+        versionId: id,
+        importes: cambios.map(calculo => [calculo.id, calculo.nuevo]),
+        tipoIngreso
+      });
       const actorInfo = await snapshotActor(dependencias, connection, actor.legajo);
       const alcance = tipoIngreso ?? 'Obligatorio y Voluntario';
       const agrupadorId = await dependencias.insertarEvento(connection, {
@@ -695,13 +707,14 @@ export async function aumentarVersionTarifario(
         actorLegajo: actorInfo.legajo,
         actorNombre: actorInfo.nombre,
         actorApellido: actorInfo.apellido,
-        detalle: `Aumento del ${porcentaje}% aplicado a ${filasAfectadas} `
-          + `filas (modalidad: ${alcance}).`,
+        detalle:
+          `Aumento del ${porcentaje}% aplicado a ${filasAfectadas} ` +
+          `filas (modalidad: ${alcance}).`
       });
       // Los hijos PRECIO usan los valores ya capturados antes de escribir
       // e identifican la fila con plan/modalidad/rango (CHECK de 014).
       for (const calculo of cambios) {
-        const filaReferencia = filas.find((fila) => Number(fila.id) === calculo.id);
+        const filaReferencia = filas.find(fila => Number(fila.id) === calculo.id);
         await dependencias.insertarEvento(connection, {
           versionId: id,
           tipoEvento: 'MODIFICACION',
@@ -715,18 +728,25 @@ export async function aumentarVersionTarifario(
           actorLegajo: actorInfo.legajo,
           actorNombre: actorInfo.nombre,
           actorApellido: actorInfo.apellido,
-          detalle: `Aumento del ${porcentaje}% aplicado a la fila ${calculo.id}: `
-            + `${calculo.antes} -> ${calculo.nuevo}.`,
+          detalle:
+            `Aumento del ${porcentaje}% aplicado a la fila ${calculo.id}: ` +
+            `${calculo.antes} -> ${calculo.nuevo}.`
         });
       }
-
       return {
-        evento: { id: String(agrupadorId), tipo: 'AUMENTO_MASIVO' },
+        evento: {
+          id: String(agrupadorId),
+          tipo: 'AUMENTO_MASIVO'
+        },
         porcentaje,
         filas: filasAfectadas,
-        revision: revision + 1,
+        revision: revision + 1
       };
-  }, { transaction: true });
+    },
+    {
+      transaction: true
+    }
+  );
 }
 
 /**
@@ -748,13 +768,12 @@ export async function previsualizarAumentoVersion(
   pool,
   parametros,
   consulta,
-  dependencias = DEPENDENCIAS_DEFECTO,
+  dependencias = DEPENDENCIAS_DEFECTO
 ) {
   const id = validarIdVersion(parametros.id);
   const porcentaje = validarPorcentajeAumento(consulta.porcentaje);
   const tipoIngreso = validarModalidadOpcional(consulta.tipoIngreso);
-
-  return dependencias.withConnection(pool, async (connection) => {
+  return dependencias.withConnection(pool, async connection => {
     const fila = await dependencias.obtenerVersionPorId(connection, id);
     if (!fila) {
       throw errorNoEncontrado('La version indicada no existe.');
@@ -763,25 +782,27 @@ export async function previsualizarAumentoVersion(
     // Reutiliza la lectura del snapshot del repositorio, sin SQL propio:
     // las filas y su orden comercial coinciden con el detalle de pantalla.
     const tarifas = await dependencias.listarTarifasDeVersion(connection, id);
-    const filas = ordenarTarifasDeVersion(tarifas)
-      .filter((tarifa) => !tipoIngreso || tarifa.tipo_ingreso === tipoIngreso);
+    const filas = ordenarTarifasDeVersion(tarifas).filter(
+      tarifa => !tipoIngreso ||
+        tarifa.tipo_ingreso === tipoIngreso
+    );
     if (filas.length === 0) {
       throw errorEstado(
         tipoIngreso
           ? `La version no tiene filas de la modalidad ${tipoIngreso}.`
-          : 'La version no tiene filas de tarifas para aumentar.',
+          : 'La version no tiene filas de tarifas para aumentar.'
       );
     }
-
     const importes = calcularImportesAumento(filas, porcentaje);
     return {
-      version: { id: String(fila.id), estado: fila.estado },
+      version: {
+        id: String(fila.id),
+        estado: fila.estado
+      },
       porcentaje,
       tipo_ingreso: tipoIngreso,
-      filas: importes.map((calculo) => {
-        const filaReferencia = filas.find(
-          (tarifa) => Number(tarifa.id) === calculo.id,
-        );
+      filas: importes.map(calculo => {
+        const filaReferencia = filas.find(tarifa => Number(tarifa.id) === calculo.id);
         return {
           id: String(calculo.id),
           plan_id: String(filaReferencia.plan_id),
@@ -791,9 +812,9 @@ export async function previsualizarAumentoVersion(
           rango_nota: filaReferencia.rango_nota ?? null,
           precio_anterior: calculo.antes,
           precio_nuevo: calculo.nuevo,
-          incremento: calculo.aumento,
+          incremento: calculo.aumento
         };
-      }),
+      })
     };
   });
 }
@@ -815,42 +836,47 @@ export async function editarTarifaVersion(
   parametros,
   cuerpo,
   actor,
-  dependencias = DEPENDENCIAS_DEFECTO,
+  dependencias = DEPENDENCIAS_DEFECTO
 ) {
   const id = validarIdVersion(parametros.id);
   const tarifaId = validarIdVersion(parametros.tarifaId);
   const precio = validarPrecioEdicion(cuerpo.precio);
   const revision = validarRevision(cuerpo.revision);
-
   return dependencias.withConnection(
     pool,
-    async (connection) => {
-      await validarEdicionDeVersion(
-        dependencias,
-        connection,
-        id,
-        revision,
-        { incrementar: false },
-      );
-      const tarifa = await dependencias.bloquearTarifa(connection, { versionId: id, tarifaId });
+    async connection => {
+      await validarEdicionDeVersion(dependencias, connection, id, revision, {
+        incrementar: false
+      });
+      const tarifa = await dependencias.bloquearTarifa(connection, {
+        versionId: id,
+        tarifaId
+      });
       if (!tarifa) {
         throw errorNoEncontrado('La tarifa indicada no existe dentro de la version.');
       }
       // Valor anterior capturado antes de la escritura (auditoria fiel).
       const precioAnterior = String(tarifa.precio);
       if (compararImportes(precioAnterior, precio) === 0) {
-        throw errorEstado(
-          'El precio nuevo es igual al precio vigente de la tarifa.',
-          [{
+        throw errorEstado('El precio nuevo es igual al precio vigente de la tarifa.', [
+          {
             field: 'precio',
-            message: 'Indica un importe diferente para registrar el cambio.',
-          }],
-        );
+            message: 'Indica un importe diferente para registrar el cambio.'
+          }
+        ]);
       }
-      if ((await dependencias.incrementarRevision(connection, { id, revision })) === 0) {
+      if (
+        (await dependencias.incrementarRevision(connection, {
+          id,
+          revision
+        })) === 0
+      ) {
         throw errorConcurrencia();
       }
-      await dependencias.actualizarPrecioTarifa(connection, { tarifaId, precio });
+      await dependencias.actualizarPrecioTarifa(connection, {
+        tarifaId,
+        precio
+      });
       const actorInfo = await snapshotActor(dependencias, connection, actor.legajo);
       await dependencias.insertarEvento(connection, {
         versionId: id,
@@ -865,21 +891,25 @@ export async function editarTarifaVersion(
         actorLegajo: actorInfo.legajo,
         actorNombre: actorInfo.nombre,
         actorApellido: actorInfo.apellido,
-        detalle: `Cambio de precio manual de ${filaDescripcion(tarifa)}: `
-          + `${precioAnterior} -> ${precio}.`,
+        detalle:
+          `Cambio de precio manual de ${filaDescripcion(tarifa)}: ` +
+          `${precioAnterior} -> ${precio}.`
       });
-
       return {
         tarifa: {
           id: String(tarifa.id),
           plan_id: String(tarifa.plan_id),
           tipo_ingreso: tarifa.tipo_ingreso,
           rango_clave: tarifa.rango_clave,
-          precio: String(precio),
+          precio: String(precio)
         },
-        revision: revision + 1,
+        revision: revision + 1
       };
-  }, { transaction: true });
+    },
+    {
+      transaction: true
+    }
+  );
 }
 
 /**
@@ -908,18 +938,17 @@ export async function finalizarVersionTarifario(
   parametros,
   cuerpo,
   actor,
-  dependencias = DEPENDENCIAS_DEFECTO,
+  dependencias = DEPENDENCIAS_DEFECTO
 ) {
   const id = validarIdVersion(parametros.id);
   const revision = validarRevision(cuerpo.revision);
-
   return dependencias.withConnection(
     pool,
-    async (connection) => {
+    async connection => {
       const version = await validarEdicionDeVersion(dependencias, connection, id, revision);
       await dependencias.actualizarEstadoVersion(connection, {
         id,
-        estado: 'LISTA_PARA_ACTIVAR',
+        estado: 'LISTA_PARA_ACTIVAR'
       });
       const actorInfo = await snapshotActor(dependencias, connection, actor.legajo);
       await dependencias.insertarEvento(connection, {
@@ -930,19 +959,23 @@ export async function finalizarVersionTarifario(
         actorLegajo: actorInfo.legajo,
         actorNombre: actorInfo.nombre,
         actorApellido: actorInfo.apellido,
-        detalle: `Finalizacion de la edicion de precios de la version ${id}: `
-          + 'quedo lista para activacion manual.',
+        detalle:
+          `Finalizacion de la edicion de precios de la version ${id}: ` +
+          'quedo lista para activacion manual.'
       });
-
       return {
         version: {
           id: String(id),
           tipo: version.tipo,
           estado: 'LISTA_PARA_ACTIVAR',
-          revision: revision + 1,
-        },
+          revision: revision + 1
+        }
       };
-  }, { transaction: true });
+    },
+    {
+      transaction: true
+    }
+  );
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -973,13 +1006,12 @@ export async function activarVersionTarifario(
   pool,
   parametros,
   actor,
-  dependencias = DEPENDENCIAS_DEFECTO,
+  dependencias = DEPENDENCIAS_DEFECTO
 ) {
   const id = validarIdVersion(parametros.id);
-
   return dependencias.withConnection(
     pool,
-    async (connection) => {
+    async connection => {
       // Orden de bloqueo consistente con crearBorradorTarifario: primero la
       // fila de la version ACTIVA y despues el borrador finalizado. Si la
       // activacion tomara las filas en el orden inverso, una creacion de
@@ -992,8 +1024,8 @@ export async function activarVersionTarifario(
       }
       if (version.estado !== 'LISTA_PARA_ACTIVAR') {
         throw errorEstado(
-          'Solo una version lista para activar (LISTA_PARA_ACTIVAR) '
-          + 'puede ser activada manualmente.',
+          'Solo una version lista para activar (LISTA_PARA_ACTIVAR) ' +
+            'puede ser activada manualmente.'
         );
       }
       // Integridad de activacion: no se activa un borrador sin filas; el
@@ -1001,24 +1033,20 @@ export async function activarVersionTarifario(
       // planes y a la matriz de claves) las impone el propio esquema en
       // el UPDATE, y un plan inactivo no impide la activacion (decisión
       // del cierre funcional: sin falsos errores de cobertura).
-      if (await dependencias.contarTarifasDeVersion(connection, id) === 0) {
-        throw errorEstado(
-          'La version indicada no tiene filas de tarifas para activar.',
-        );
+      if ((await dependencias.contarTarifasDeVersion(connection, id)) === 0) {
+        throw errorEstado('La version indicada no tiene filas de tarifas para activar.');
       }
       if (!versionActiva) {
-        throw errorEstado(
-          'No hay una version activa vigente que reemplazar por la edicion.',
-        );
+        throw errorEstado('No hay una version activa vigente que reemplazar por la edicion.');
       }
       await dependencias.actualizarEstadoVersion(connection, {
         id: Number(versionActiva.id),
-        estado: 'HISTORICA',
+        estado: 'HISTORICA'
       });
       await dependencias.actualizarEstadoVersion(connection, {
         id,
         estado: 'ACTIVA',
-        activar: true,
+        activar: true
       });
       const actorInfo = await snapshotActor(dependencias, connection, actor.legajo);
       const eventoId = await dependencias.insertarEvento(connection, {
@@ -1029,17 +1057,24 @@ export async function activarVersionTarifario(
         actorLegajo: actorInfo.legajo,
         actorNombre: actorInfo.nombre,
         actorApellido: actorInfo.apellido,
-        detalle: `Activacion manual de la version ${id}, que reemplaza `
-          + `a la version ${Number(versionActiva.id)}.`,
+        detalle:
+          `Activacion manual de la version ${id}, que reemplaza ` +
+          `a la version ${Number(versionActiva.id)}.`
       });
       const activada = await dependencias.obtenerVersionConResponsable(connection, id);
-
       return {
         version: presentarVersionHistoria(activada),
         versionReemplazada: String(versionActiva.id),
-        evento: { id: String(eventoId), tipo: 'ACTIVACION' },
+        evento: {
+          id: String(eventoId),
+          tipo: 'ACTIVACION'
+        }
       };
-  }, { transaction: true });
+    },
+    {
+      transaction: true
+    }
+  );
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -1069,27 +1104,26 @@ export async function reanudarEdicionVersion(
   pool,
   parametros,
   actor,
-  dependencias = DEPENDENCIAS_DEFECTO,
+  dependencias = DEPENDENCIAS_DEFECTO
 ) {
   const id = validarIdVersion(parametros.id);
-
   return dependencias.withConnection(
     pool,
-    async (connection) => {
+    async connection => {
       const version = await dependencias.bloquearVersion(connection, id);
       if (!version) {
         throw errorNoEncontrado('La version indicada no existe.');
       }
       if (version.estado !== 'LISTA_PARA_ACTIVAR') {
         throw errorTransicion(
-          'Solo una version lista para activar (LISTA_PARA_ACTIVAR) '
-          + 'puede volver a edicion; las versiones ACTIVA o HISTORICA '
-          + 'no se modifican directamente.',
+          'Solo una version lista para activar (LISTA_PARA_ACTIVAR) ' +
+            'puede volver a edicion; las versiones ACTIVA o HISTORICA ' +
+            'no se modifican directamente.'
         );
       }
       await dependencias.actualizarEstadoVersion(connection, {
         id,
-        estado: 'PREPARACION',
+        estado: 'PREPARACION'
       });
       const actorInfo = await snapshotActor(dependencias, connection, actor.legajo);
       const eventoId = await dependencias.insertarEvento(connection, {
@@ -1100,20 +1134,27 @@ export async function reanudarEdicionVersion(
         actorLegajo: actorInfo.legajo,
         actorNombre: actorInfo.nombre,
         actorApellido: actorInfo.apellido,
-        detalle: `La version ${id} volvio a preparacion (reapertura `
-          + 'de la edicion de precios) sin perder precios ni auditoria.',
+        detalle:
+          `La version ${id} volvio a preparacion (reapertura ` +
+          'de la edicion de precios) sin perder precios ni auditoria.'
       });
-
       return {
         version: {
           id: String(id),
           tipo: version.tipo,
           estado: 'PREPARACION',
-          revision: version.revision,
+          revision: version.revision
         },
-        evento: { id: String(eventoId), tipo: 'REANUDACION' },
+        evento: {
+          id: String(eventoId),
+          tipo: 'REANUDACION'
+        }
       };
-  }, { transaction: true });
+    },
+    {
+      transaction: true
+    }
+  );
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -1153,25 +1194,23 @@ export async function descartarVersionTarifario(
   parametros,
   cuerpo,
   actor,
-  dependencias = DEPENDENCIAS_DEFECTO,
+  dependencias = DEPENDENCIAS_DEFECTO
 ) {
   const id = validarIdVersion(parametros.id);
   const revision = validarRevision(cuerpo.revision);
   const motivo = validarMotivoDescarte(cuerpo.motivo);
-
   return dependencias.withConnection(
     pool,
-    async (connection) => {
+    async connection => {
       const version = await dependencias.bloquearVersion(connection, id);
       if (!version) {
         throw errorNoEncontrado('La version indicada no existe.');
       }
-      if (version.estado !== 'PREPARACION'
-        && version.estado !== 'LISTA_PARA_ACTIVAR') {
+      if (version.estado !== 'PREPARACION' && version.estado !== 'LISTA_PARA_ACTIVAR') {
         throw errorTransicion(
-          'Solo una version en preparacion o lista para activar puede '
-          + 'descartarse; las versiones ACTIVA o HISTORICA no se '
-          + 'modifican y la vigencia queda intacta.',
+          'Solo una version en preparacion o lista para activar puede ' +
+            'descartarse; las versiones ACTIVA o HISTORICA no se ' +
+            'modifican y la vigencia queda intacta.'
         );
       }
       // La revision optimista protege el descarte de carreras con una
@@ -1181,7 +1220,7 @@ export async function descartarVersionTarifario(
       }
       await dependencias.actualizarEstadoVersion(connection, {
         id,
-        estado: 'CANCELADA',
+        estado: 'CANCELADA'
       });
       const actorInfo = await snapshotActor(dependencias, connection, actor.legajo);
       const eventoId = await dependencias.insertarEvento(connection, {
@@ -1192,19 +1231,25 @@ export async function descartarVersionTarifario(
         actorLegajo: actorInfo.legajo,
         actorNombre: actorInfo.nombre,
         actorApellido: actorInfo.apellido,
-        detalle: `Descarte de la version ${id}. Motivo: ${motivo}`,
+        detalle: `Descarte de la version ${id}. Motivo: ${motivo}`
       });
-
       return {
         version: {
           id: String(id),
           tipo: version.tipo,
           estado: 'CANCELADA',
-          revision,
+          revision
         },
-        evento: { id: String(eventoId), tipo: 'DESCARTE' },
+        evento: {
+          id: String(eventoId),
+          tipo: 'DESCARTE'
+        }
       };
-  }, { transaction: true });
+    },
+    {
+      transaction: true
+    }
+  );
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -1229,21 +1274,25 @@ function presentarEventoAuditoria(evento, hijosPorAgrupador) {
     tipo_evento: evento.tipo_evento,
     tipo_operacion: evento.tipo_operacion ?? null,
     agrupador: evento.agrupador_id == null ? null : String(evento.agrupador_id),
-    filas_agrupadas: evento.tipo_operacion === 'AUMENTO_MASIVO'
-      ? Number(hijosPorAgrupador.get(String(evento.id)) ?? 0)
-      : undefined,
-    entidad: evento.plan_id == null ? null : {
-      plan_id: String(evento.plan_id),
-      tipo_ingreso: evento.tipo_ingreso,
-      rango_clave: evento.rango_clave,
-    },
+    filas_agrupadas:
+      evento.tipo_operacion === 'AUMENTO_MASIVO'
+        ? Number(hijosPorAgrupador.get(String(evento.id)) ?? 0)
+        : undefined,
+    entidad:
+      evento.plan_id == null
+        ? null
+        : {
+            plan_id: String(evento.plan_id),
+            tipo_ingreso: evento.tipo_ingreso,
+            rango_clave: evento.rango_clave
+          },
     valor_anterior: evento.valor_anterior == null ? null : String(evento.valor_anterior),
     valor_nuevo: evento.valor_nuevo == null ? null : String(evento.valor_nuevo),
     detalle: evento.detalle ?? null,
     actor_legajo: evento.actor_legajo ?? null,
     actor_nombre: evento.actor_nombre ?? null,
     actor_apellido: evento.actor_apellido ?? null,
-    evento_en: evento.evento_en ? new Date(evento.evento_en).toISOString() : null,
+    evento_en: evento.evento_en ? new Date(evento.evento_en).toISOString() : null
   };
 }
 
@@ -1262,11 +1311,10 @@ function presentarEventoAuditoria(evento, hijosPorAgrupador) {
 export async function resumirEventosDeVersion(
   pool,
   parametros,
-  dependencias = DEPENDENCIAS_DEFECTO,
+  dependencias = DEPENDENCIAS_DEFECTO
 ) {
   const id = validarIdVersion(parametros.id);
-
-  return dependencias.withConnection(pool, async (connection) => {
+  return dependencias.withConnection(pool, async connection => {
     const fila = await dependencias.obtenerVersionPorId(connection, id);
     if (!fila) {
       throw errorNoEncontrado('La version indicada no existe.');
@@ -1282,9 +1330,7 @@ export async function resumirEventosDeVersion(
     }
     return {
       version: presentarVersionHistoria(fila),
-      eventos: eventos
-        .map((evento) => presentarEventoAuditoria(evento, hijosPorAgrupador))
-        .reverse(),
+      eventos: eventos.map(evento => presentarEventoAuditoria(evento, hijosPorAgrupador)).reverse()
     };
   });
 }
@@ -1296,8 +1342,7 @@ export async function resumirEventosDeVersion(
  * @returns {boolean} true si el evento proviene de un deshacer previo.
  */
 function esEventoDeDeshacer(evento) {
-  return typeof evento.detalle === 'string'
-    && evento.detalle.startsWith('DESHACE');
+  return typeof evento.detalle === 'string' && evento.detalle.startsWith('DESHACE');
 }
 
 /**
@@ -1336,7 +1381,6 @@ function agrupadorDe(evento) {
 function ultimoCambioEconomico(eventos) {
   const operacionesVigentes = [];
   const gruposRegistrados = new Set();
-
   for (const evento of eventos) {
     const operacion = operacionDe(evento);
     if (esEventoDeDeshacer(evento)) {
@@ -1344,30 +1388,37 @@ function ultimoCambioEconomico(eventos) {
       // encabezado revierte un grupo entero y una fila suelta revierte una
       // edicion individual; los hijos DESHACE del grupo no vuelven a sacar
       // elementos de la pila.
-      if (operacion === 'AUMENTO_MASIVO'
-        || (operacion === 'PRECIO' && agrupadorDe(evento) == null)) {
+      if (
+        operacion === 'AUMENTO_MASIVO' ||
+        (operacion === 'PRECIO' && agrupadorDe(evento) == null)
+      ) {
         operacionesVigentes.pop();
       }
       continue;
     }
-
     if (operacion !== 'PRECIO') continue;
     if (agrupadorDe(evento) == null) {
-      operacionesVigentes.push({ datos: [evento], esGrupo: false });
+      operacionesVigentes.push({
+        datos: [evento],
+        esGrupo: false
+      });
       continue;
     }
-
     const agrupador = String(agrupadorDe(evento));
     if (gruposRegistrados.has(agrupador)) continue;
     gruposRegistrados.add(agrupador);
     const datos = eventos.filter(
-      (hijo) => String(agrupadorDe(hijo) ?? '') === agrupador
-        && operacionDe(hijo) === 'PRECIO'
-        && !esEventoDeDeshacer(hijo),
+      hijo =>
+        String(agrupadorDe(hijo) ?? '') === agrupador &&
+        operacionDe(hijo) === 'PRECIO' &&
+        !esEventoDeDeshacer(hijo)
     );
-    operacionesVigentes.push({ datos, esGrupo: true, agrupador });
+    operacionesVigentes.push({
+      datos,
+      esGrupo: true,
+      agrupador
+    });
   }
-
   return operacionesVigentes.at(-1) ?? null;
 }
 
@@ -1394,21 +1445,18 @@ export async function deshacerUltimoCambioEconomico(
   parametros,
   cuerpo,
   actor,
-  dependencias = DEPENDENCIAS_DEFECTO,
+  dependencias = DEPENDENCIAS_DEFECTO
 ) {
   const id = validarIdVersion(parametros.id);
   const revision = validarRevision(cuerpo.revision);
-
   return dependencias.withConnection(
     pool,
-    async (connection) => {
+    async connection => {
       await validarEdicionDeVersion(dependencias, connection, id, revision);
       const eventos = await dependencias.listarEventosDeVersion(connection, id);
       const objetivo = ultimoCambioEconomico(eventos);
       if (!objetivo) {
-        throw errorEstado(
-          'La version no registra cambios economicos para deshacer.',
-        );
+        throw errorEstado('La version no registra cambios economicos para deshacer.');
       }
 
       // Resuelve cada fila por la clave de negocio del evento (la misma
@@ -1419,13 +1467,13 @@ export async function deshacerUltimoCambioEconomico(
           versionId: id,
           planId: Number(evento.plan_id),
           tipoIngreso: evento.tipo_ingreso,
-          rangoClave: evento.rango_clave,
+          rangoClave: evento.rango_clave
         });
         if (!tarifa) {
           throw errorEstado(
-            `La fila ${evento.plan_id}/${evento.tipo_ingreso}/`
-              + `${evento.rango_clave} del evento ${evento.id} ya no existe `
-              + 'en la version; el deshacer se aborta sin aplicar nada.',
+            `La fila ${evento.plan_id}/${evento.tipo_ingreso}/` +
+              `${evento.rango_clave} del evento ${evento.id} ya no existe ` +
+              'en la version; el deshacer se aborta sin aplicar nada.'
           );
         }
         // Integridad con la auditoria: el precio actual debe ser el valor
@@ -1433,14 +1481,17 @@ export async function deshacerUltimoCambioEconomico(
         // via (o una reversion previa no registrada), se refuse el cambio.
         if (String(tarifa.precio) !== String(evento.valor_nuevo)) {
           throw errorEstado(
-            `La fila ${evento.plan_id}/${evento.tipo_ingreso}/`
-              + `${evento.rango_clave} tiene el precio `
-              + `${String(tarifa.precio)} distinto del valor registrado `
-              + `(${String(evento.valor_nuevo)}); el deshacer se aborta `
-              + 'sin aplicar nada.',
+            `La fila ${evento.plan_id}/${evento.tipo_ingreso}/` +
+              `${evento.rango_clave} tiene el precio ` +
+              `${String(tarifa.precio)} distinto del valor registrado ` +
+              `(${String(evento.valor_nuevo)}); el deshacer se aborta ` +
+              'sin aplicar nada.'
           );
         }
-        restauradas.push({ evento, tarifa });
+        restauradas.push({
+          evento,
+          tarifa
+        });
       }
 
       // Auditoria propia del deshacer: convencion de detalle 'DESHACE: ...'
@@ -1456,18 +1507,18 @@ export async function deshacerUltimoCambioEconomico(
           actorLegajo: actorInfo.legajo,
           actorNombre: actorInfo.nombre,
           actorApellido: actorInfo.apellido,
-          detalle: `DESHACE: restablece los precios previos del ultimo `
-            + `aumento masivo aplicado a la version ${id}.`,
+          detalle:
+            `DESHACE: restablece los precios previos del ultimo ` +
+            `aumento masivo aplicado a la version ${id}.`
         });
       }
-
       const actorInfo = await snapshotActor(dependencias, connection, actor.legajo);
       const eventosNuevos = [];
       for (const { evento, tarifa } of restauradas) {
         const precioRestaurado = String(evento.valor_anterior);
         await dependencias.actualizarPrecioTarifa(connection, {
           tarifaId: tarifa.id,
-          precio: precioRestaurado,
+          precio: precioRestaurado
         });
         const idEventoNuevo = await dependencias.insertarEvento(connection, {
           versionId: id,
@@ -1482,21 +1533,31 @@ export async function deshacerUltimoCambioEconomico(
           actorLegajo: actorInfo.legajo,
           actorNombre: actorInfo.nombre,
           actorApellido: actorInfo.apellido,
-          detalle: `DESHACE: restablece el precio previo de `
-            + `${descripcionDeFila(evento)}: `
-            + `${String(evento.valor_nuevo)} -> ${precioRestaurado}.`,
+          detalle:
+            `DESHACE: restablece el precio previo de ` +
+            `${descripcionDeFila(evento)}: ` +
+            `${String(evento.valor_nuevo)} -> ${precioRestaurado}.`
         });
         eventosNuevos.push(idEventoNuevo);
       }
-
       return {
         filas: restauradas.length,
         revision: revision + 1,
         evento: objetivo.esGrupo
-          ? { id: String(grupoId), tipo: 'DESHACER_GRUPO' }
-          : { id: String(eventosNuevos[0]), tipo: 'DESHACER_EDICION' },
+          ? {
+              id: String(grupoId),
+              tipo: 'DESHACER_GRUPO'
+            }
+          : {
+              id: String(eventosNuevos[0]),
+              tipo: 'DESHACER_EDICION'
+            }
       };
-  }, { transaction: true });
+    },
+    {
+      transaction: true
+    }
+  );
 }
 
 /**
@@ -1535,12 +1596,12 @@ export async function crearBorradorDesdeHistorica(
   pool,
   parametros,
   actor,
-  dependencias = DEPENDENCIAS_DEFECTO,
+  dependencias = DEPENDENCIAS_DEFECTO
 ) {
   const idOrigen = validarIdVersion(parametros.id);
   return dependencias.withConnection(
     pool,
-    async (connection) => {
+    async connection => {
       const historica = await dependencias.bloquearVersion(connection, idOrigen);
       if (!historica) {
         throw errorNoEncontrado('La version indicada no existe.');
@@ -1549,8 +1610,8 @@ export async function crearBorradorDesdeHistorica(
       // caso normal y una LISTA_PARA_ACTIVAR propia del borrador abierto.
       if (historica.estado !== 'HISTORICA') {
         throw errorTransicion(
-          'Solo una version HISTORICA puede recuperarse como borrador. '
-          + 'La version ACTIVA se copia con el flujo habitual de creacion.',
+          'Solo una version HISTORICA puede recuperarse como borrador. ' +
+            'La version ACTIVA se copia con el flujo habitual de creacion.'
         );
       }
       const borrador = await dependencias.bloquearBorradorAbierto(connection);
@@ -1558,14 +1619,14 @@ export async function crearBorradorDesdeHistorica(
         throw errorBorradorExistente(borrador);
       }
       const actorInfo = await snapshotActor(dependencias, connection, actor.legajo);
-      const observacion = 'Recuperacion de la version historica '
-        + `${idOrigen} al crear el borrador.`;
+      const observacion =
+        'Recuperacion de la version historica ' + `${idOrigen} al crear el borrador.`;
       let versionId;
       try {
         versionId = await dependencias.insertarBorrador(connection, {
           versionBaseId: Number(idOrigen),
           actorLegajo: actor.legajo,
-          observacion,
+          observacion
         });
       } catch (error) {
         // Misma carrera concurrente que el caso regular: reporta al
@@ -1576,15 +1637,15 @@ export async function crearBorradorDesdeHistorica(
             throw errorBorradorExistente(ganador);
           }
           throw errorEstado(
-            'Otro administrador creo una version de precios al mismo tiempo. '
-            + 'Recarga el historial antes de continuar.',
+            'Otro administrador creo una version de precios al mismo tiempo. ' +
+              'Recarga el historial antes de continuar.'
           );
         }
         throw error;
       }
       const filasCopiadas = await dependencias.copiarTarifas(connection, {
         origenId: idOrigen,
-        destinoId: versionId,
+        destinoId: versionId
       });
       const eventoId = await dependencias.insertarEvento(connection, {
         versionId,
@@ -1594,10 +1655,10 @@ export async function crearBorradorDesdeHistorica(
         actorLegajo: actorInfo.legajo,
         actorNombre: actorInfo.nombre,
         actorApellido: actorInfo.apellido,
-        detalle: `Recuperacion de la version historica ${idOrigen} `
-          + `con ${filasCopiadas} filas de tarifas.`,
+        detalle:
+          `Recuperacion de la version historica ${idOrigen} ` +
+          `con ${filasCopiadas} filas de tarifas.`
       });
-
       return {
         version: {
           id: String(versionId),
@@ -1605,8 +1666,15 @@ export async function crearBorradorDesdeHistorica(
           estado: 'PREPARACION',
           version_base_id: String(idOrigen),
           actor_legajo: actor.legajo,
-          evento: { id: String(eventoId), tipo: 'CREACION' },
-        },
+          evento: {
+            id: String(eventoId),
+            tipo: 'CREACION'
+          }
+        }
       };
-  }, { transaction: true });
+    },
+    {
+      transaction: true
+    }
+  );
 }

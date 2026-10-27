@@ -1,3 +1,6 @@
+/**
+ * Construye errores operativos con código y estado HTTP públicos.
+ */
 const operationalErrors = new WeakSet();
 
 /**
@@ -9,8 +12,13 @@ const operationalErrors = new WeakSet();
  * @returns {Error} Error reconocible por el manejador centralizado.
  */
 export function createAppError(code, message, status, details) {
-  if (!/^[A-Z][A-Z0-9_]*$/.test(code) || typeof message !== 'string'
-      || !Number.isInteger(status) || status < 400 || status > 599) {
+  if (
+    !/^[A-Z][A-Z0-9_]*$/.test(code) ||
+    typeof message !== 'string' ||
+    !Number.isInteger(status) ||
+    status < 400 ||
+    status > 599
+  ) {
     throw new Error('Contrato de error operativo inválido.');
   }
   const error = new Error(message);
@@ -20,7 +28,7 @@ export function createAppError(code, message, status, details) {
     // Solo se conservan campos públicos; no se serializa el objeto de validación original.
     error.details = details.map(({ field, message: detailMessage }) => ({
       field: typeof field === 'string' ? field : 'entrada',
-      message: typeof detailMessage === 'string' ? detailMessage : 'Valor inválido.',
+      message: typeof detailMessage === 'string' ? detailMessage : 'Valor inválido.'
     }));
   }
   operationalErrors.add(error);
@@ -28,7 +36,8 @@ export function createAppError(code, message, status, details) {
 }
 
 /**
- * Comprueba el origen del error para no publicar errores de bibliotecas por coincidencia de propiedades.
+ * Comprueba el origen del error para no publicar errores de bibliotecas por coincidencia de
+ * propiedades.
  * @param {unknown} error Error recibido.
  * @returns {boolean} Si fue creado por createAppError.
  */

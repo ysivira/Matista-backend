@@ -1,14 +1,20 @@
+/**
+ * Adapta las solicitudes y respuestas HTTP de autenticación y perfil.
+ */
 import { matchedData } from 'express-validator';
 import * as service from './auth.service.js';
 import { AUTH_COOKIE_NAME } from './auth.constants.js';
 
 /**
- * Extrae solo datos validados, conservando null explícito sin introducir campos opcionales ausentes.
+ * Extrae solo datos validados, conservando null explícito sin introducir campos opcionales
+ * ausentes.
  * @param {object} req Solicitud procesada por express-validator.
  * @returns {object} Entrada pública filtrada; permite borrar datos opcionales mediante PATCH.
  */
 function validatedInput(req) {
-  const data = matchedData(req, { includeOptionals: true });
+  const data = matchedData(req, {
+    includeOptionals: true
+  });
   return Object.fromEntries(Object.entries(data).filter(([, value]) => value !== undefined));
 }
 
@@ -26,9 +32,12 @@ export async function register(req, res) {
 export async function login(req, res) {
   const signed = await service.login(validatedInput(req), req.authContext);
   res.cookie(AUTH_COOKIE_NAME, signed.token, {
-    ...req.authHttp.cookie, maxAge: Math.max(0, signed.expiresAt.getTime() - req.authContext.now().getTime()),
+    ...req.authHttp.cookie,
+    maxAge: Math.max(0, signed.expiresAt.getTime() - req.authContext.now().getTime())
   });
-  res.json({ user: signed.user });
+  res.json({
+    user: signed.user
+  });
 }
 
 /** Revoca el jti presentado si sigue siendo verificable, elimina cookie y retorna HTTP 204 idempotente. */
@@ -79,7 +88,11 @@ export async function editProfile(req, res) {
 
 /** Cambia contraseña con la actual, cierra sesiones y elimina cookie. */
 export async function changePassword(req, res) {
-  const result = await service.changePassword(req.auth.claims, validatedInput(req), req.authContext);
+  const result = await service.changePassword(
+    req.auth.claims,
+    validatedInput(req),
+    req.authContext
+  );
   clearSessionCookie(req, res);
   res.json(result);
 }

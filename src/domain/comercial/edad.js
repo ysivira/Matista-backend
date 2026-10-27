@@ -1,4 +1,7 @@
 /**
+ * Calcula y valida edades a partir de fechas civiles.
+ */
+/**
  * Cálculo de edad a partir de la fecha de nacimiento del cliente (SPEC-UI-02).
  * La edad no es un atributo persistente del cliente: se deriva de su fecha real
  * y los snapshots de cotizaciones conservan la edad efectivamente utilizada.
@@ -7,13 +10,24 @@
 /** Convierte 'DD/MM/AAAA' o 'AAAA-MM-DD' en partes numéricas sin interpretar husos horarios. */
 function partesFechaTextual(valor) {
   if (typeof valor !== 'string') return null;
-  const normalizado = /^\d{4}-\d{2}-\d{2}$/.test(valor) ? valor
-    : (/^\d{2}\/\d{2}\/\d{4}$/.test(valor) ? valor.slice(6) + '-' + valor.slice(3, 5) + '-' + valor.slice(0, 2) : null);
+  const normalizado = /^\d{4}-\d{2}-\d{2}$/.test(valor)
+    ? valor
+    : /^\d{2}\/\d{2}\/\d{4}$/.test(valor)
+      ? valor.slice(6) + '-' +
+        valor.slice(3, 5) +
+        '-' +
+        valor.slice(0, 2)
+      : null;
   if (!normalizado) return null;
   const [año, mes, día] = normalizado.split('-').map(Number);
   // Descarta fechas imposibles: el constructor de Date salta al mes siguiente ante día inexistente.
   const fecha = new Date(Date.UTC(año, mes - 1, día));
-  if (fecha.getUTCFullYear() !== año || fecha.getUTCMonth() !== mes - 1 || fecha.getUTCDate() !== día) return null;
+  if (
+    fecha.getUTCFullYear() !== año ||
+    fecha.getUTCMonth() !== mes - 1 ||
+    fecha.getUTCDate() !== día
+  )
+    return null;
   return fecha;
 }
 
@@ -46,9 +60,12 @@ export function calcularEdad(fechaNacimiento, hoy = new Date()) {
   const referencia = hoyUTC(hoy);
   if (nacimiento > referencia) return null;
   let años = referencia.getUTCFullYear() - nacimiento.getUTCFullYear();
-  const cumpleañosNoOcurrido = nacimiento.getUTCMonth() > referencia.getUTCMonth()
-    || (nacimiento.getUTCMonth() === referencia.getUTCMonth() && nacimiento.getUTCDate() > referencia.getUTCDate());
-  // Un nacimiento el 29/02 cumple años el 1/3 de los años no bisiestos: la comparación (mes, día) lo resuelve.
+  const cumpleañosNoOcurrido =
+    nacimiento.getUTCMonth() > referencia.getUTCMonth() ||
+    (nacimiento.getUTCMonth() === referencia.getUTCMonth() &&
+      nacimiento.getUTCDate() > referencia.getUTCDate());
+  // Un nacimiento el 29/02 cumple años el 1/3 de los años no bisiestos: la comparación (mes, día)
+  // lo resuelve.
   if (cumpleañosNoOcurrido) años -= 1;
   return años;
 }

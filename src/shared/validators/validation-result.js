@@ -1,3 +1,6 @@
+/**
+ * Convierte los errores de validación en respuestas públicas uniformes.
+ */
 import { validationResult } from 'express-validator';
 import { createAppError } from '../errors/app-error.js';
 
@@ -14,7 +17,9 @@ export function publicValidationMessage(message) {
   if (typeof message !== 'string' || !message.trim()) {
     throw new Error('El mensaje público de validación debe ser un texto no vacío.');
   }
-  const publicMessage = Object.freeze({ message });
+  const publicMessage = Object.freeze({
+    message
+  });
   publicMessages.add(publicMessage);
   return publicMessage;
 }
@@ -30,9 +35,13 @@ export function publicValidationMessage(message) {
 export function handleValidationResult(req, res, next) {
   const result = validationResult(req);
   if (result.isEmpty()) return next();
-  const details = result.array({ onlyFirstError: true }).map((error) => ({
-    field: error.type === 'field' ? error.path : 'entrada',
-    message: publicMessages.has(error.msg) ? error.msg.message : 'Valor inválido.',
-  }));
+  const details = result
+    .array({
+      onlyFirstError: true
+    })
+    .map(error => ({
+      field: error.type === 'field' ? error.path : 'entrada',
+      message: publicMessages.has(error.msg) ? error.msg.message : 'Valor inválido.'
+    }));
   return next(createAppError('VALIDATION_FAILED', 'Revise los campos indicados.', 400, details));
 }

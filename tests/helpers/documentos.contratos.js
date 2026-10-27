@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
+import { Script } from 'node:vm';
 
 /**
  * Calcula SHA-256 sin alterar bytes.
- * @param {string} texto Cadena de contrato.
+ * @param {string|Buffer} texto Cadena o bytes del contrato.
  * @returns {string} Digest hexadecimal.
  */
 export function sha256(texto) {
@@ -261,4 +262,258 @@ export function contratoCss(css) {
     return resultado;
   }
   return reglas();
+}
+
+/**
+ * Tokeniza la gramática usada por los paginadores sin borrar contenido de cadenas.
+ * Conserva saltos relevantes para ASI y rechaza construcciones no cubiertas.
+ * @param {string} fuente Script completo ya generado para el documento.
+ * @returns {string[]} Tokens ordenados con marcas de salto potencialmente significativo.
+ * @throws {Error} Si la sintaxis es inválida o contiene literales no soportados.
+ */
+function tokensPaginacion(fuente) {
+  new Script(fuente);
+  const tokens = [];
+  let posicion = 0, salto = false;
+  while (posicion < fuente.length) {
+    const inicio = posicion, caracter = fuente[posicion];
+    if (/\s/u.test(caracter)) {
+      salto ||= /[\n\r\u2028\u2029]/u.test(caracter);
+      posicion++;
+      continue;
+    }
+    if (fuente.startsWith('//', posicion)) {
+      while (posicion < fuente.length && !/[\n\r\u2028\u2029]/u.test(fuente[posicion])) posicion++;
+      continue;
+    }
+    if (fuente.startsWith('/*', posicion)) {
+      const fin = fuente.indexOf('*/', posicion + 2);
+      assert.ok(fin >= 0, 'Comentario JavaScript sin cierre');
+      salto ||= /[\n\r\u2028\u2029]/u.test(fuente.slice(posicion, fin + 2));
+      posicion = fin + 2;
+      continue;
+    }
+    if (caracter === '"' || caracter === "'") {
+      posicion++;
+      while (posicion < fuente.length && fuente[posicion] !== caracter) {
+        if (fuente[posicion] === '\\') posicion++;
+        posicion++;
+      }
+      assert.ok(posicion < fuente.length, 'Cadena JavaScript sin cierre');
+      posicion++;
+    } else {
+      // Los scripts históricos no usan templates, regex ni identificadores escapados.
+      // Una ampliación de esa gramática exige revisar el contrato, nunca descartarla.
+      const coincidencia = /^(?:[a-zA-Z_$][\w$]*|\d+(?:\.\d+)?|===|!==|=>|\.\.\.|\?\.|\?\?|&&|\|\||\+\+|--|<=|>=|==|!=|\+=|-=|\*=|\/=|[{}()[\].,;:?+*%<>=!&|\/-])/.exec(fuente.slice(posicion));
+      assert.ok(coincidencia, `Token JavaScript fuera del contrato en ${posicion}`);
+      posicion += coincidencia[0].length;
+    }
+    const token = fuente.slice(inicio, posicion);
+    if (token === '/') {
+      // Es la única división de los scripts históricos. No se interpreta una regex como operadores.
+      assert.deepEqual(tokens.slice(-5), ['(', 'min', '+', 'max', ')'],
+        'División o regex fuera de la gramática histórica');
+    }
+    if (salto && (['return', 'throw', 'break', 'continue', 'yield', 'async'].includes(tokens.at(-1))
+      || ['++', '--', '=>'].includes(token))) tokens.push('SALTO_ASI');
+    tokens.push(token);
+    salto = false;
+  }
+  return tokens;
+}
+
+/**
+ * Compara sintaxis conservando tokens, cadenas y límites relevantes de sentencias.
+ * Solo admite los cambios concretos de paréntesis de SPEC-22: alturas y las dos numeraciones.
+ * @param {string} fuente Script del documento, sin etiquetas HTML.
+ * @returns {string[]} Contrato sintáctico estricto; no ejecuta el script.
+ */
+export function contratoPaginacion(fuente) {
+  let tokens = tokensPaginacion(fuente);
+  const equivalencias = [
+    ["(pagina.querySelector('footer').offsetTop-contenido.offsetTop-14)+'px'",
+      "pagina.querySelector('footer').offsetTop-contenido.offsetTop-14+'px'"],
+    ["(hoja.querySelector('footer').offsetTop-contenido.offsetTop-12)+'px'",
+      "hoja.querySelector('footer').offsetTop-contenido.offsetTop-12+'px'"],
+    ["(p,i)=>p.querySelector('.numeracion').textContent=(i+1)+' / '+paginas.length",
+      "(p,i)=>(p.querySelector('.numeracion').textContent=i+1+' / '+paginas.length)"],
+    ["(hoja,i)=>hoja.querySelector('.numeracion').textContent='Página '+(i+1)+' de '+hojas.length",
+      "(hoja,i)=>(hoja.querySelector('.numeracion').textContent='Página '+(i+1)+' de '+hojas.length)"]
+  ];
+  for (const [antes, despues] of equivalencias) {
+    // Son patrones léxicos cerrados, no eliminación general de paréntesis.
+    // Se tokenizan como expresiones válidas para conservar límites de cadenas.
+    const patron = tokensPaginacion(antes), reemplazo = tokensPaginacion(despues);
+    const resultado = [];
+    for (let indice = 0; indice < tokens.length;) {
+      if (patron.every((token, desplazamiento) => tokens[indice + desplazamiento] === token)) {
+        resultado.push(...reemplazo);
+        indice += patron.length;
+      } else resultado.push(tokens[indice++]);
+    }
+    tokens = resultado;
+  }
+  return tokens;
+}
+
+/**
+ * Lee un atributo real sin confundirlo con texto dentro de otro atributo.
+ * @param {string} etiqueta Apertura HTML completa, conservada literalmente por el contrato.
+ * @param {string} nombre Nombre del atributo requerido.
+ * @returns {string|undefined} Valor sin comillas, o undefined si el atributo no existe.
+ * @throws {AssertionError} Ante atributos duplicados o sintaxis fuera del contrato.
+ */
+function atributoDocumental(etiqueta, nombre) {
+  const apertura = /^<[a-zA-Z][\w:-]*/.exec(etiqueta);
+  if (!apertura) return undefined;
+  let posicion = apertura[0].length;
+  const atributos = new Map();
+  while (posicion < etiqueta.length) {
+    const espacio = /^[\t\n\f\r ]*/.exec(etiqueta.slice(posicion))[0];
+    posicion += espacio.length;
+    if (etiqueta[posicion] === '>' || etiqueta.slice(posicion) === '/>') break;
+    assert.ok(espacio.length, 'Atributos HTML sin separación');
+    const atributo = /^[a-zA-Z_:][\w:.-]*/.exec(etiqueta.slice(posicion));
+    assert.ok(atributo, 'Nombre de atributo fuera del contrato');
+    const clave = atributo[0].toLowerCase();
+    assert.ok(!atributos.has(clave), 'Atributo HTML duplicado');
+    posicion += atributo[0].length;
+    let valor = '';
+    const asignacion = /^[\t\n\f\r ]*=[\t\n\f\r ]*/.exec(etiqueta.slice(posicion));
+    if (asignacion) {
+      posicion += asignacion[0].length;
+      const comilla = etiqueta[posicion++];
+      assert.ok(comilla === '"' || comilla === "'", 'El contrato requiere atributos entre comillas');
+      const fin = etiqueta.indexOf(comilla, posicion);
+      assert.ok(fin >= 0, 'Atributo HTML sin cierre');
+      valor = etiqueta.slice(posicion, fin);
+      posicion = fin + 1;
+    }
+    atributos.set(clave, valor);
+  }
+  return atributos.get(nombre);
+}
+
+/**
+ * Identifica contenedores cuyo blanco interelemento no participa del diseño histórico.
+ * @param {object} padre Elemento abierto, con nombre y etiqueta original.
+ * @returns {boolean} Permite omitir solo nodos íntegramente blancos en ese contenedor.
+ */
+function permiteBlancosDocumentales(padre) {
+  const contenedores = {
+    '#documento': ['html'],
+    html: ['head', 'body'],
+    head: ['meta', 'title', 'style'],
+    body: ['main', 'template', 'script'],
+    table: ['thead', 'tbody', 'tfoot', 'caption', 'colgroup'],
+    thead: ['tr'], tbody: ['tr'], tr: ['th', 'td'],
+    svg: ['polygon', 'path']
+  };
+  const plantillas = {
+    marca: ['header'], cabecera: ['header', 'div'], tabla: ['table'],
+    filas: ['table'], notas: ['section'],
+    comercial: ['h1', 'h2', 'p', 'div', 'table'],
+    catalogo: ['h1', 'h2', 'p', 'table']
+  };
+  const grupos = {
+    titulo: ['span', 'div'], identidad: ['div'], plan: ['span'],
+    total: ['div', 'strong'], tramos: ['div']
+  };
+  const clase = atributoDocumental(padre.etiqueta, 'class');
+  const id = atributoDocumental(padre.etiqueta, 'id');
+  const permitidos = padre.nombre === 'template' ? plantillas[id]
+    : padre.nombre === 'div' ? grupos[clase]
+      : padre.nombre === 'header' && clase === 'marca' ? ['img', 'div']
+        : contenedores[padre.nombre];
+  if (!permitidos) return false;
+  // No se ignoran blancos junto a texto directo ni entre hijos inline desconocidos.
+  return padre.hijos.every(hijo => hijo.nombre ? permitidos.includes(hijo.nombre)
+    : hijo[0] !== 'texto' || /^[\t\n\f\r ]*$/.test(hijo[1]));
+}
+
+/**
+ * Representa el HTML sin normalizar atributos, entidades ni texto significativo.
+ * Compara CSS con su gramática ordenada y scripts con su contrato sintáctico estricto.
+ * @param {string} documento HTML autónomo actual o histórico reconstruido.
+ * @returns {Array} Árbol de etiquetas y contenido en el orden original, incluidos templates.
+ * @throws {AssertionError} Ante HTML incompleto o anidación fuera del contrato soportado.
+ */
+export function contratoDocumento(documento) {
+  const raiz = { nombre: '#documento', etiqueta: '', hijos: [] };
+  const pila = [raiz];
+  const vacias = new Set(['meta', 'img', 'br', 'hr', 'input', 'link', 'area', 'base', 'col', 'embed', 'param', 'source', 'track', 'wbr']);
+  let posicion = 0;
+  while (posicion < documento.length) {
+    const padre = pila.at(-1);
+    if (documento[posicion] !== '<') {
+      const siguiente = documento.indexOf('<', posicion);
+      const fin = siguiente < 0 ? documento.length : siguiente;
+      const texto = documento.slice(posicion, fin);
+      padre.hijos.push(['texto', texto]);
+      posicion = fin;
+      continue;
+    }
+    if (documento.startsWith('<!--', posicion)) {
+      const fin = documento.indexOf('-->', posicion + 4);
+      assert.ok(fin >= 0, 'Comentario HTML sin cierre');
+      padre.hijos.push(['comentario', documento.slice(posicion, fin + 3)]);
+      posicion = fin + 3;
+      continue;
+    }
+    let fin = posicion + 1, comilla = '';
+    for (; fin < documento.length; fin++) {
+      const caracter = documento[fin];
+      if (comilla) { if (caracter === comilla) comilla = ''; }
+      else if (caracter === '"' || caracter === "'") comilla = caracter;
+      else if (caracter === '>') break;
+    }
+    assert.ok(fin < documento.length, 'Etiqueta HTML sin cierre');
+    const etiqueta = documento.slice(posicion, fin + 1);
+    posicion = fin + 1;
+    if (/^<!doctype\s/i.test(etiqueta)) {
+      padre.hijos.push(['doctype', etiqueta]);
+      continue;
+    }
+    const coincidencia = /^<(\/)?([a-zA-Z][\w:-]*)(?=[\t\n\f\r />])/.exec(etiqueta);
+    assert.ok(coincidencia, 'Etiqueta HTML fuera del contrato');
+    const nombre = coincidencia[2].toLowerCase();
+    if (coincidencia[1]) {
+      assert.equal(padre.nombre, nombre, 'Cierre HTML no corresponde al elemento abierto');
+      assert.ok(pila.length > 1, 'Cierre HTML sin apertura');
+      padre.hijos.push(['cierre', etiqueta]);
+      pila.pop();
+      continue;
+    }
+    const nodo = { nombre, etiqueta, hijos: [] };
+    padre.hijos.push(nodo);
+    if (['script', 'style', 'title', 'textarea', 'xmp', 'iframe', 'noembed', 'noframes', 'noscript'].includes(nombre)) {
+      const cierre = new RegExp(`</${nombre}[\\t\\n\\f\\r ]*>`, 'ig');
+      cierre.lastIndex = posicion;
+      const encontrado = cierre.exec(documento);
+      assert.ok(encontrado, `Elemento ${nombre} sin cierre`);
+      const contenido = documento.slice(posicion, encontrado.index);
+      nodo.hijos.push(nombre === 'script' ? ['javascript', contratoPaginacion(contenido)]
+        : nombre === 'style' ? ['css', contratoCss(contenido)] : ['texto', contenido]);
+      nodo.hijos.push(['cierre', encontrado[0]]);
+      posicion = cierre.lastIndex;
+    } else if (!vacias.has(nombre) && !etiqueta.endsWith('/>')) pila.push(nodo);
+  }
+  assert.equal(pila.length, 1, 'Elemento HTML sin cierre');
+  /**
+   * Conserva el árbol y omite blancos autorizados por el contenedor y sus hijos.
+   * @param {object} nodo Elemento con sus hijos originales.
+   * @returns {object} Representación estricta con los hijos conservados en orden.
+   */
+  function representar(nodo) {
+    const permite = permiteBlancosDocumentales(nodo);
+    return {
+      nombre: nodo.nombre,
+      etiqueta: nodo.etiqueta,
+      hijos: nodo.hijos
+        .filter(hijo => !(permite && Array.isArray(hijo) && hijo[0] === 'texto'
+          && /^[\t\n\f\r ]*$/.test(hijo[1])))
+        .map(hijo => hijo.nombre ? representar(hijo) : hijo)
+    };
+  }
+  return representar(raiz).hijos;
 }

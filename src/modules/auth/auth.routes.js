@@ -1,3 +1,6 @@
+/**
+ * Compone las rutas AUTH y sus dependencias y controles HTTP.
+ */
 import { randomBytes } from 'node:crypto';
 import { Router } from 'express';
 import cookieParser from 'cookie-parser';
@@ -18,7 +21,8 @@ import { authValidators } from './auth.validators.js';
 import { createAppError } from '../../shared/errors/app-error.js';
 
 /**
- * Compone el único router AUTH con dependencias explícitas para pruebas y creación diferida en ejecución.
+ * Compone el único router AUTH con dependencias explícitas para pruebas y creación diferida en
+ * ejecución.
  * @param {object} options Entorno, política HTTP validada y contexto opcional con dobles.
  * @returns {object} Router Express; importarlo o consultar health no crea pool ni transporte SMTP.
  */
@@ -39,28 +43,68 @@ export function createAuthRouter({ env, httpPolicy, context }) {
       req.authContext = context;
     } else {
       if (!runtime) runtime = initializeRuntime(env, httpPolicy);
-      try { req.authContext = await runtime; } catch (error) { runtime = undefined; throw error; }
+      try {
+        req.authContext = await runtime;
+      } catch (error) {
+        runtime = undefined;
+        throw error;
+      }
     }
     next();
   });
-
-  const policies = { login: createAuthRateLimiter('login'), forgotPassword: createAuthRateLimiter('passwordRecovery'),
-    resendVerification: createAuthRateLimiter('verificationResend') };
+  const policies = {
+    login: createAuthRateLimiter('login'),
+    forgotPassword: createAuthRateLimiter('passwordRecovery'),
+    resendVerification: createAuthRateLimiter('verificationResend')
+  };
   const publicRoutes = [
-    ['/register', 'register'], ['/verify-email', 'verifyEmail'], ['/confirm-email-change', 'confirmEmailChange'],
-    ['/resend-verification', 'resendVerification'], ['/login', 'login'], ['/logout', 'logout'],
-    ['/forgot-password', 'forgotPassword'], ['/reset-password', 'resetPassword'],
+    ['/register', 'register'],
+    ['/verify-email', 'verifyEmail'],
+    ['/confirm-email-change', 'confirmEmailChange'],
+    ['/resend-verification', 'resendVerification'],
+    ['/login', 'login'],
+    ['/logout', 'logout'],
+    ['/forgot-password', 'forgotPassword'],
+    ['/reset-password', 'resetPassword']
   ];
   for (const [path, operation] of publicRoutes) {
-    router.post(path, ...(policies[operation] ? [policies[operation]] : []),
-      ...authValidators(operation), handleValidationResult, controller[operation]);
+    router.post(
+      path,
+      ...(policies[operation] ? [policies[operation]] : []),
+      ...authValidators(operation),
+      handleValidationResult,
+      controller[operation]
+    );
   }
   router.get('/me', authenticate, authorize(...AUTH_ROLES), controller.getProfile);
-  router.patch('/me', authenticate, authorize(...AUTH_ROLES), ...authValidators('editProfile'), handleValidationResult, controller.editProfile);
-  router.post('/change-password', authenticate, authorize(...AUTH_ROLES), ...authValidators('changePassword'), handleValidationResult, controller.changePassword);
-  router.post('/change-email', authenticate, authorize(...AUTH_ROLES), ...authValidators('changeEmail'), handleValidationResult, controller.changeEmail);
+  router.patch(
+    '/me',
+    authenticate,
+    authorize(...AUTH_ROLES),
+    ...authValidators('editProfile'),
+    handleValidationResult,
+    controller.editProfile
+  );
+  router.post(
+    '/change-password',
+    authenticate,
+    authorize(...AUTH_ROLES),
+    ...authValidators('changePassword'),
+    handleValidationResult,
+    controller.changePassword
+  );
+  router.post(
+    '/change-email',
+    authenticate,
+    authorize(...AUTH_ROLES),
+    ...authValidators('changeEmail'),
+    handleValidationResult,
+    controller.changeEmail
+  );
   /** Responde rutas AUTH inexistentes con JSON seguro, sin crear alias legacy. */
-  router.use((req, res, next) => next(createAppError('AUTH_ROUTE_NOT_FOUND', 'La ruta AUTH no existe.', 404)));
+  router.use((req, res, next) =>
+    next(createAppError('AUTH_ROUTE_NOT_FOUND', 'La ruta AUTH no existe.', 404))
+  );
   return router;
 }
 
@@ -81,23 +125,35 @@ export function createAuthRouter({ env, httpPolicy, context }) {
  */
 export function initializeRuntime(env, httpPolicy) {
   if (!promesaRuntime) {
+    // IIFE asíncrona única: carga configuración y compone el contexto compartido
+    // (pool, repositorio, seguridad, hash señuela, reloj, correo e incidentes).
     promesaRuntime = (async () => {
       const security = loadSecurityConfig(env);
       const database = loadDatabaseConfig(env);
       const dummyPasswordHash = await hashPassword(randomBytes(54).toString('base64url'), security);
       return {
-        pool: createDatabasePool(database), repository, security, dummyPasswordHash,
+        pool: createDatabasePool(database),
+        repository,
+        security,
+        dummyPasswordHash,
         /** Devuelve UTC del reloj del proceso; las pruebas inyectan su propio reloj. */
         now: () => new Date(),
         /** Reutiliza el envío de B con mensaje funcional y configuración propia de MATISTA. */
-        notify: (notice) => sendAuthNotice(notice, { origin: httpPolicy.origin, env }),
+        notify: notice =>
+          sendAuthNotice(notice, {
+            origin: httpPolicy.origin,
+            env
+          }),
         /** Registra únicamente código y tipo de incidente, nunca errores SMTP ni datos personales. */
-        reportIncident: (incident) => console.warn('Incidente AUTH:', incident.code, incident.operation),
+        reportIncident: incident =>
+          console.warn('Incidente AUTH:', incident.code, incident.operation)
       };
     })();
     // La promesa se descarta solo si falla: nadie debe quedarse esperando
     // una inicialización rota ni reutilizar un pool a medio construir.
-    promesaRuntime.catch(() => { promesaRuntime = undefined; });
+    promesaRuntime.catch(() => {
+      promesaRuntime = undefined;
+    });
   }
   return promesaRuntime;
 }

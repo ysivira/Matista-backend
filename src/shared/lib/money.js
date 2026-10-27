@@ -1,21 +1,26 @@
-// Utilidades monetarias compartidas por el dominio comercial y ADMIN.
-// Todo calculo monetario se hace con BigInt sobre enteros escalados
-// (sin punto flotante) y con redondeo HALF-UP, criterio aprobado para
-// importes y porcentajes del tarifario. Las conversiones MySQL/servicio
-// usan siempre strings DECIMAL tal como entrega mysql2.
+/**
+ * Opera importes y porcentajes con precisión entera y redondeo HALF-UP.
+ */
 
+/*
+ * Utilidades monetarias compartidas por el dominio comercial y ADMIN.
+ * Todo calculo monetario se hace con BigInt sobre enteros escalados
+ * (sin punto flotante) y con redondeo HALF-UP, criterio aprobado para
+ * importes y porcentajes del tarifario. Las conversiones MySQL/servicio
+ * usan siempre strings DECIMAL tal como entrega mysql2.
+ */
 import { createAppError } from '../errors/app-error.js';
 
 /**
  * Conserva el contrato público histórico de validación monetaria sin depender del módulo ADMIN.
  * @param {string} mensaje Descripción pública del error, sin incluir valores recibidos.
- * @returns {Error} Error operativo ADMIN_VALIDACION con HTTP 400, compatible con los consumidores existentes.
+ * @returns {Error} Error operativo ADMIN_VALIDACION con HTTP 400, compatible con los consumidores
+ * existentes.
  */
 function errorValidacion(mensaje) {
   // El código conserva su nombre por compatibilidad; no representa una dependencia hacia ADMIN.
   return createAppError('ADMIN_VALIDACION', mensaje, 400);
 }
-
 const PATRON_DECIMAL = /^(-?)(\d+)(\.(\d+))?$/;
 
 /**
@@ -42,7 +47,7 @@ export function parseDecimal(valor) {
   return {
     mantisa: BigInt(parteEntera + parteDecimal),
     escala: parteDecimal.length,
-    negativo,
+    negativo
   };
 }
 
@@ -74,9 +79,10 @@ export function dividirHalfUp(numerador, denominador) {
  */
 export function importeACentavos(importe) {
   const { mantisa, escala, negativo } = parseDecimal(importe);
-  const valor = escala <= 2
-    ? mantisa * 10n ** BigInt(2 - escala)
-    : dividirHalfUp(mantisa, 10n ** BigInt(escala - 2));
+  const valor =
+    escala <= 2
+      ? mantisa * 10n ** BigInt(2 - escala)
+      : dividirHalfUp(mantisa, 10n ** BigInt(escala - 2));
   return negativo ? -valor : valor;
 }
 

@@ -1,9 +1,8 @@
+/**
+ * Valida filtros, importes, fechas y revisiones del tarifario.
+ */
 import { errorValidacion } from './admin.errors.js';
-import {
-  compararImportes,
-  esImporteValido,
-  esPorcentajeValido,
-} from './admin.money.js';
+import { compararImportes, esImporteValido, esPorcentajeValido } from './admin.money.js';
 
 const TIPOS_INGRESO = Object.freeze(['Obligatorio', 'Voluntario']);
 
@@ -16,33 +15,33 @@ const TIPOS_INGRESO = Object.freeze(['Obligatorio', 'Voluntario']);
 export function validarParametrosTarifario({ planId, tipoIngreso }) {
   const detalles = [];
   const planIdTexto = typeof planId === 'string' ? planId : '';
-  const planIdValido = /^[1-9][0-9]{0,4}$/.test(planIdTexto)
-    && Number(planIdTexto) <= 65535;
-
+  const planIdValido = /^[1-9][0-9]{0,4}$/.test(planIdTexto) && Number(planIdTexto) <= 65535;
   if (!planIdValido) {
     detalles.push({
       field: 'planId',
-      message: 'Debe ser un entero entre 1 y 65535, sin signo ni ceros iniciales.',
+      message: 'Debe ser un entero entre 1 y 65535, sin signo ni ceros iniciales.'
     });
   }
   if (!TIPOS_INGRESO.includes(tipoIngreso)) {
     detalles.push({
       field: 'tipoIngreso',
-      message: 'Debe ser Obligatorio o Voluntario.',
+      message: 'Debe ser Obligatorio o Voluntario.'
     });
   }
   if (detalles.length > 0) {
     throw errorValidacion('Los parametros de la consulta no son validos.', detalles);
   }
-
-  return Object.freeze({ planId: Number(planIdTexto), tipoIngreso });
+  return Object.freeze({
+    planId: Number(planIdTexto),
+    tipoIngreso
+  });
 }
 
 // Patron aceptado para la fecha historica: fecha y hora con zona
 // horaria explicita (Z o desplazamiento +/-HH:MM) y hasta 3 decimales de
 // fraccion, la precision maxima del reloj de JavaScript (milisegundo).
 const PATRON_FECHA_VERSION = Object.freeze(
-  /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::(\d{2}))?(?:\.(\d{1,3}))?(Z|[+-]\d{2}:\d{2})$/,
+  /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::(\d{2}))?(?:\.(\d{1,3}))?(Z|[+-]\d{2}:\d{2})$/
 );
 
 /**
@@ -57,12 +56,13 @@ const PATRON_FECHA_VERSION = Object.freeze(
 export function validarIdVersion(idValor) {
   const texto = typeof idValor === 'string' ? idValor : '';
   const valido = /^[1-9][0-9]*$/.test(texto) && Number(texto) <= Number.MAX_SAFE_INTEGER;
-
   if (!valido) {
-    throw errorValidacion('El identificador de version no es valido.', [{
-      field: 'id',
-      message: 'Debe ser un entero positivo sin signo ni ceros iniciales.',
-    }]);
+    throw errorValidacion('El identificador de version no es valido.', [
+      {
+        field: 'id',
+        message: 'Debe ser un entero positivo sin signo ni ceros iniciales.'
+      }
+    ]);
   }
   return Number(texto);
 }
@@ -79,22 +79,24 @@ export function validarIdVersion(idValor) {
  */
 export function validarFechaVersion(fechaValor) {
   if (typeof fechaValor !== 'string') {
-    throw errorValidacion('La fecha de la consulta no es valida.', [{
-      field: 'fecha',
-      message: 'Debe incluir fecha y hora con zona explicita '
-        + '(Z o +/-HH:MM) y hasta milisegundos.',
-    }]);
+    throw errorValidacion('La fecha de la consulta no es valida.', [
+      {
+        field: 'fecha',
+        message:
+          'Debe incluir fecha y hora con zona explicita ' + '(Z o +/-HH:MM) y hasta milisegundos.'
+      }
+    ]);
   }
-
   const captura = fechaValor.match(PATRON_FECHA_VERSION);
   if (!captura) {
-    throw errorValidacion('La fecha de la consulta no es valida.', [{
-      field: 'fecha',
-      message: 'Debe incluir fecha y hora con zona explicita '
-        + '(Z o +/-HH:MM) y hasta milisegundos.',
-    }]);
+    throw errorValidacion('La fecha de la consulta no es valida.', [
+      {
+        field: 'fecha',
+        message:
+          'Debe incluir fecha y hora con zona explicita ' + '(Z o +/-HH:MM) y hasta milisegundos.'
+      }
+    ]);
   }
-
   const [, año, mes, dia, hora, minuto, segundos = '0', fraccion = '', zona] = captura;
   const milisegundos = fraccion ? Number(fraccion.padEnd(3, '0')) : 0;
 
@@ -105,11 +107,17 @@ export function validarFechaVersion(fechaValor) {
     const [horasZona, minutosZonaTexto] = zona.slice(1).split(':');
     minutosZona = signo * (Number(horasZona) * 60 + Number(minutosZonaTexto));
   }
-
-  const utc = Date.UTC(
-    Number(año), Number(mes) - 1, Number(dia),
-    Number(hora), Number(minuto), Number(segundos), milisegundos,
-  ) - minutosZona * 60000;
+  const utc =
+    Date.UTC(
+      Number(año),
+      Number(mes) - 1,
+      Number(dia),
+      Number(hora),
+      Number(minuto),
+      Number(segundos),
+      milisegundos
+    ) -
+    minutosZona * 60000;
   const fecha = new Date(utc);
 
   // La comparacion redondeada descarta fechas inexistentes (31-02, 24:00 sin
@@ -118,21 +126,22 @@ export function validarFechaVersion(fechaValor) {
   // zona del pedido -- contra los componentes tal como los escribio el
   // cliente, para no penalizar zonas distintas de UTC.
   const relojPared = new Date(utc + minutosZona * 60000);
-  const validaCalendario = relojPared.getUTCFullYear() === Number(año)
-    && relojPared.getUTCMonth() + 1 === Number(mes)
-    && relojPared.getUTCDate() === Number(dia)
-    && relojPared.getUTCHours() === Number(hora)
-    && relojPared.getUTCMinutes() === Number(minuto)
-    && relojPared.getUTCSeconds() === Number(segundos)
-    && relojPared.getUTCMilliseconds() === milisegundos;
-
+  const validaCalendario =
+    relojPared.getUTCFullYear() === Number(año) &&
+    relojPared.getUTCMonth() + 1 === Number(mes) &&
+    relojPared.getUTCDate() === Number(dia) &&
+    relojPared.getUTCHours() === Number(hora) &&
+    relojPared.getUTCMinutes() === Number(minuto) &&
+    relojPared.getUTCSeconds() === Number(segundos) &&
+    relojPared.getUTCMilliseconds() === milisegundos;
   if (!validaCalendario) {
-    throw errorValidacion('La fecha de la consulta no es valida.', [{
-      field: 'fecha',
-      message: 'La fecha indicada no existe o excede la precision aceptada.',
-    }]);
+    throw errorValidacion('La fecha de la consulta no es valida.', [
+      {
+        field: 'fecha',
+        message: 'La fecha indicada no existe o excede la precision aceptada.'
+      }
+    ]);
   }
-
   return fecha;
 }
 
@@ -145,18 +154,18 @@ export function validarFechaVersion(fechaValor) {
  * @throws {Error} ADMIN_VALIDACION cuando falta, no es entero o excede rango.
  */
 export function validarRevision(revisionValor) {
-  const texto = typeof revisionValor === 'string' || typeof revisionValor === 'number'
-    ? String(revisionValor)
-    : '';
-  const valido = /^[0-9]+$/.test(texto)
-    && !/^0[0-9]/.test(texto)
-    && Number(texto) <= 4294967295;
-
+  const texto =
+    typeof revisionValor === 'string' || typeof revisionValor === 'number'
+      ? String(revisionValor)
+      : '';
+  const valido = /^[0-9]+$/.test(texto) && !/^0[0-9]/.test(texto) && Number(texto) <= 4294967295;
   if (!valido) {
-    throw errorValidacion('La revision enviada no es valida.', [{
-      field: 'revision',
-      message: 'Debe ser el contador de revision actual de la version (entero sin signo).',
-    }]);
+    throw errorValidacion('La revision enviada no es valida.', [
+      {
+        field: 'revision',
+        message: 'Debe ser el contador de revision actual de la version (entero sin signo).'
+      }
+    ]);
   }
   return Number(texto);
 }
@@ -170,12 +179,19 @@ export function validarRevision(revisionValor) {
  */
 export function validarPrecioEdicion(precioValor) {
   const texto = String(precioValor ?? '');
-  if (!esImporteValido(texto, { maximo: '99999999.99', decimales: 2 })
-    || compararImportes(texto, '0') !== 1) {
-    throw errorValidacion('El precio enviado no es valido.', [{
-      field: 'precio',
-      message: 'Debe ser un importe positivo con hasta dos decimales.',
-    }]);
+  if (
+    !esImporteValido(texto, {
+      maximo: '99999999.99',
+      decimales: 2
+    }) ||
+    compararImportes(texto, '0') !== 1
+  ) {
+    throw errorValidacion('El precio enviado no es valido.', [
+      {
+        field: 'precio',
+        message: 'Debe ser un importe positivo con hasta dos decimales.'
+      }
+    ]);
   }
   return texto;
 }
@@ -190,10 +206,13 @@ export function validarPrecioEdicion(precioValor) {
 export function validarPorcentajeAumento(porcentajeValor) {
   const texto = String(porcentajeValor ?? '');
   if (!esPorcentajeValido(texto) || compararImportes(texto, '0') !== 1) {
-    throw errorValidacion('El porcentaje de aumento no es valido.', [{
-      field: 'porcentaje',
-      message: 'Debe ser un porcentaje positivo mayor a cero y menor a 100 con hasta dos decimales.',
-    }]);
+    throw errorValidacion('El porcentaje de aumento no es valido.', [
+      {
+        field: 'porcentaje',
+        message:
+          'Debe ser un porcentaje positivo mayor a cero y menor a 100 con hasta dos decimales.'
+      }
+    ]);
   }
   return texto;
 }
@@ -206,17 +225,18 @@ export function validarPorcentajeAumento(porcentajeValor) {
  * @throws {Error} ADMIN_VALIDACION con modalidades desconocidas.
  */
 export function validarModalidadOpcional(tipoIngresoValor) {
-  if (tipoIngresoValor === undefined || tipoIngresoValor === null
-    || tipoIngresoValor === '') {
+  if (tipoIngresoValor === undefined || tipoIngresoValor === null || tipoIngresoValor === '') {
     return null;
   }
   if (TIPOS_INGRESO.includes(tipoIngresoValor)) {
     return tipoIngresoValor;
   }
-  throw errorValidacion('La modalidad del aumento no es valida.', [{
-    field: 'tipoIngreso',
-    message: 'Debe ser Obligatorio, Voluntario o omitirse para aplicar a ambas.',
-  }]);
+  throw errorValidacion('La modalidad del aumento no es valida.', [
+    {
+      field: 'tipoIngreso',
+      message: 'Debe ser Obligatorio, Voluntario o omitirse para aplicar a ambas.'
+    }
+  ]);
 }
 
 /**
@@ -232,10 +252,12 @@ export function validarModalidadOpcional(tipoIngresoValor) {
 export function validarMotivoDescarte(motivoValor) {
   const texto = typeof motivoValor === 'string' ? motivoValor.trim() : '';
   if (texto.length === 0 || texto.length > 200) {
-    throw errorValidacion('El motivo del descarte no es valido.', [{
-      field: 'motivo',
-      message: 'Debe explicar en texto breve (maximo 200 caracteres) la razon del descarte.',
-    }]);
+    throw errorValidacion('El motivo del descarte no es valido.', [
+      {
+        field: 'motivo',
+        message: 'Debe explicar en texto breve (maximo 200 caracteres) la razon del descarte.'
+      }
+    ]);
   }
   return texto;
 }

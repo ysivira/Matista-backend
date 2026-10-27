@@ -1,3 +1,12 @@
+/**
+ * Valida y aplica migraciones únicamente sobre las bases permitidas.
+ */
+
+/*
+ * Solo admite las bases matista_dev y matista_test; rechaza DROP, USE,
+ * usuarios, permisos y toda sentencia fuera de la tabla objetivo declarada.
+ */
+
 import { createHash } from 'node:crypto';
 import { readdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -11,12 +20,12 @@ const ALTER_TARGET_PATTERN = /^ALTER\s+TABLE\s+`?([a-z0-9_]+)`?\b/i;
 const UPDATE_TARGET_PATTERN = /^UPDATE\s+`?([a-z0-9_]+)`?\b/i;
 const CREATE_TABLE_PATTERN = /^CREATE\s+TABLE\b/i;
 // DROP solo se prohibe salvo cuando es un DROP CHECK (ajuste de restricciones declarativas).
-const FORBIDDEN_SQL_PATTERN = /\b(USE|DROP(?!\s+CHECK)|CREATE\s+DATABASE|ALTER\s+USER|CREATE\s+USER|GRANT|REVOKE)\b/i;
+const FORBIDDEN_SQL_PATTERN =
+  /\b(USE|DROP(?!\s+CHECK)|CREATE\s+DATABASE|ALTER\s+USER|CREATE\s+USER|GRANT|REVOKE)\b/i;
 const LOCAL_MIGRATION_TARGETS = new Map([
   ['development', 'matista_dev'],
-  ['test', 'matista_test'],
+  ['test', 'matista_test']
 ]);
-
 const SCHEMA_MIGRATIONS_SQL = `
   CREATE TABLE IF NOT EXISTS schema_migrations (
     version VARCHAR(100)
@@ -31,7 +40,13 @@ const SCHEMA_MIGRATIONS_SQL = `
     COLLATE utf8mb4_0900_ai_ci
 `;
 
+/** Error que señala inconsistencias del estado de migraciones con detalles adicionales. */
 export class MigrationStateError extends Error {
+  /**
+   * Conserva el mensaje y los detalles de una inconsistencia de migración.
+   * @param {string} message Descripción del estado inválido.
+   * @param {object} [details] Contexto adicional para el diagnóstico.
+   */
   constructor(message, details = {}) {
     super(message);
     this.name = 'MigrationStateError';
@@ -39,26 +54,29 @@ export class MigrationStateError extends Error {
   }
 }
 
+/**
+ * Garantiza que las migraciones apunten a la base autorizada del entorno.
+ * @param {object} config Configuración de base de datos con nodeEnv y database.
+ * @returns {void}
+ * @throws {Error} Si el entorno no es development/matista_dev o test/matista_test.
+ */
 export function assertMigrationTarget(config) {
   const expectedDatabase = LOCAL_MIGRATION_TARGETS.get(config.nodeEnv);
-
   if (!expectedDatabase || config.database !== expectedDatabase) {
-    throw new Error(
-      'El runner solo admite development/matista_dev o test/matista_test.',
-    );
+    throw new Error('El runner solo admite development/matista_dev o test/matista_test.');
   }
 }
 
+/** Separa sentencias ejecutables eliminando líneas de comentario SQL y vacías. */
 function executableStatements(sql) {
   const withoutLineComments = sql
     .split('\n')
-    .filter((line) => !line.trimStart().startsWith('--'))
+    .filter(line => !line.trimStart().startsWith('--'))
     .join('\n')
     .trim();
-
   return withoutLineComments
     .split(';')
-    .map((statement) => statement.trim())
+    .map(statement => statement.trim())
     .filter(Boolean);
 }
 
@@ -84,58 +102,45 @@ function isAllowedAlterStatement(statement, targetTable) {
  */
 export function validateMigrationDefinition(fileName, sql) {
   const fileMatch = fileName.match(MIGRATION_FILE_PATTERN);
-
   if (!fileMatch) {
-    throw new Error(
-      `Nombre de migracion invalido: ${fileName}. `
-      + 'Se esperaba NNN_nombre.sql.',
-    );
+    throw new Error(`Nombre de migracion invalido: ${fileName}. ` + 'Se esperaba NNN_nombre.sql.');
   }
 
   const targetMatch = sql.match(TARGET_TABLE_PATTERN);
-
   if (!targetMatch) {
-    throw new Error(
-      `${fileName} debe declarar -- matista:target-table <tabla>.`,
-    );
+    throw new Error(`${fileName} debe declarar -- matista:target-table <tabla>.`);
   }
 
   const kindHeaders = sql.match(KIND_GLOBAL_PATTERN) ?? [];
-
   if (kindHeaders.length > 1) {
     throw new Error(`${fileName} solo puede declarar un tipo de migracion.`);
   }
 
   const kind = sql.match(KIND_PATTERN)?.[1] ?? 'create';
-
   if (FORBIDDEN_SQL_PATTERN.test(sql)) {
     throw new Error(`${fileName} contiene una operacion SQL no permitida.`);
   }
 
   const statements = executableStatements(sql);
-
   if (kind === 'create') {
     if (statements.length !== 1 || !CREATE_TABLE_PATTERN.test(statements[0])) {
-      throw new Error(
-        `${fileName} debe contener exactamente un CREATE TABLE.`,
-      );
+      throw new Error(`${fileName} debe contener exactamente un CREATE TABLE.`);
     }
   }
 
   if (
-    kind === 'alter'
-    && (statements.length === 0
-      || !statements.some((statement) => ALTER_STATEMENT_PATTERN.test(statement))
-      || statements.some((statement) => !isAllowedAlterStatement(statement, targetMatch[1])))
+    kind === 'alter' &&
+    (statements.length === 0 ||
+      !statements.some(statement => ALTER_STATEMENT_PATTERN.test(statement)) ||
+      statements.some(statement => !isAllowedAlterStatement(statement, targetMatch[1])))
   ) {
     throw new Error(
-      `${fileName} de tipo alter solo admite ALTER TABLE y UPDATE de backfill `
-      + 'sobre su tabla objetivo.',
+      `${fileName} de tipo alter solo admite ALTER TABLE y UPDATE de backfill ` +
+        'sobre su tabla objetivo.'
     );
   }
 
   const version = `${fileMatch[1]}_${fileMatch[2]}`;
-
   return Object.freeze({
     fileName,
     version,
@@ -143,18 +148,27 @@ export function validateMigrationDefinition(fileName, sql) {
     targetTable: targetMatch[1],
     checksum: createHash('sha256').update(sql).digest('hex'),
     sql: kind === 'create' ? `${statements[0]};` : statements.join(';\n'),
-    statements: kind === 'create' ? Object.freeze([statements[0]]) : Object.freeze(statements),
+    statements: kind === 'create' ? Object.freeze([statements[0]]) : Object.freeze(statements)
   });
 }
-
+/**
+ * Carga, valida y ordena todas las migraciones SQL del directorio indicado.
+ * @param {string} migrationsDirectory Directorio con archivos NNN_nombre.sql.
+ * @returns {Promise<Array>} Definiciones validadas, ordenadas y congeladas.
+ * @throws {Error} Si alguna migración no cumple el contrato declarado.
+ */
 export async function loadMigrations(migrationsDirectory) {
-  const entries = await readdir(migrationsDirectory, { withFileTypes: true });
-  const fileNames = entries
-    .filter((entry) => entry.isFile() && entry.name.endsWith('.sql'))
-    .map((entry) => entry.name)
-    .sort();
-  const migrations = [];
+  const entries = await readdir(migrationsDirectory, {
+    withFileTypes: true
+  });
 
+  const fileNames = entries
+    .filter(entry => entry.isFile() &&
+      entry.name.endsWith('.sql'))
+    .map(entry => entry.name)
+    .sort();
+
+  const migrations = [];
   for (const fileName of fileNames) {
     const sql = await readFile(path.join(migrationsDirectory, fileName), 'utf8');
     migrations.push(validateMigrationDefinition(fileName, sql));
@@ -162,7 +176,6 @@ export async function loadMigrations(migrationsDirectory) {
 
   const versions = new Set();
   const createdTargets = new Set();
-
   for (const migration of migrations) {
     if (versions.has(migration.version)) {
       throw new Error(`Version de migracion duplicada: ${migration.version}.`);
@@ -171,39 +184,43 @@ export async function loadMigrations(migrationsDirectory) {
     // Un solo CREATE TABLE por tabla; las migraciones alter ajustan tablas ya creadas.
     if (migration.kind === 'create' && createdTargets.has(migration.targetTable)) {
       throw new Error(
-        `Tabla objetivo duplicada en migraciones iniciales: `
-        + `${migration.targetTable}.`,
+        `Tabla objetivo duplicada en migraciones iniciales: ` + `${migration.targetTable}.`
       );
     }
-
     versions.add(migration.version);
-
     if (migration.kind === 'create') {
       createdTargets.add(migration.targetTable);
     }
   }
-
   return migrations;
 }
 
-export function assessMigrationState(
-  migrations,
-  appliedMigrations,
-  existingTables,
-) {
-  const migrationsByVersion = new Map(
-    migrations.map((migration) => [migration.version, migration]),
-  );
-  const appliedByVersion = new Map(
-    appliedMigrations.map((migration) => [migration.version, migration]),
-  );
-  const tables = new Set(existingTables);
+/**
+ * Compara migraciones del repositorio con el estado registrado en la base.
+ * Detecta versiones aplicadas sin archivo, checksums alterados y tablas
+ * creadas sin registro (aplicación parcial).
+ * @param {Array} migrations Definiciones cargadas del repositorio.
+ * @param {Array} appliedMigrations Filas leídas de schema_migrations.
+ * @param {Array} existingTables Tablas objetivo ya presentes en la base.
+ * @returns {object} Listas congeladas de migraciones aplicadas y pendientes.
+ * @throws {MigrationStateError} Si el estado registrado es inconsistente.
+ */
 
+export function assessMigrationState(migrations, appliedMigrations, existingTables) {
+  const migrationsByVersion = new Map(migrations.map(migration => [migration.version, migration]));
+  const appliedByVersion = new Map(
+    appliedMigrations.map(migration => [migration.version, migration])
+  );
+
+  const tables = new Set(existingTables);
   for (const applied of appliedMigrations) {
     if (!migrationsByVersion.has(applied.version)) {
       throw new MigrationStateError(
         `La version aplicada ${applied.version} no existe en el repositorio.`,
-        { type: 'missing-file', version: applied.version },
+        {
+          type: 'missing-file',
+          version: applied.version
+        }
       );
     }
   }
@@ -219,32 +236,35 @@ export function assessMigrationState(
     if (record && record.checksum !== migration.checksum) {
       throw new MigrationStateError(
         `El checksum de ${migration.version} no coincide con el registrado.`,
-        { type: 'checksum-mismatch', version: migration.version },
+        {
+          type: 'checksum-mismatch',
+          version: migration.version
+        }
       );
     }
 
     if (record && !tableExists) {
       throw new MigrationStateError(
-        `La version ${migration.version} figura aplicada, pero falta la tabla `
-        + `${migration.targetTable}.`,
+        `La version ${migration.version} figura aplicada, pero falta la tabla ` +
+          `${migration.targetTable}.`,
         {
           type: 'missing-target',
           version: migration.version,
-          targetTable: migration.targetTable,
-        },
+          targetTable: migration.targetTable
+        }
       );
     }
 
     // Para alter la tabla objetivo ya existe por diseño; su ausencia de registro es la vía normal.
     if (!record && tableExists && kind === 'create') {
       throw new MigrationStateError(
-        `Aplicacion parcial detectada: existe la tabla `
-        + `${migration.targetTable}, pero no la version ${migration.version}.`,
+        `Aplicacion parcial detectada: existe la tabla ` +
+          `${migration.targetTable}, pero no la version ${migration.version}.`,
         {
           type: 'untracked-target',
           version: migration.version,
-          targetTable: migration.targetTable,
-        },
+          targetTable: migration.targetTable
+        }
       );
     }
 
@@ -254,34 +274,45 @@ export function assessMigrationState(
       pending.push(migration);
     }
   }
-
-  return Object.freeze({ applied, pending });
+  return Object.freeze({
+    applied,
+    pending
+  });
 }
 
+/** Lee versiones y checksums registrados, en orden de versión. */
 async function readAppliedMigrations(connection) {
   const [rows] = await connection.query(
-    'SELECT version, checksum FROM schema_migrations ORDER BY version',
+    'SELECT version, checksum FROM schema_migrations ORDER BY version'
   );
   return rows;
 }
 
+/** Lista las tablas objetivo que ya existen en la base, para detectar aplicaciones parciales. */
 async function readExistingTargetTables(connection, database, migrations) {
   if (migrations.length === 0) {
     return [];
   }
-
-  const targetTables = migrations.map((migration) => migration.targetTable);
+  const targetTables = migrations.map(migration => migration.targetTable);
   const placeholders = targetTables.map(() => '?').join(', ');
   const [rows] = await connection.query(
     `SELECT TABLE_NAME AS tableName
        FROM information_schema.TABLES
       WHERE TABLE_SCHEMA = ?
         AND TABLE_NAME IN (${placeholders})`,
-    [database, ...targetTables],
+    [database, ...targetTables]
   );
-
-  return rows.map((row) => row.tableName);
+  return rows.map(row => row.tableName);
 }
+
+/**
+ * Ejecuta las migraciones pendientes bajo lock exclusivo por base.
+ * Verifica la base seleccionada, crea la tabla técnica si falta, aplica cada
+ * migración pendiente y registra su checksum; omite las ya aplicadas.
+ * @param {object} options Pool, configuración validada y directorio de migraciones.
+ * @returns {Promise<object>} Versiones aplicadas ahora y omitidas por ya presentes.
+ * @throws {MigrationStateError} Ante aplicaciones parciales o fallos de registro.
+ */
 
 export async function runMigrations({ pool, config, migrationsDirectory }) {
   assertMigrationTarget(config);
@@ -291,43 +322,29 @@ export async function runMigrations({ pool, config, migrationsDirectory }) {
   let lockAcquired = false;
 
   try {
-    const [databaseRows] = await connection.query(
-      'SELECT DATABASE() AS databaseName',
-    );
+    const [databaseRows] = await connection.query('SELECT DATABASE() AS databaseName');
     const selectedDatabase = databaseRows[0]?.databaseName;
-
     if (selectedDatabase !== config.database) {
       throw new Error(
-        `La conexion selecciono ${selectedDatabase ?? 'ninguna base'}; `
-        + `se esperaba ${config.database}.`,
+        `La conexion selecciono ${selectedDatabase ?? 'ninguna base'}; ` +
+          `se esperaba ${config.database}.`
       );
     }
 
-    const [lockRows] = await connection.query(
-      'SELECT GET_LOCK(?, 10) AS acquired',
-      [lockName],
-    );
-
+    const [lockRows] = await connection.query('SELECT GET_LOCK(?, 10) AS acquired', [lockName]);
     if (lockRows[0]?.acquired !== 1) {
       throw new Error(`No se pudo adquirir el lock de migraciones ${lockName}.`);
     }
 
     lockAcquired = true;
+
     await connection.query(SCHEMA_MIGRATIONS_SQL);
 
     const appliedMigrations = await readAppliedMigrations(connection);
-    const existingTables = await readExistingTargetTables(
-      connection,
-      config.database,
-      migrations,
-    );
-    const state = assessMigrationState(
-      migrations,
-      appliedMigrations,
-      existingTables,
-    );
-    const newlyApplied = [];
+    const existingTables = await readExistingTargetTables(connection, config.database, migrations);
+    const state = assessMigrationState(migrations, appliedMigrations, existingTables);
 
+    const newlyApplied = [];
     for (const migration of state.pending) {
       for (const statement of migration.statements) {
         await connection.query(statement);
@@ -337,28 +354,26 @@ export async function runMigrations({ pool, config, migrationsDirectory }) {
         await connection.query(
           `INSERT INTO schema_migrations (version, checksum)
            VALUES (?, ?)`,
-          [migration.version, migration.checksum],
+          [migration.version, migration.checksum]
         );
       } catch (error) {
         throw new MigrationStateError(
-          `La tabla ${migration.targetTable} fue creada, pero no se pudo `
-          + `registrar ${migration.version}. La siguiente ejecucion se `
-          + 'detendra para diagnostico.',
+          `La tabla ${migration.targetTable} fue creada, pero no se pudo ` +
+            `registrar ${migration.version}. La siguiente ejecucion se ` +
+            'detendra para diagnostico.',
           {
             type: 'version-registration-failed',
             version: migration.version,
             targetTable: migration.targetTable,
-            cause: error,
-          },
+            cause: error
+          }
         );
       }
-
       newlyApplied.push(migration.version);
     }
-
     return Object.freeze({
       applied: newlyApplied,
-      skipped: state.applied.map((migration) => migration.version),
+      skipped: state.applied.map(migration => migration.version)
     });
   } finally {
     try {

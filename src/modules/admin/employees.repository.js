@@ -1,8 +1,13 @@
-// Repositorio ADMIN de gestion de empleados (SL-1, SPEC-03).
-// Consultas y escrituras sobre las tablas AUTH existentes (empleados y
-// empleados_correos); las sesiones y la auditoria se gestionan con los
-// primitivos de AUTH reutilizados por el servicio. Ningun DDL nuevo.
+/**
+ * Consulta y actualiza empleados mediante sentencias parametrizadas.
+ */
 
+/*
+ * Repositorio ADMIN de gestion de empleados (SL-1, SPEC-03).
+ * Consultas y escrituras sobre las tablas AUTH existentes (empleados y
+ * empleados_correos); las sesiones y la auditoria se gestionan con los
+ * primitivos de AUTH reutilizados por el servicio. Ningun DDL nuevo.
+ */
 /**
  * Lista empleados con su correo ACTUAL y filtros opcionales ya validados
  * por el servicio.
@@ -18,7 +23,6 @@
 export async function listarEmpleados(connection, { estado, rol, busqueda } = {}) {
   const condiciones = [];
   const valores = [];
-
   if (estado) {
     condiciones.push('e.estado = ?');
     valores.push(estado);
@@ -31,12 +35,11 @@ export async function listarEmpleados(connection, { estado, rol, busqueda } = {}
     // Coincidencia parcial case-insensitive; el servicio ya escapo % _ y \\.
     const patron = `%${busqueda}%`;
     condiciones.push(
-      '(e.legajo LIKE ? OR e.nombre LIKE ? OR e.segundo_nombre LIKE ?'
-      + ' OR e.apellido LIKE ? OR e.segundo_apellido LIKE ? OR c.email LIKE ?)',
+      '(e.legajo LIKE ? OR e.nombre LIKE ? OR e.segundo_nombre LIKE ?' +
+        ' OR e.apellido LIKE ? OR e.segundo_apellido LIKE ? OR c.email LIKE ?)'
     );
     valores.push(patron, patron, patron, patron, patron, patron);
   }
-
   const donde = condiciones.length ? `WHERE ${condiciones.join(' AND ')}` : '';
   const [filas] = await connection.query(
     `SELECT e.legajo, e.nombre, e.segundo_nombre, e.apellido, e.segundo_apellido,
@@ -49,7 +52,7 @@ export async function listarEmpleados(connection, { estado, rol, busqueda } = {}
          ) c ON c.legajo = e.legajo
        ${donde}
       ORDER BY e.apellido, e.nombre, e.legajo`,
-    valores,
+    valores
   );
   return filas;
 }
@@ -72,7 +75,7 @@ export async function obtenerEmpleado(connection, legajo) {
                WHERE estado = 'ACTUAL'
          ) c ON c.legajo = e.legajo
       WHERE e.legajo = ?`,
-    [legajo],
+    [legajo]
   );
   return filas[0];
 }
@@ -90,7 +93,7 @@ export async function contarAdminsActivos(connection, legajoExcluido) {
     `SELECT COUNT(*) AS total
        FROM empleados
       WHERE rol = 'ADMIN' AND estado = 'ACTIVO' AND legajo <> ?`,
-    [legajoExcluido],
+    [legajoExcluido]
   );
   return Number(filas[0].total);
 }
@@ -110,13 +113,11 @@ export async function contarAdminsActivos(connection, legajoExcluido) {
  * - Retorna: nada; los bloqueos se liberan al commit o rollback del servicio.
  */
 export async function bloquearAdminsActivos(connection) {
-  await connection.query(
-    `SELECT legajo
+  await connection.query(`SELECT legajo
        FROM empleados
       WHERE rol = 'ADMIN' AND estado = 'ACTIVO'
       ORDER BY legajo
-      FOR UPDATE`,
-  );
+      FOR UPDATE`);
 }
 
 /**
@@ -128,10 +129,7 @@ export async function bloquearAdminsActivos(connection) {
  * - Retorna: nada; el UPDATE se confirma al hacer commit el servicio.
  */
 export async function actualizarEstado(connection, legajo, estado) {
-  await connection.execute(
-    'UPDATE empleados SET estado = ? WHERE legajo = ?',
-    [estado, legajo],
-  );
+  await connection.execute('UPDATE empleados SET estado = ? WHERE legajo = ?', [estado, legajo]);
 }
 
 /**
@@ -142,10 +140,7 @@ export async function actualizarEstado(connection, legajo, estado) {
  * - Retorna: nada; confirma al hacer el commit del servicio.
  */
 export async function actualizarRol(connection, legajo, rol) {
-  await connection.execute(
-    'UPDATE empleados SET rol = ? WHERE legajo = ?',
-    [rol, legajo],
-  );
+  await connection.execute('UPDATE empleados SET rol = ? WHERE legajo = ?', [rol, legajo]);
 }
 
 /**
@@ -156,5 +151,7 @@ export async function actualizarRol(connection, legajo, rol) {
  * - Retorna: string escapado para usar dentro del patron LIKE.
  */
 export function escaparBusqueda(busqueda) {
-  return String(busqueda).trim().replace(/([%_\\])/g, '\\$1');
+  return String(busqueda)
+    .trim()
+    .replace(/([%_\\])/g, '\\$1');
 }

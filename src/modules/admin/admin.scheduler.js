@@ -1,8 +1,13 @@
-// Activador programado de políticas comerciales (ciclo de vida SPEC-03).
-// Toda escritura real la resuelve el servicio transaccional: este módulo
-// solo consulta el scheduler del proceso e ignora activaciones vencidas
-// (la lectura hace activación preventiva, el intervalo solo la adelanta).
+/**
+ * Programa la activación de versiones administrativas pendientes.
+ */
 
+/*
+ * Activador programado de políticas comerciales (ciclo de vida SPEC-03).
+ * Toda escritura real la resuelve el servicio transaccional: este módulo
+ * solo consulta el scheduler del proceso e ignora activaciones vencidas
+ * (la lectura hace activación preventiva, el intervalo solo la adelanta).
+ */
 import { activarPoliticasProgramadas } from './politica-comercial.service.js';
 
 /** Referencia al intervalo activo del proceso, si existe. */
@@ -27,7 +32,6 @@ export function iniciarActivadorPoliticas(pool, { intervaloMs = 30000 } = {}) {
       console.warn('Activador de políticas:', error.code ?? 'ERROR_INESPERADO');
     }
   }
-
   const temporizador = setInterval(ciclo, intervaloMs);
   // No debe impedir el apagado ordenado del proceso.
   temporizador.unref?.();

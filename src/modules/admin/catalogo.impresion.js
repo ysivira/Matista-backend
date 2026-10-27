@@ -11,7 +11,15 @@ import { renderizarCatalogo } from './documentos/catalogo.plantilla.js';
 export async function documentoCatalogoHtml(datos, tipo, imprimir = false) {
   const plan = tipo === 'plan' ? datos : datos.plan;
   const color = colorPlanPdf(plan.nombre);
-  const titulo = tipo === 'cotizacion' ? 'Cotización comercial' : tipo === 'plan' ? 'Prestaciones y coberturas' : 'Lista de precios';
-  const encabezados = tipo === 'cotizacion' ? ['Concepto', 'Detalle', 'Importe'] : tipo === 'plan' ? ['Prestación', 'Cobertura', 'Observaciones'] : ['Segmento tarifario', 'Precio vigente'];
+  const titulo = tipo === 'cotizacion'
+    ? 'Cotización comercial'
+    : tipo === 'plan'
+      ? 'Prestaciones y coberturas'
+      : 'Lista de precios';
+  const encabezados = tipo === 'cotizacion'
+    ? ['Concepto', 'Detalle', 'Importe']
+    : tipo === 'plan'
+      ? ['Prestación', 'Cobertura', 'Observaciones']
+      : ['Segmento tarifario', 'Precio vigente'];
   return renderizarCatalogo({ datos, tipo, imprimir, plan, color, titulo, encabezados });
 }

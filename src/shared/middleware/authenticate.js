@@ -1,3 +1,6 @@
+/**
+ * Autentica la sesión y adjunta la identidad a la solicitud.
+ */
 import { authenticateToken } from '../../modules/auth/auth.service.js';
 import { AUTH_COOKIE_NAME } from '../../modules/auth/auth.constants.js';
 import { createAppError } from '../errors/app-error.js';

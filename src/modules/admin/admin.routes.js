@@ -1,6 +1,11 @@
-// Router agregador de SPEC-03 ADMIN: comparte infraestructura AUTH entre los
-// slices y conserva un unico fallback despues de todas las rutas conocidas.
+/**
+ * Compone las rutas y los controles de acceso de ADMIN.
+ */
 
+/*
+ * Router agregador de SPEC-03 ADMIN: comparte infraestructura AUTH entre los
+ * slices y conserva un unico fallback despues de todas las rutas conocidas.
+ */
 import { Router } from 'express';
 import cookieParser from 'cookie-parser';
 import { loadAuthHttpPolicy } from '../auth/auth.constants.js';
@@ -20,8 +25,8 @@ export function createAdminRouter({ env, context } = {}) {
   const router = Router();
   const httpPolicy = loadAuthHttpPolicy(env);
   let runtime;
-
   router.use(cookieParser());
+  /** Asigna política HTTP y evita caché de respuestas personales o errores de sesión. */
   router.use((req, res, next) => {
     req.authHttp = httpPolicy;
     res.set('Cache-Control', 'no-store');
@@ -42,13 +47,10 @@ export function createAdminRouter({ env, context } = {}) {
     }
     next();
   });
-
   router.use(createEmployeesRouter());
   router.use(createTarifarioRouter());
-  router.use((req, res, next) => next(createAppError(
-    'ADMIN_ROUTE_NOT_FOUND',
-    'La ruta ADMIN no existe.',
-    404,
-  )));
+  router.use((req, res, next) =>
+    next(createAppError('ADMIN_ROUTE_NOT_FOUND', 'La ruta ADMIN no existe.', 404))
+  );
   return router;
 }

@@ -1,12 +1,17 @@
-// Auditoria transaccional compartida de SPEC-03 ADMIN.
-// Los eventos VERSION_* del tarifario se escriben en la tabla
-// empleados_auditoria existente (infraestructura AUTH), respetando el
-// CHECK incorporado por la migracion 012. La fila se inserta con la
-// MISMA conexion de la operacion administrativa: si la auditoria falla,
-// la operacion no se confirma. Convencion reservada para TARIFARIO:
-// legajo = actor_legajo (referencia propia coherente con el patron AUTH,
-// porque la entidad afectada es una version y no un empleado).
+/**
+ * Registra eventos administrativos en la conexión de la operación.
+ */
 
+/*
+ * Auditoria transaccional compartida de SPEC-03 ADMIN.
+ * Los eventos VERSION_* del tarifario se escriben en la tabla
+ * empleados_auditoria existente (infraestructura AUTH), respetando el
+ * CHECK incorporado por la migracion 012. La fila se inserta con la
+ * MISMA conexion de la operacion administrativa: si la auditoria falla,
+ * la operacion no se confirma. Convencion reservada para TARIFARIO:
+ * legajo = actor_legajo (referencia propia coherente con el patron AUTH,
+ * porque la entidad afectada es una version y no un empleado).
+ */
 import { errorValidacion } from './admin.errors.js';
 
 // Eventos VERSION_* admitidos por el CHECK de la migracion 012; el
@@ -17,7 +22,7 @@ export const EVENTOS_VERSION = Object.freeze([
   'VERSION_PROGRAMADA',
   'VERSION_CANCELADA',
   'VERSION_REACTIVADA',
-  'VERSION_REVERTIDA',
+  'VERSION_REVERTIDA'
 ]);
 
 /**
@@ -52,7 +57,7 @@ export async function registrarAuditoriaVersion(
   actorLegajo,
   valorAnterior,
   valorNuevo,
-  fechaLocalizada,
+  fechaLocalizada
 ) {
   if (!EVENTOS_VERSION.includes(evento)) {
     throw errorValidacion(`Evento de auditoria ADMIN no permitido: ${evento}`);
@@ -61,6 +66,6 @@ export async function registrarAuditoriaVersion(
     `INSERT INTO empleados_auditoria
       (legajo, actor_legajo, evento, campo, valor_anterior, valor_nuevo, created_at)
      VALUES (?, ?, ?, 'TARIFARIO', ?, ?, ?)`,
-    [actorLegajo, actorLegajo, evento, valorAnterior, valorNuevo, fechaLocalizada],
+    [actorLegajo, actorLegajo, evento, valorAnterior, valorNuevo, fechaLocalizada]
   );
 }
