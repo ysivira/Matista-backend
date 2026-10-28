@@ -1,3 +1,16 @@
+-- ============================================================
+-- MATISTA | COMPROBACIONES DEL CICLO TARIFARIO
+-- ============================================================
+--
+-- Archivo: 013_015_post.sql
+-- Módulo: Verificación de migraciones
+--
+-- Responsabilidad:
+-- Consultar historial, columnas, índices y restricciones del
+-- ciclo tarifario tras sus migraciones, sin realizar escrituras.
+--
+-- ============================================================
+
 -- Verificaciones POSTERIORES a 013/014/015 (solo lectura).
 -- Ejecutar contra la base objetivo despues de correr `npm run db:migrate`:
 --   mysql -h<host> -P<puerto> -u<usuario> -p <base> < migrations/verificaciones/013_015_post.sql

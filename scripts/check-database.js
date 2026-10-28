@@ -1,5 +1,16 @@
 /**
- * Comprueba la conexión y la identidad de la base de datos configurada.
+ * ============================================================
+ * MATISTA | VERIFICACIÓN DE CONEXIÓN
+ * ============================================================
+ *
+ * Archivo: check-database.js
+ * Módulo: Mantenimiento
+ *
+ * Responsabilidad:
+ * Comprobar la conexión y la identidad de la base configurada,
+ * informar su versión y cerrar el pool al finalizar.
+ *
+ * ============================================================
  */
 import 'dotenv/config';
 import {

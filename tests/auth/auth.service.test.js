@@ -1,3 +1,17 @@
+/**
+ * ============================================================
+ * MATISTA | PRUEBAS DE SERVICIOS AUTH
+ * ============================================================
+ *
+ * Archivo: auth.service.test.js
+ * Módulo: Pruebas de autenticación
+ *
+ * Responsabilidad:
+ * Probar transiciones de cuenta, tokens de un solo uso y
+ * revocación de sesiones con fixtures y notificaciones aisladas.
+ *
+ * ============================================================
+ */
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { verifyPassword } from '../../src/infrastructure/security/password.js';

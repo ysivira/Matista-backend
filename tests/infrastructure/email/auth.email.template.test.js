@@ -1,3 +1,17 @@
+/**
+ * ============================================================
+ * MATISTA | PRUEBAS DE CORREOS AUTH
+ * ============================================================
+ *
+ * Archivo: auth.email.template.test.js
+ * Módulo: Pruebas de correo
+ *
+ * Responsabilidad:
+ * Verificar marca CID, textos, enlaces y escape de los avisos
+ * AUTH mediante captura de mensajes, sin enviar correo real.
+ *
+ * ============================================================
+ */
 import assert from 'node:assert/strict';
 import { existsSync } from 'node:fs';
 import { test } from 'node:test';

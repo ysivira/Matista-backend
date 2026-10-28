@@ -1,3 +1,17 @@
+/**
+ * ============================================================
+ * MATISTA | REGRESIONES DE BENEFICIO JOVEN
+ * ============================================================
+ *
+ * Archivo: fix07.test.js
+ * Módulo: Pruebas comerciales
+ *
+ * Responsabilidad:
+ * Probar topes por período, elegibilidad joven y coherencia
+ * familiar; la comprobación PDF real exige RUN_PDF_TESTS.
+ *
+ * ============================================================
+ */
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { calcularCotizacion } from '../../../src/domain/comercial/cotizacion.engine.js';

@@ -1,5 +1,16 @@
 /**
- * Valida claves, algoritmos y tiempos de la configuración de seguridad.
+ * ============================================================
+ * MATISTA | CONFIGURACIÓN DE SEGURIDAD
+ * ============================================================
+ *
+ * Archivo: config.js
+ * Módulo: Infraestructura de seguridad
+ *
+ * Responsabilidad:
+ * Validar el secreto JWT, las duraciones y la política de
+ * contraseñas, y definir límites de solicitudes AUTH.
+ *
+ * ============================================================
  */
 
 export const PASSWORD_MAX_BYTES = 72;

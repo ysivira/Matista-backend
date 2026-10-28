@@ -1,3 +1,17 @@
+/**
+ * ============================================================
+ * MATISTA | SERVIDOR HTTP DE PRUEBA
+ * ============================================================
+ *
+ * Archivo: http.js
+ * Módulo: Soporte de pruebas
+ *
+ * Responsabilidad:
+ * Montar aplicaciones en loopback, realizar peticiones de prueba
+ * y registrar el cierre del servidor en el contexto de la prueba.
+ *
+ * ============================================================
+ */
 import { createServer, request } from 'node:http';
 import { once } from 'node:events';
 

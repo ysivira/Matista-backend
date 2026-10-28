@@ -1,5 +1,16 @@
 /**
- * Compone las rutas AUTH y sus dependencias y controles HTTP.
+ * ============================================================
+ * MATISTA | RUTAS DE CUENTA
+ * ============================================================
+ *
+ * Archivo: auth.routes.js
+ * Módulo: Autenticación
+ *
+ * Responsabilidad:
+ * Componer rutas AUTH, validadores y controles HTTP, y compartir
+ * la inicialización diferida del runtime entre módulos.
+ *
+ * ============================================================
  */
 import { randomBytes } from 'node:crypto';
 import { Router } from 'express';

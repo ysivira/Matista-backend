@@ -1,9 +1,20 @@
 /**
- * Centraliza los códigos y errores públicos de ADMIN.
+ * ============================================================
+ * MATISTA | ERRORES ADMINISTRATIVOS
+ * ============================================================
+ *
+ * Archivo: admin.errors.js
+ * Módulo: Administración
+ *
+ * Responsabilidad:
+ * Centralizar códigos de error públicos y traducir conflictos
+ * de integridad MySQL al contrato operativo de ADMIN.
+ *
+ * ============================================================
  */
 
 /*
- * Errores de dominio de SPEC-03 ADMIN sobre el mecanismo existente
+ * Errores de dominio de ADMIN sobre el mecanismo existente
  * de createAppError: mismos contratos que AUTH (codigo estable, mensaje
  * publico y estado HTTP 400-599); sin infraestructura paralela.
  */

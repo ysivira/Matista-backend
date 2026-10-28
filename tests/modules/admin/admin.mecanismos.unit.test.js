@@ -1,6 +1,17 @@
-// Pruebas unitarias de los mecanismos compartidos de SPEC-03 ADMIN
-// (E-LM): precisión monetaria, errores de dominio y whitelist de
-// auditoría. No requieren base de datos.
+/**
+ * ============================================================
+ * MATISTA | PRUEBAS DE MECANISMOS ADMIN
+ * ============================================================
+ *
+ * Archivo: admin.mecanismos.unit.test.js
+ * Módulo: Pruebas administrativas
+ *
+ * Responsabilidad:
+ * Probar precisión monetaria, errores públicos y lista permitida
+ * de auditoría sin utilizar bases de datos.
+ *
+ * ============================================================
+ */
 
 import assert from 'node:assert/strict';
 import { test } from 'node:test';

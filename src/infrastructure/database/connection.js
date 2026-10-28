@@ -1,5 +1,16 @@
 /**
- * Crea el pool MySQL y comprueba la base seleccionada.
+ * ============================================================
+ * MATISTA | CONEXIONES MYSQL
+ * ============================================================
+ *
+ * Archivo: connection.js
+ * Módulo: Infraestructura de base de datos
+ *
+ * Responsabilidad:
+ * Crear pools con referencia UTC y comprobar que la conexión
+ * selecciona la base esperada antes de utilizarla.
+ *
+ * ============================================================
  */
 import mysql from 'mysql2/promise';
 import { loadDatabaseConfig } from './config.js';
@@ -27,7 +38,7 @@ export function createDatabasePool(config = loadDatabaseConfig()) {
 
 /**
  * Verifica la conexión fijando UTC y comprobando la base seleccionada.
- * @param {object} Pool del que se toma una conexión y se libera al final.
+ * @param {object} pool - Pool del que se toma una conexión y se libera al final.
  * @param {string} expectedDatabase Nombre de base que debe reportar DATABASE().
  * @returns {Promise<object>} Nombre real de base y versión del servidor, congelados.
  * @throws {Error} Si la base seleccionada difiere de la esperada o falla la conexión.

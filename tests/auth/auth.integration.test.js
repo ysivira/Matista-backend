@@ -1,3 +1,17 @@
+/**
+ * ============================================================
+ * MATISTA | PRUEBAS HTTP AUTH
+ * ============================================================
+ *
+ * Archivo: auth.integration.test.js
+ * Módulo: Pruebas de autenticación
+ *
+ * Responsabilidad:
+ * Ejercitar registro, sesión y recuperación a través de HTTP
+ * local, con repositorio y notificaciones de prueba en memoria.
+ *
+ * ============================================================
+ */
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { createApp } from '../../src/app.js';

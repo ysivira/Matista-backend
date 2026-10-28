@@ -1,3 +1,17 @@
+/**
+ * ============================================================
+ * MATISTA | PRUEBAS SQL DE PORCENTAJES
+ * ============================================================
+ *
+ * Archivo: porcentajes-comerciales.repository.test.js
+ * Módulo: Pruebas administrativas
+ *
+ * Responsabilidad:
+ * Capturar consultas, bloqueos y auditoría de porcentajes para
+ * conservar parámetros, proyecciones y propagación de errores.
+ *
+ * ============================================================
+ */
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { readFileSync } from 'node:fs';

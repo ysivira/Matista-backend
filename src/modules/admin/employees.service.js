@@ -1,5 +1,16 @@
 /**
- * Gestiona empleados y protege las restricciones de administración de cuentas.
+ * ============================================================
+ * MATISTA | SERVICIOS DEL DIRECTORIO
+ * ============================================================
+ *
+ * Archivo: employees.service.js
+ * Módulo: Administración
+ *
+ * Responsabilidad:
+ * Gestionar cuentas ajenas con guardias de último administrador,
+ * correo verificado, revocación y auditoría transaccional.
+ *
+ * ============================================================
  */
 
 /*
@@ -11,9 +22,9 @@
  *   ACTIVO -> INACTIVO | BAJA (desactivacion y baja logica; RF-D04)
  *   INACTIVO -> ACTIVO | BAJA (reactivacion y baja; RF-D03/D04)
  *   BAJA: estado terminal, no admite reactivacion (RF-D04).
- * Regla SPEC-25: activar o reactivar exige un correo pendiente de estado
- * ACTUAL con verificacion confirmada (verificado_at), igual que el
- * ingreso de AUTH; sin correo verificado la transicion se rechaza.
+ * Regla de negocio: activar o reactivar una cuenta exige que su correo
+ * ACTUAL esté verificado (verificado_at), igual que el ingreso de AUTH;
+ * sin correo verificado la transición se rechaza.
  * Reutiliza contratos de AUTH (withConnection, findEmployee con lock,
  * revokeSessions y audit) y los scripts propios del repositorio ADMIN,
  * sin duplicar el comportamiento AUTH. Las funciones reciben un
@@ -178,10 +189,10 @@ export async function gestionarEstado(
         );
       }
       if (destino === 'ACTIVO') {
-        // Regla SPEC-25: solo se activa o reactiva una cuenta cuyo correo
-        // ACTUAL esta verificado, la misma condicion que exige el ingreso.
-        // Con lock FOR UPDATE para no dejar pasar dos activaciones
-        // concurrentes con el mismo correo sin verificar.
+        // Regla de negocio: solo se activa o reactiva una cuenta cuyo
+        // correo ACTUAL está verificado, la misma condición que exige el
+        // ingreso. Con lock FOR UPDATE para no dejar pasar dos
+        // activaciones concurrentes con el mismo correo sin verificar.
         const correos = await repositorio.findEmails(connection, objetivo.legajo, true);
         if (!correos.some(c => c.estado === 'ACTUAL' && c.verificado_at)) {
           throw errorEstado(

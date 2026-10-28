@@ -1,5 +1,16 @@
 /**
- * Restringe la solicitud a los roles autorizados.
+ * ============================================================
+ * MATISTA | AUTORIZACIÓN POR ROL
+ * ============================================================
+ *
+ * Archivo: authorize.js
+ * Módulo: Middleware compartido
+ *
+ * Responsabilidad:
+ * Restringir solicitudes según el rol actual de la identidad
+ * recargada por el middleware de autenticación.
+ *
+ * ============================================================
  */
 import { createAppError } from '../errors/app-error.js';
 

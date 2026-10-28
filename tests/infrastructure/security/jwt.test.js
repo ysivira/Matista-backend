@@ -1,3 +1,17 @@
+/**
+ * ============================================================
+ * MATISTA | PRUEBAS CRIPTOGRÁFICAS JWT
+ * ============================================================
+ *
+ * Archivo: jwt.test.js
+ * Módulo: Pruebas de seguridad
+ *
+ * Responsabilidad:
+ * Probar firma, claims, tiempos y rechazos de JWT manipulados
+ * o inválidos con claves y relojes de prueba.
+ *
+ * ============================================================
+ */
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { test } from 'node:test';

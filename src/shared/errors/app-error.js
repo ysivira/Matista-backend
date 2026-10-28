@@ -1,5 +1,16 @@
 /**
- * Construye errores operativos con código y estado HTTP públicos.
+ * ============================================================
+ * MATISTA | ERRORES OPERATIVOS
+ * ============================================================
+ *
+ * Archivo: app-error.js
+ * Módulo: Errores compartidos
+ *
+ * Responsabilidad:
+ * Construir e identificar errores con código, estado y datos
+ * públicos, distinguiéndolos de errores ajenos mediante WeakSet.
+ *
+ * ============================================================
  */
 const operationalErrors = new WeakSet();
 

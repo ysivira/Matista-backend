@@ -1,3 +1,17 @@
+/**
+ * ============================================================
+ * MATISTA | GARANTÍAS MYSQL DEL TARIFARIO
+ * ============================================================
+ *
+ * Archivo: tarifario.migraciones.integration.test.js
+ * Módulo: Pruebas administrativas
+ *
+ * Responsabilidad:
+ * Comprobar estados, exclusividad y auditoría declarativa con
+ * transacciones aisladas; requiere habilitar RUN_DB_TESTS.
+ *
+ * ============================================================
+ */
 import 'dotenv/config';
 
 import assert from 'node:assert/strict';

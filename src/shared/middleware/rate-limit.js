@@ -1,12 +1,23 @@
 /**
- * Limita solicitudes por ventana temporal con almacenamiento acotado.
+ * ============================================================
+ * MATISTA | LÍMITES DE SOLICITUDES
+ * ============================================================
+ *
+ * Archivo: rate-limit.js
+ * Módulo: Middleware compartido
+ *
+ * Responsabilidad:
+ * Crear limitadores independientes para operaciones AUTH,
+ * con ventanas, límites y almacenamiento configurables.
+ *
+ * ============================================================
  */
 import { rateLimit } from 'express-rate-limit';
 import { RATE_LIMIT_POLICIES } from '../../infrastructure/security/config.js';
 import { createAppError } from '../errors/app-error.js';
 
 /**
- * Crea un limitador independiente para una operación futura, sin montarlo en rutas.
+ * Crea un limitador independiente; el llamador decide dónde montarlo.
  * @param {'login'|'passwordRecovery'|'verificationResend'} operation Política aprobada.
  * @param {object} overrides Ventana y máximo opcionales; store sustituible en pruebas/despliegue.
  * @returns {Function} Middleware Express con almacén independiente por instancia.

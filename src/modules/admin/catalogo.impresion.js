@@ -1,3 +1,17 @@
+/**
+ * ============================================================
+ * MATISTA | IMPRESIÓN DEL CATÁLOGO
+ * ============================================================
+ *
+ * Archivo: catalogo.impresion.js
+ * Módulo: Catálogo compartido
+ *
+ * Responsabilidad:
+ * Preparar títulos, color y columnas para la plantilla del
+ * catálogo, sin recalcular precios ni beneficios comerciales.
+ *
+ * ============================================================
+ */
 import { colorPlanPdf } from '../../infrastructure/pdf/documento.js';
 import { renderizarCatalogo } from './documentos/catalogo.plantilla.js';
 

@@ -1,3 +1,17 @@
+/**
+ * ============================================================
+ * MATISTA | BÚSQUEDA UNICODE DEL HISTORIAL
+ * ============================================================
+ *
+ * Archivo: historial.repository.test.js
+ * Módulo: Pruebas comerciales
+ *
+ * Responsabilidad:
+ * Verificar búsqueda de nombres con tildes y Ñ y parámetros
+ * del historial mediante una conexión capturadora.
+ *
+ * ============================================================
+ */
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { listarCotizaciones } from '../../../src/modules/asesor/asesor.repository.js';
@@ -5,7 +19,12 @@ import { listarCotizaciones } from '../../../src/modules/asesor/asesor.repositor
 for (const texto of ['PÉREZ GÓMEZ', 'MUÑOZ', 'MAT-123']) {
   /** Conserva el filtro Unicode parametrizado y el cotejo binario del número, sin modificar datos históricos. */
   test(`SPEC21 historial admite filtro Unicode sin convertir parámetros a ASCII: ${texto}`, async () => {
-    const historica = { id: '1', nombres: 'María', apellidos: 'Muñoz', aportes: '[]' };
+    const historica = {
+      id: '1',
+      nombres: 'María',
+      apellidos: 'Muñoz',
+      aportes: '[]'
+    };
     const conexion = {
       /** Captura el SQL real y devuelve únicamente una fila sintética, sin abrir conexiones. */
       async execute(sql, parametros) {
@@ -18,7 +37,13 @@ for (const texto of ['PÉREZ GÓMEZ', 'MUÑOZ', 'MAT-123']) {
       },
     };
     const filas = await listarCotizaciones(conexion, '12345678', {
-      cliente: texto, estado: '', dni: '', plan: '', desde: '', hasta: '', offset: 0,
+      cliente: texto,
+      estado: '',
+      dni: '',
+      plan: '',
+      desde: '',
+      hasta: '',
+      offset: 0,
     });
     assert.deepEqual(filas, [{ ...historica, aportes: [] }]);
     assert.equal(historica.aportes, '[]');

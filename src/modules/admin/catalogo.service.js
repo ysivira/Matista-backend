@@ -1,5 +1,16 @@
 /**
- * Consulta el catálogo y las condiciones comerciales vigentes.
+ * ============================================================
+ * MATISTA | CONSULTA DE CONDICIONES
+ * ============================================================
+ *
+ * Archivo: catalogo.service.js
+ * Módulo: Catálogo compartido
+ *
+ * Responsabilidad:
+ * Presentar la política publicada, aportes y porcentajes vigentes
+ * sin exponer metadatos del responsable ni programación pendiente.
+ *
+ * ============================================================
  */
 import { withConnection } from '../auth/auth.repository.js';
 import { obtenerPoliticaComercial } from './politica-comercial.service.js';

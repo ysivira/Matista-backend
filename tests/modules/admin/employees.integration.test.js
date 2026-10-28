@@ -1,3 +1,18 @@
+/**
+ * ============================================================
+ * MATISTA | INTEGRACIÓN DEL DIRECTORIO
+ * ============================================================
+ *
+ * Archivo: employees.integration.test.js
+ * Módulo: Pruebas administrativas
+ *
+ * Responsabilidad:
+ * Probar acceso HTTP, estados, roles y auditoría con cuentas
+ * exclusivas de prueba; requiere habilitar RUN_DB_TESTS.
+ *
+ * ============================================================
+ */
+
 // Pruebas de integracion HTTP del modulo ADMIN de empleados (SL-1) sobre
 // matista_test con el stack real (pool mysql2, migraciones, JWT y
 // cookie de AUTH). Solo lectura del catalogo permanente; cada cuenta creada

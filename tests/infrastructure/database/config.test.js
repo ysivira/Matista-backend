@@ -1,3 +1,17 @@
+/**
+ * ============================================================
+ * MATISTA | PRUEBAS DE CONFIGURACIÓN MYSQL
+ * ============================================================
+ *
+ * Archivo: config.test.js
+ * Módulo: Pruebas de base de datos
+ *
+ * Responsabilidad:
+ * Validar bases permitidas por entorno, guardas de pruebas y
+ * variables obligatorias sin establecer conexiones reales.
+ *
+ * ============================================================
+ */
 import assert from 'node:assert/strict';
 import test from 'node:test';
 

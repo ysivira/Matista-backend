@@ -1,3 +1,17 @@
+/**
+ * ============================================================
+ * MATISTA | AISLAMIENTO DE INTEGRACIONES
+ * ============================================================
+ *
+ * Archivo: integracion-aislada.test.js
+ * Módulo: Pruebas administrativas
+ *
+ * Responsabilidad:
+ * Inspeccionar las suites MySQL para asegurar limpieza por
+ * propiedad y protección de tablas y registros preexistentes.
+ *
+ * ============================================================
+ */
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';

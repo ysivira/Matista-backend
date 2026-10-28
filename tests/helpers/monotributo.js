@@ -1,5 +1,20 @@
 /**
- * Construye la solicitud sintética del caso DIAMANTE de la SPEC, con importes auditados.
+ * ============================================================
+ * MATISTA | FIXTURE DE MONOTRIBUTO
+ * ============================================================
+ *
+ * Archivo: monotributo.js
+ * Módulo: Soporte de pruebas comerciales
+ *
+ * Responsabilidad:
+ * Construir una solicitud DIAMANTE independiente con importes
+ * estables para probar aportes de titular y adherentes.
+ *
+ * ============================================================
+ */
+
+/**
+ * Construye la solicitud sintética DIAMANTE con importes auditados.
  * @returns {object} Solicitud nueva e independiente; no lee ni modifica configuración MySQL.
  */
 export function solicitudMonotributo() {

@@ -1,3 +1,17 @@
+/**
+ * ============================================================
+ * MATISTA | PRUEBAS TRANSACCIONALES ADMIN
+ * ============================================================
+ *
+ * Archivo: admin.mecanismos.integration.test.js
+ * Módulo: Pruebas administrativas
+ *
+ * Responsabilidad:
+ * Verificar locks, rollback, auditoría y vigencia en MySQL.
+ * Requiere RUN_DB_TESTS; conserva el catálogo permanente.
+ *
+ * ============================================================
+ */
 import 'dotenv/config';
 
 import assert from 'node:assert/strict';

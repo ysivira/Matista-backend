@@ -1,9 +1,20 @@
 /**
- * Adapta las solicitudes HTTP del tarifario a sus casos de uso.
+ * ============================================================
+ * MATISTA | RUTAS DEL TARIFARIO
+ * ============================================================
+ *
+ * Archivo: tarifario.routes.js
+ * Módulo: Administración
+ *
+ * Responsabilidad:
+ * Adaptar consultas y operaciones de tarifas, versiones y políticas
+ * a sus servicios, con autenticación y autorización administrativa.
+ *
+ * ============================================================
  */
 
 /*
- * Endpoints de solo lectura para RF-D06/D07; la infraestructura compartida
+ * Endpoints de consulta y gestión; la infraestructura compartida
  * de cookie, contexto y fallback pertenece al router agregador ADMIN.
  */
 import { Router } from 'express';

@@ -1,3 +1,17 @@
+/**
+ * ============================================================
+ * MATISTA | PRUEBAS DEL MOTOR ECONÓMICO
+ * ============================================================
+ *
+ * Archivo: cotizacion.engine.test.js
+ * Módulo: Pruebas comerciales
+ *
+ * Responsabilidad:
+ * Verificar modalidades, descuentos, aportes, centavos exactos
+ * y bandas etarias mediante solicitudes y tarifas sintéticas.
+ *
+ * ============================================================
+ */
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { calcularCotizacion, segmentoIntegrante } from '../../../src/domain/comercial/cotizacion.engine.js';

@@ -1,3 +1,17 @@
+/**
+ * ============================================================
+ * MATISTA | PRUEBAS DE CONTRASEÑAS
+ * ============================================================
+ *
+ * Archivo: password.test.js
+ * Módulo: Pruebas de seguridad
+ *
+ * Responsabilidad:
+ * Comprobar política bcrypt, sal aleatoria y límites UTF-8,
+ * conservando espacios y Unicode en las credenciales sintéticas.
+ *
+ * ============================================================
+ */
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import bcrypt from 'bcryptjs';

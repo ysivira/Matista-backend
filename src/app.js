@@ -1,5 +1,16 @@
 /**
- * Compone la aplicación HTTP, sus módulos y el manejo central de errores.
+ * ============================================================
+ * MATISTA | APLICACIÓN HTTP
+ * ============================================================
+ *
+ * Archivo: app.js
+ * Módulo: Composición del backend
+ *
+ * Responsabilidad:
+ * Componer Express, CORS, parsers y módulos de negocio con
+ * controles HTTP y un manejador centralizado de errores.
+ *
+ * ============================================================
  */
 import express from 'express';
 import cors from 'cors';

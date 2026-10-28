@@ -1,3 +1,17 @@
+/**
+ * ============================================================
+ * MATISTA | PRUEBAS DEL REPOSITORIO AUTH
+ * ============================================================
+ *
+ * Archivo: auth.repository.test.js
+ * Módulo: Pruebas de autenticación
+ *
+ * Responsabilidad:
+ * Verificar UTC, commit, rollback, liberación y parametrización
+ * SQL mediante conexiones simuladas, sin utilizar MySQL real.
+ *
+ * ============================================================
+ */
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import * as repository from '../../src/modules/auth/auth.repository.js';

@@ -1,3 +1,17 @@
+/**
+ * ============================================================
+ * MATISTA | PRUEBAS DE SERVICIOS DE PORCENTAJES
+ * ============================================================
+ *
+ * Archivo: porcentajes-comerciales.service.test.js
+ * Módulo: Pruebas administrativas
+ *
+ * Responsabilidad:
+ * Comprobar duplicados, ausencias, auditoría, errores y límites
+ * transaccionales con el contrato mysql2 simulado.
+ *
+ * ============================================================
+ */
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import {

@@ -1,5 +1,20 @@
 /**
- * Valida y aplica migraciones únicamente sobre las bases permitidas.
+ * ============================================================
+ * MATISTA | EJECUTOR DE MIGRACIONES
+ * ============================================================
+ *
+ * Archivo: migration-runner.js
+ * Módulo: Infraestructura de base de datos
+ *
+ * Responsabilidad:
+ * Validar definiciones SQL, contrastar el historial y aplicar
+ * migraciones pendientes bajo un bloqueo exclusivo por base.
+ *
+ * Consideraciones técnicas:
+ * - Los checksums incluyen todos los bytes del archivo SQL.
+ * - Las migraciones aplicadas no deben reformatearse.
+ *
+ * ============================================================
  */
 
 /*
@@ -95,6 +110,7 @@ function isAllowedAlterStatement(statement, targetTable) {
 
 /**
  * Valida nombre, cabeceras y sentencias permitidas de una migración local.
+ * El checksum conserva también comentarios y espacios del SQL original.
  * @param {string} fileName Nombre versionado del archivo SQL.
  * @param {string} sql Contenido completo de la migración.
  * @returns {object} Definición normalizada y lista para ejecutar.

@@ -1,3 +1,17 @@
+/**
+ * ============================================================
+ * MATISTA | PRUEBAS DE POLÍTICAS DE SEGURIDAD
+ * ============================================================
+ *
+ * Archivo: config.test.js
+ * Módulo: Pruebas de seguridad
+ *
+ * Responsabilidad:
+ * Comprobar configuración por entorno, secreto, parámetros
+ * aprobados y estructuras congeladas sin divulgar credenciales.
+ *
+ * ============================================================
+ */
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { loadSecurityConfig, RATE_LIMIT_POLICIES } from '../../../src/infrastructure/security/config.js';

@@ -1,3 +1,17 @@
+/**
+ * ============================================================
+ * MATISTA | INTEGRACIÓN DEL CICLO TARIFARIO
+ * ============================================================
+ *
+ * Archivo: tarifario.ciclo.integration.test.js
+ * Módulo: Pruebas administrativas
+ *
+ * Responsabilidad:
+ * Verificar borradores, aumentos y transiciones con fixtures
+ * propios; las operaciones MySQL requieren RUN_DB_TESTS.
+ *
+ * ============================================================
+ */
 import 'dotenv/config';
 
 import assert from 'node:assert/strict';

@@ -1,3 +1,18 @@
+/**
+ * ============================================================
+ * MATISTA | PRUEBAS SQL DEL DIRECTORIO
+ * ============================================================
+ *
+ * Archivo: employees.repository.test.js
+ * Módulo: Pruebas administrativas
+ *
+ * Responsabilidad:
+ * Verificar proyección pública, correo actual verificado y
+ * parametrización del directorio mediante conexiones simuladas.
+ *
+ * ============================================================
+ */
+
 // Pruebas unitarias del repositorio ADMIN de empleados (SL-1) contra una
 // conexion mysql2 simulada (sin base de datos). Comprueban el contrato
 // publico del listado/detalle y la consulta del correo ACTUAL con su

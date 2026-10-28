@@ -1,5 +1,20 @@
 /**
- * Gestiona cuentas, sesiones, perfil y recuperación de acceso.
+ * ============================================================
+ * MATISTA | SERVICIOS DE CUENTA
+ * ============================================================
+ *
+ * Archivo: auth.service.js
+ * Módulo: Autenticación
+ *
+ * Responsabilidad:
+ * Gestionar registro, sesiones, perfil y recuperación de acceso
+ * con autorización vigente y transiciones atómicas de credenciales.
+ *
+ * Consideraciones técnicas:
+ * - Los avisos se envían después de confirmar la persistencia.
+ * - La cuenta y la sesión se revalidan para operaciones sensibles.
+ *
+ * ============================================================
  */
 import { createAppError } from '../../shared/errors/app-error.js';
 import { hashPassword, verifyPassword } from '../../infrastructure/security/password.js';
@@ -128,6 +143,10 @@ export async function authenticateToken(token, context) {
 }
 
 /**
+ * ============================================================
+ * REGISTER
+ * ============================================================
+ *
  * Registra ASESOR/PENDIENTE y correo/token/auditoría atómicamente; envía correo después del commit.
  * @param {object} data Datos públicos validados del registro.
  * @param {object} context Dependencias inyectadas, sin acceso global a servicios.
@@ -168,6 +187,10 @@ export async function register(data, context) {
 }
 
 /**
+ * ============================================================
+ * LOGIN
+ * ============================================================
+ *
  * Emite sesión solo para correo actual verificado y cuenta habilitada, revalidando bajo bloqueo.
  * @param {object} input Correo y contraseña; la respuesta de credenciales incorrectas es uniforme.
  * @param {object} context Repositorio, pool, seguridad, hash ficticio para comparación neutra y

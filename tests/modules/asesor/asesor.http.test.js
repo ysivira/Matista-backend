@@ -1,3 +1,17 @@
+/**
+ * ============================================================
+ * MATISTA | CONTRATOS HTTP DEL ASESOR
+ * ============================================================
+ *
+ * Archivo: asesor.http.test.js
+ * Módulo: Pruebas comerciales
+ *
+ * Responsabilidad:
+ * Verificar acceso, origen y errores públicos de campaña y
+ * esquema pendiente con contexto y consultas simuladas.
+ *
+ * ============================================================
+ */
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createApp } from '../../../src/app.js';

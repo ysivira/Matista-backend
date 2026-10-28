@@ -1,5 +1,16 @@
 /**
- * Expone las consultas HTTP del catálogo administrativo.
+ * ============================================================
+ * MATISTA | RUTAS DEL CATÁLOGO
+ * ============================================================
+ *
+ * Archivo: catalogo.routes.js
+ * Módulo: Catálogo compartido
+ *
+ * Responsabilidad:
+ * Exponer consultas y documentos del catálogo para ADMIN y
+ * ASESOR sin montar operaciones de escritura administrativa.
+ *
+ * ============================================================
  */
 import { Router } from 'express';
 import cookieParser from 'cookie-parser';

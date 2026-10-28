@@ -1,3 +1,17 @@
+/**
+ * ============================================================
+ * MATISTA | PRUEBAS MYSQL AUTH
+ * ============================================================
+ *
+ * Archivo: auth.repository.integration.test.js
+ * Módulo: Pruebas de autenticación
+ *
+ * Responsabilidad:
+ * Comprobar persistencia y atomicidad de correo, sesiones y
+ * credenciales; requiere habilitar expresamente RUN_AUTH_DB_TESTS.
+ *
+ * ============================================================
+ */
 import assert from 'node:assert/strict';
 import { randomBytes, randomInt } from 'node:crypto';
 import { after, before, test } from 'node:test';

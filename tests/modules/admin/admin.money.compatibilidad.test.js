@@ -1,3 +1,17 @@
+/**
+ * ============================================================
+ * MATISTA | COMPATIBILIDAD MONETARIA ADMIN
+ * ============================================================
+ *
+ * Archivo: admin.money.compatibilidad.test.js
+ * Módulo: Pruebas administrativas
+ *
+ * Responsabilidad:
+ * Preservar exports, identidad de funciones, errores y redondeo
+ * entre la interfaz ADMIN y la implementación monetaria compartida.
+ *
+ * ============================================================
+ */
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import * as neutral from '../../../src/shared/lib/money.js';

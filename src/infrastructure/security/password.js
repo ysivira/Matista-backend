@@ -1,5 +1,16 @@
 /**
- * Genera y verifica hashes de contraseñas con bcrypt.
+ * ============================================================
+ * MATISTA | CONTRASEÑAS BCRYPT
+ * ============================================================
+ *
+ * Archivo: password.js
+ * Módulo: Infraestructura de seguridad
+ *
+ * Responsabilidad:
+ * Validar contraseñas nuevas, generar hashes bcrypt y verificar
+ * credenciales existentes sin normalizar su contenido.
+ *
+ * ============================================================
  */
 import bcrypt from 'bcryptjs';
 import { loadSecurityConfig, PASSWORD_MAX_BYTES } from './config.js';

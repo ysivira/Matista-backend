@@ -1,3 +1,17 @@
+/**
+ * ============================================================
+ * MATISTA | PRUEBAS DE IDENTIDAD DE CLIENTES
+ * ============================================================
+ *
+ * Archivo: clientes.normalizacion.test.js
+ * Módulo: Pruebas comerciales
+ *
+ * Responsabilidad:
+ * Probar mayúsculas Unicode, teléfono y conservación de historia
+ * con conexiones sintéticas; el PDF real requiere RUN_PDF_TESTS.
+ *
+ * ============================================================
+ */
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { mkdtemp, writeFile, rm } from 'node:fs/promises';

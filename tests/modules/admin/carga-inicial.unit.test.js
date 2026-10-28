@@ -1,3 +1,17 @@
+/**
+ * ============================================================
+ * MATISTA | PRUEBAS AISLADAS DE CARGA
+ * ============================================================
+ *
+ * Archivo: carga-inicial.unit.test.js
+ * Módulo: Pruebas administrativas
+ *
+ * Responsabilidad:
+ * Verificar normalización de rangos, exclusiones, catálogo inicial
+ * e idempotencia con fuentes y conexiones sintéticas.
+ *
+ * ============================================================
+ */
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 

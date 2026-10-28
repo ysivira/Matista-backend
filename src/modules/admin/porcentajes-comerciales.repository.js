@@ -1,5 +1,16 @@
 /**
- * Consulta y persiste versiones de porcentajes comerciales.
+ * ============================================================
+ * MATISTA | PERSISTENCIA DE PORCENTAJES
+ * ============================================================
+ *
+ * Archivo: porcentajes-comerciales.repository.js
+ * Módulo: Administración
+ *
+ * Responsabilidad:
+ * Consultar, bloquear y versionar filas de porcentajes y registrar
+ * su auditoría mediante el contrato previo de filas abiertas.
+ *
+ * ============================================================
  */
 /**
  * Obtiene todos los porcentajes comerciales actualmente vigentes.

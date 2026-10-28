@@ -1,5 +1,16 @@
 /**
- * Valida la configuración MySQL y restringe las bases por entorno.
+ * ============================================================
+ * MATISTA | CONFIGURACIÓN MYSQL
+ * ============================================================
+ *
+ * Archivo: config.js
+ * Módulo: Infraestructura de base de datos
+ *
+ * Responsabilidad:
+ * Validar las conexiones MATISTA por entorno y la configuración
+ * de la fuente SIGEC utilizada por la carga inicial.
+ *
+ * ============================================================
  */
 const DATABASE_BY_ENV = Object.freeze({
   development: 'matista_dev',

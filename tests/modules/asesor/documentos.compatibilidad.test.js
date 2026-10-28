@@ -1,3 +1,17 @@
+/**
+ * ============================================================
+ * MATISTA | COMPATIBILIDAD DOCUMENTAL
+ * ============================================================
+ *
+ * Archivo: documentos.compatibilidad.test.js
+ * Módulo: Pruebas documentales
+ *
+ * Responsabilidad:
+ * Contrastar documentos con referencias históricas y detectar
+ * cambios de contenido; el PDF real requiere RUN_PDF_TESTS.
+ *
+ * ============================================================
+ */
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFile, mkdtemp, writeFile, rm } from 'node:fs/promises';

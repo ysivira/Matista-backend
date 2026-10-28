@@ -1,3 +1,17 @@
+/**
+ * ============================================================
+ * MATISTA | PROCESO HTTP
+ * ============================================================
+ *
+ * Archivo: server.js
+ * Módulo: Composición del backend
+ *
+ * Responsabilidad:
+ * Iniciar el servidor, preparar la activación de políticas y
+ * coordinar el cierre del activador y del transporte de correo.
+ *
+ * ============================================================
+ */
 import 'dotenv/config';
 import app from './app.js';
 import { closeSharedEmailTransport } from './infrastructure/email/email.service.js';

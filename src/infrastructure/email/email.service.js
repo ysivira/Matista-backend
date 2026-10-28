@@ -1,5 +1,16 @@
 /**
- * Configura el transporte y envía notificaciones por correo.
+ * ============================================================
+ * MATISTA | TRANSPORTE DE CORREO
+ * ============================================================
+ *
+ * Archivo: email.service.js
+ * Módulo: Infraestructura de correo
+ *
+ * Responsabilidad:
+ * Configurar y reutilizar el transporte SMTP, enviar mensajes
+ * y cerrar sus recursos durante el apagado del proceso.
+ *
+ * ============================================================
  */
 import nodemailer from 'nodemailer';
 import { createAppError } from '../../shared/errors/app-error.js';

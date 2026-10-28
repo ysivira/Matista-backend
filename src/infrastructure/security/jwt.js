@@ -1,5 +1,18 @@
 /**
- * Emite y verifica tokens de acceso con la configuración de seguridad.
+ * ============================================================
+ * MATISTA | TOKENS DE ACCESO JWT
+ * ============================================================
+ *
+ * Archivo: jwt.js
+ * Módulo: Infraestructura de seguridad
+ *
+ * Responsabilidad:
+ * Firmar y verificar identidad, claims y vigencia de tokens JWT.
+ *
+ * Consideraciones técnicas:
+ * - La verificación criptográfica no sustituye la consulta de sesión.
+ *
+ * ============================================================
  */
 import { randomUUID } from 'node:crypto';
 import { SignJWT, jwtVerify } from 'jose';
@@ -10,7 +23,7 @@ const LEGAJO_PATTERN = /^[0-9]{7,10}$/;
 const JTI_PATTERN = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
 
 /**
- * Firma un JWT de acceso y devuelve los tiempos que deberá persistir la etapa C.
+ * Firma un JWT de acceso y devuelve los tiempos que persistirá el servicio AUTH.
  * @param {object} identity Legajo y jti UUID opcional; por defecto genera un UUID.
  * @param {object} config Configuración validada, con secreto base64url.
  * @param {Date} now Instante de emisión sustituible en pruebas.
@@ -61,7 +74,7 @@ export async function signAccessToken(
  * @param {string} token JWT recibido.
  * @param {object} config Configuración de seguridad validada.
  * @param {Date} now Reloj de validación sustituible en pruebas.
- * @returns {Promise<object>} Claims verificados; aún requieren autorización en etapa C.
+ * @returns {Promise<object>} Claims verificados; aún requieren validar sesión y cuenta.
  * @throws {Error} ACCESS_TOKEN_INVALID con mensaje público uniforme.
  */
 

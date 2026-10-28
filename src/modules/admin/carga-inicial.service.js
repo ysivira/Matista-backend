@@ -1,5 +1,16 @@
 /**
- * Coordina las validaciones y la transacción de carga inicial.
+ * ============================================================
+ * MATISTA | SERVICIO DE CARGA INICIAL
+ * ============================================================
+ *
+ * Archivo: carga-inicial.service.js
+ * Módulo: Administración
+ *
+ * Responsabilidad:
+ * Validar el origen SIGEC y coordinar la carga transaccional o
+ * la comprobación de consistencia del catálogo ya existente.
+ *
+ * ============================================================
  */
 
 /*

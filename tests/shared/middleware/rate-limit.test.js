@@ -1,3 +1,17 @@
+/**
+ * ============================================================
+ * MATISTA | PRUEBAS DE LIMITACIÓN HTTP
+ * ============================================================
+ *
+ * Archivo: rate-limit.test.js
+ * Módulo: Pruebas compartidas
+ *
+ * Responsabilidad:
+ * Comprobar independencia de límites, respuesta 429 y recuperación
+ * de ventana con servidor local y almacenes aislados.
+ *
+ * ============================================================
+ */
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import express from 'express';

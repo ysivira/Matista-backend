@@ -1,5 +1,16 @@
 /**
- * Gestiona el ciclo de versiones de la política comercial.
+ * ============================================================
+ * MATISTA | CICLO DE POLÍTICAS COMERCIALES
+ * ============================================================
+ *
+ * Archivo: politica-comercial.service.js
+ * Módulo: Administración
+ *
+ * Responsabilidad:
+ * Validar y versionar condiciones comerciales, coordinar su
+ * programación o activación y preservar el historial auditado.
+ *
+ * ============================================================
  */
 import { withConnection } from '../auth/auth.repository.js';
 import {
@@ -633,6 +644,10 @@ export async function obtenerDetallePoliticaComercial(pool, politicaId) {
 }
 
 /**
+ * ============================================================
+ * ACTUALIZAR POLITICA COMERCIAL
+ * ============================================================
+ *
  * Crea o edita una versión, con activación inmediata o programada.
  * @param {object} pool Pool MySQL compartido.
  * @param {string|number} politicaId Vigente o programación que se edita.

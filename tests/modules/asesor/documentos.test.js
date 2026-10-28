@@ -1,3 +1,17 @@
+/**
+ * ============================================================
+ * MATISTA | PRESENTACIÓN DE COTIZACIONES
+ * ============================================================
+ *
+ * Archivo: documentos.test.js
+ * Módulo: Pruebas documentales
+ *
+ * Responsabilidad:
+ * Verificar identidad oficial y economía histórica del HTML,
+ * sin recalcular snapshots; Chrome real exige RUN_PDF_TESTS.
+ *
+ * ============================================================
+ */
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { execFileSync } from 'node:child_process';

@@ -1,4 +1,19 @@
 /**
+ * ============================================================
+ * MATISTA | EXPORTACIÓN CSV DEL CATÁLOGO
+ * ============================================================
+ *
+ * Archivo: catalogo.documentos.js
+ * Módulo: Catálogo compartido
+ *
+ * Responsabilidad:
+ * Exportar las tarifas reales a CSV con escape de comillas y
+ * neutralización de fórmulas de hojas de cálculo.
+ *
+ * ============================================================
+ */
+
+/**
  * Escapa una celda y neutraliza fórmulas al abrir el CSV en una planilla.
  * @param {unknown} valor Dato de la celda; null y undefined se presentan vacíos.
  * @returns {string} Celda entre comillas con sus comillas internas duplicadas.
@@ -23,4 +38,3 @@ export function listaCsv(lista) {
   ];
   return '\uFEFF' + filas.map(f => f.map(celda).join(';')).join('\r\n');
 }
-

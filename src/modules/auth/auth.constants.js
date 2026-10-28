@@ -1,5 +1,16 @@
 /**
- * Define roles, campos públicos y políticas HTTP de autenticación.
+ * ============================================================
+ * MATISTA | POLÍTICAS HTTP AUTH
+ * ============================================================
+ *
+ * Archivo: auth.constants.js
+ * Módulo: Autenticación
+ *
+ * Responsabilidad:
+ * Definir roles, campos públicos, respuestas neutras y opciones
+ * de cookie, y validar el origen HTTP canónico del frontend.
+ *
+ * ============================================================
  */
 
 export const AUTH_COOKIE_NAME = 'matista_session';

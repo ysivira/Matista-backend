@@ -1,3 +1,17 @@
+/**
+ * ============================================================
+ * MATISTA | PRUEBAS DE ERRORES HTTP
+ * ============================================================
+ *
+ * Archivo: error-handler.test.js
+ * Módulo: Pruebas compartidas
+ *
+ * Responsabilidad:
+ * Verificar errores públicos, parser y ocultamiento de datos
+ * internos mediante endpoints locales de prueba.
+ *
+ * ============================================================
+ */
 import assert from 'node:assert/strict';
 import { randomBytes } from 'node:crypto';
 import { test } from 'node:test';

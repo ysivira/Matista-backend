@@ -1,3 +1,17 @@
+/**
+ * ============================================================
+ * MATISTA | PLANTILLA DE COTIZACIÓN
+ * ============================================================
+ *
+ * Archivo: cotizacion.plantilla.js
+ * Módulo: Documentos del asesor
+ *
+ * Responsabilidad:
+ * Renderizar el snapshot preparado con prestaciones, condiciones,
+ * marca, estilos y paginación embebidos en un HTML autónomo.
+ *
+ * ============================================================
+ */
 import { readFile } from 'node:fs/promises';
 import { html, pesos, fecha } from '../../../infrastructure/pdf/formato-documental.js';
 

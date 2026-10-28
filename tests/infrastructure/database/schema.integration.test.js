@@ -1,3 +1,17 @@
+/**
+ * ============================================================
+ * MATISTA | PRUEBAS DEL ESQUEMA MYSQL
+ * ============================================================
+ *
+ * Archivo: schema.integration.test.js
+ * Módulo: Pruebas de base de datos
+ *
+ * Responsabilidad:
+ * Contrastar esquema, restricciones y ciclo de políticas en MySQL.
+ * La integración real permanece condicionada a RUN_DB_TESTS.
+ *
+ * ============================================================
+ */
 import 'dotenv/config';
 
 import assert from 'node:assert/strict';

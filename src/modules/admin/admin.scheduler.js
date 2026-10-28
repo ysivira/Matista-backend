@@ -1,9 +1,20 @@
 /**
- * Programa la activación de versiones administrativas pendientes.
+ * ============================================================
+ * MATISTA | ACTIVADOR DE POLÍTICAS
+ * ============================================================
+ *
+ * Archivo: admin.scheduler.js
+ * Módulo: Administración
+ *
+ * Responsabilidad:
+ * Programar ciclos de activación de políticas comerciales y
+ * delegar sus escrituras al servicio transaccional.
+ *
+ * ============================================================
  */
 
 /*
- * Activador programado de políticas comerciales (ciclo de vida SPEC-03).
+ * Activador programado del ciclo de vida de políticas comerciales.
  * Toda escritura real la resuelve el servicio transaccional: este módulo
  * solo consulta el scheduler del proceso e ignora activaciones vencidas
  * (la lectura hace activación preventiva, el intervalo solo la adelanta).

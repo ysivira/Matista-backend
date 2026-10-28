@@ -1,3 +1,17 @@
+/**
+ * ============================================================
+ * MATISTA | PRUEBAS DE SALUD HTTP
+ * ============================================================
+ *
+ * Archivo: health.test.js
+ * Módulo: Pruebas de infraestructura
+ *
+ * Responsabilidad:
+ * Preservar el contrato de salud, la política de proxy loopback
+ * y la respuesta uniforme ante JSON inválido.
+ *
+ * ============================================================
+ */
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import app from '../src/app.js';

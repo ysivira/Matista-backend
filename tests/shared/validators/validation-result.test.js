@@ -1,3 +1,17 @@
+/**
+ * ============================================================
+ * MATISTA | PRUEBAS DE MENSAJES DE VALIDACIÓN
+ * ============================================================
+ *
+ * Archivo: validation-result.test.js
+ * Módulo: Pruebas compartidas
+ *
+ * Responsabilidad:
+ * Verificar publicación de mensajes marcados y ocultamiento de
+ * excepciones o valores internos de validadores personalizados.
+ *
+ * ============================================================
+ */
 import assert from 'node:assert/strict';
 import { randomBytes } from 'node:crypto';
 import { test } from 'node:test';

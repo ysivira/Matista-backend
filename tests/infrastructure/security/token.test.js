@@ -1,3 +1,17 @@
+/**
+ * ============================================================
+ * MATISTA | PRUEBAS DE TOKENS TEMPORALES
+ * ============================================================
+ *
+ * Archivo: token.test.js
+ * Módulo: Pruebas de seguridad
+ *
+ * Responsabilidad:
+ * Verificar generación, hashes binarios, vencimientos y
+ * rechazo de formatos inválidos sin publicar el token recibido.
+ *
+ * ============================================================
+ */
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { test } from 'node:test';

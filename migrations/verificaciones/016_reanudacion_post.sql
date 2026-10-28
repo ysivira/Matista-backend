@@ -1,3 +1,16 @@
+-- ============================================================
+-- MATISTA | COMPROBACIONES DE REANUDACIÓN
+-- ============================================================
+--
+-- Archivo: 016_reanudacion_post.sql
+-- Módulo: Verificación de migraciones
+--
+-- Responsabilidad:
+-- Consultar el registro de migración, tipo de evento y
+-- restricciones conservadas tras incorporar REANUDACION.
+--
+-- ============================================================
+
 -- Verificaciones de la 016 (solo lectura, sin DDL ni DML).
 -- Ejecutar contra la base objetivo DESPUES de renombrar y aplicar
 -- migrations/016_reanudacion_evento.sql (procedimiento en el resumen de la

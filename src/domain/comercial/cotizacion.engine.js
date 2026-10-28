@@ -1,5 +1,16 @@
 /**
- * Calcula cotizaciones con tarifas capturadas y aritmética monetaria exacta.
+ * ============================================================
+ * MATISTA | MOTOR DE COTIZACIÓN
+ * ============================================================
+ *
+ * Archivo: cotizacion.engine.js
+ * Módulo: Dominio comercial
+ *
+ * Responsabilidad:
+ * Calcular cotizaciones desde tarifas y políticas capturadas,
+ * mediante aritmética monetaria exacta y sin acceso a SQL o HTTP.
+ *
+ * ============================================================
  */
 import { createAppError } from '../../shared/errors/app-error.js';
 import {
@@ -76,6 +87,10 @@ function parametro(politica, campo, etiqueta) {
 }
 
 /**
+ * ============================================================
+ * CALCULAR COTIZACION
+ * ============================================================
+ *
  * Calcula una cotización pura desde tarifas/política capturadas por servidor, sin SQL ni HTTP.
  * @param {object} solicitud Entradas validadas y snapshot del catálogo vigente.
  * @param {object} reglas Decisiones comerciales confirmadas de normalización y compatibilidad.

@@ -1,3 +1,17 @@
+/**
+ * ============================================================
+ * MATISTA | CONTRATOS DE ARCHIVOS SQL
+ * ============================================================
+ *
+ * Archivo: migration-files.test.js
+ * Módulo: Pruebas de base de datos
+ *
+ * Responsabilidad:
+ * Inspeccionar bootstrap y migraciones para verificar orden,
+ * claves, restricciones y metadatos sin ejecutar sentencias SQL.
+ *
+ * ============================================================
+ */
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';

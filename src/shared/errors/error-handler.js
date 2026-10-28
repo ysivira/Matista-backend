@@ -1,5 +1,16 @@
 /**
- * Traduce errores a respuestas HTTP sin exponer datos internos.
+ * ============================================================
+ * MATISTA | RESPUESTAS DE ERROR
+ * ============================================================
+ *
+ * Archivo: error-handler.js
+ * Módulo: Errores compartidos
+ *
+ * Responsabilidad:
+ * Traducir errores operativos y del parser a respuestas HTTP,
+ * sin publicar datos internos de excepciones desconocidas.
+ *
+ * ============================================================
  */
 import { isAppError } from './app-error.js';
 

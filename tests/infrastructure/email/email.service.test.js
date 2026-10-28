@@ -1,3 +1,17 @@
+/**
+ * ============================================================
+ * MATISTA | PRUEBAS DEL TRANSPORTE SMTP
+ * ============================================================
+ *
+ * Archivo: email.service.test.js
+ * Módulo: Pruebas de correo
+ *
+ * Responsabilidad:
+ * Comprobar configuración TLS, reutilización del pool y errores
+ * públicos de envío usando transportes simulados, sin SMTP real.
+ *
+ * ============================================================
+ */
 import assert from 'node:assert/strict';
 import { randomBytes } from 'node:crypto';
 import { test } from 'node:test';

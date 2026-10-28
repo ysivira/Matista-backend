@@ -1,5 +1,16 @@
 /**
- * Persiste clientes y cotizaciones con alcance por asesor.
+ * ============================================================
+ * MATISTA | PERSISTENCIA COMERCIAL
+ * ============================================================
+ *
+ * Archivo: asesor.repository.js
+ * Módulo: Asesor
+ *
+ * Responsabilidad:
+ * Persistir clientes, preparaciones, emisiones y auditoría con
+ * alcance por propietario y snapshots históricos decodificados.
+ *
+ * ============================================================
  */
 /** Convierte JSON de mysql2 o de dobles de prueba a su representación nativa. */
 export function leerJson(valor) {

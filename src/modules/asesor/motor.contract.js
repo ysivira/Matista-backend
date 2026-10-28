@@ -1,5 +1,16 @@
 /**
- * Construye el contrato de entrada del motor de cotización.
+ * ============================================================
+ * MATISTA | CONTRATO DEL MOTOR
+ * ============================================================
+ *
+ * Archivo: motor.contract.js
+ * Módulo: Asesor
+ *
+ * Responsabilidad:
+ * Validar el contrato de entrada del motor y la forma mínima
+ * de resultados históricos utilizados en la presentación.
+ *
+ * ============================================================
  */
 import { createAppError } from '../../shared/errors/app-error.js';
 import { calcularCotizacion } from '../../domain/comercial/cotizacion.engine.js';

@@ -1,15 +1,22 @@
 /**
- * Ejecuta operaciones administrativas con transacción y bloqueos.
- */
-
-/*
- * Mecanismo transaccional compartido de SPEC-03 ADMIN.
- * Toda operacion administrativa que escribe en el tarifario se ejecuta:
- * 1) con UNA conexion del pool que lleva negocio y auditoria juntas,
- * 2) dentro de la transaccion de esa conexion (sin transacciones anidadas),
- * 3) bajo el bloqueo exclusivo "matista_tarifario" (GET_LOCK en la MISMA
- *    conexion que hara el trabajo), y
- * 4) liberando siempre la conexion, con o sin commit, con o sin lock.
+ * ============================================================
+ * MATISTA | TRANSACCIONES ADMINISTRATIVAS
+ * ============================================================
+ *
+ * Archivo: admin.transaction.js
+ * Módulo: Administración
+ *
+ * Responsabilidad:
+ * Ejecutar unidades de trabajo MySQL y coordinar el bloqueo
+ * exclusivo del tarifario sobre una única conexión.
+ *
+ * Consideraciones técnicas:
+ * - Negocio y auditoría utilizan la conexión recibida.
+ * - Las operaciones no deben abrir transacciones anidadas.
+ * - withAdminVersionLock adquiere "matista_tarifario" antes de escribir.
+ * - Las conexiones adquiridas se liberan en finally.
+ *
+ * ============================================================
  */
 import { errorConcurrencia } from './admin.errors.js';
 
@@ -20,7 +27,17 @@ export const NOMBRE_LOCK_TARIFARIO = 'matista_tarifario';
 export const TIMEOUT_LOCK_TARIFARIO_SEGUNDOS = 5;
 
 /**
- * Ejecuta una unidad de trabajo administrativa en transaccion propia.
+ * ============================================================
+ * WITH ADMIN TRANSACTION
+ * ============================================================
+ *
+ * Propósito:
+ * Ejecutar una unidad de trabajo administrativa en transacción propia.
+ *
+ * Funcionamiento:
+ * Obtener una conexión, fijar UTC, iniciar la transacción y ejecutar
+ * la operación; confirmar o intentar rollback y liberar la conexión.
+ *
  * Es la version ADMIN del patron withConnection de AUTH: la misma
  * conexion sirve para escrituras de negocio y de auditoria, garantizando
  * que ambas se confirmen (o deshagan) juntas. No soporta transacciones
@@ -31,6 +48,13 @@ export const TIMEOUT_LOCK_TARIFARIO_SEGUNDOS = 5;
  * - Retorna: el resultado de `operacion` tras el commit exitoso.
  * - Error: el error original capturado; hace rollback completo y
  *   libera la conexion en finally en todos los escenarios.
+ *
+ * @param {object} pool - Pool MySQL de la operación.
+ * @param {Function} operacion - Operación asíncrona que recibe la conexión.
+ * @returns {Promise<*>} Resultado tras confirmar la transacción.
+ * @throws {Error} Error de adquisición, ejecución o cierre transaccional.
+ *
+ * ============================================================
  */
 export async function withAdminTransaction(pool, operacion) {
   const connection = await pool.getConnection();
@@ -60,6 +84,9 @@ export async function withAdminTransaction(pool, operacion) {
  *
  * - Parametros: `valor` fila o celda cruda de GET_LOCK.
  * - Retorna: 1, 0 o null.
+ *
+ * @param {*} valor - Celda devuelta por GET_LOCK.
+ * @returns {number|null} Uno, cero o null según el resultado.
  */
 export function interpretarGetLock(valor) {
   if (valor === 1 || valor === '1') return 1;
@@ -68,7 +95,11 @@ export function interpretarGetLock(valor) {
 }
 
 /**
- * Ejecuta una operacion administrativa protegida por el bloqueo
+ * ============================================================
+ * WITH ADMIN VERSION LOCK
+ * ============================================================
+ *
+ * Ejecuta una operación administrativa protegida por el bloqueo
  * exclusivo del tarifario y con transaccion propia, en la MISMA
  * conexion. El bloqueo evita que dos operaciones concurrentes generen
  * versiones incompatibles o modificaciones parciales; la transaccion
@@ -83,6 +114,15 @@ export function interpretarGetLock(valor) {
  *   error); el error original de `operacion` si fallo la unidad de
  *   trabajo (con rollback completo). La conexion se libera en finally
  *   incluso si RELEASE_LOCK falla.
+ *
+ * @param {object} pool - Pool MySQL compartido.
+ * @param {Function} operacion - Recibe la conexión y el estado del bloqueo.
+ * @param {object} [opciones] - Opciones de espera del bloqueo.
+ * @param {number} [opciones.timeoutSegundos=5] - Espera máxima en segundos.
+ * @returns {Promise<object>} Resultado, bloqueo adquirido y estado de liberación.
+ * @throws {Error} Conflicto de bloqueo o fallo de conexión/transacción.
+ *
+ * ============================================================
  */
 export async function withAdminVersionLock(
   pool,

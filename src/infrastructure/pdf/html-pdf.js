@@ -1,3 +1,21 @@
+/**
+ * ============================================================
+ * MATISTA | IMPRESIÓN HTML A PDF
+ * ============================================================
+ *
+ * Archivo: html-pdf.js
+ * Módulo: Infraestructura documental
+ *
+ * Responsabilidad:
+ * Imprimir documentos autónomos mediante Chrome headless y su
+ * protocolo de depuración, con control de tiempo y desbordamiento.
+ *
+ * Consideraciones técnicas:
+ * - El HTML recibido se escribe sin reinterpretar su contenido.
+ * - El proceso, el socket y los temporales se limpian al finalizar.
+ *
+ * ============================================================
+ */
 import { spawn } from 'node:child_process';
 import { mkdtemp, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';

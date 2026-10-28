@@ -1,5 +1,16 @@
 /**
- * Valida compatibilidad, porcentajes y topes de los descuentos comerciales.
+ * ============================================================
+ * MATISTA | VALIDACIÓN DE DESCUENTOS
+ * ============================================================
+ *
+ * Archivo: descuentos.validation.js
+ * Módulo: Dominio comercial
+ *
+ * Responsabilidad:
+ * Validar compatibilidad, porcentajes y topes de descuentos,
+ * compartiendo los errores de campo entre la edición y el motor.
+ *
+ * ============================================================
  */
 import { importeACentavos, centavosAImporte, esPorcentajeValido } from '../../shared/lib/money.js';
 

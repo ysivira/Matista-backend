@@ -1,3 +1,18 @@
+/**
+ * ============================================================
+ * MATISTA | PRUEBAS DEL RUNTIME COMPARTIDO
+ * ============================================================
+ *
+ * Archivo: runtime-compartido.test.js
+ * Módulo: Pruebas administrativas
+ *
+ * Responsabilidad:
+ * Verificar que inicializaciones concurrentes esperan la misma
+ * promesa y reciben un único runtime AUTH/ADMIN.
+ *
+ * ============================================================
+ */
+
 // Pruebas de la inicialización compartida del runtime AUTH/ADMIN
 // (corrección B de la estabilización SPEC-03): initializeRuntime debe
 // memoizar la PROMESA, de modo que las llamadas concurrentes de AUTH, ADMIN

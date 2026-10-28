@@ -1,5 +1,16 @@
 /**
- * Valida y normaliza clientes y solicitudes de cotización.
+ * ============================================================
+ * MATISTA | VALIDACIÓN COMERCIAL
+ * ============================================================
+ *
+ * Archivo: asesor.validation.js
+ * Módulo: Asesor
+ *
+ * Responsabilidad:
+ * Validar identidad, contacto, familia y entradas declarativas
+ * del motor sin aceptar importes finales calculados por el cliente.
+ *
+ * ============================================================
  */
 import { createAppError } from '../../shared/errors/app-error.js';
 import { calcularEdad } from '../../domain/comercial/edad.js';
@@ -49,7 +60,7 @@ export function validarContacto(datos) {
 }
 
 /**
- * Valida un teléfono opcional (SPEC-28): vacío es válido; con contenido,
+ * Valida un teléfono opcional: vacío es válido; con contenido,
  * admite prefijo internacional, espacios, paréntesis y guiones con una
  * cantidad razonable de dígitos, y rechaza letras y caracteres ajenos, sin
  * imponer un formato nacional único ni alterar teléfonos históricos.

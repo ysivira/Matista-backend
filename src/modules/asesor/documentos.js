@@ -1,3 +1,17 @@
+/**
+ * ============================================================
+ * MATISTA | DOCUMENTOS DE COTIZACIÓN
+ * ============================================================
+ *
+ * Archivo: documentos.js
+ * Módulo: Asesor
+ *
+ * Responsabilidad:
+ * Validar el snapshot emitido, preparar su vista documental y
+ * delegar la generación HTML o PDF sin recalcular su economía.
+ *
+ * ============================================================
+ */
 import { imprimirHtmlPdf } from '../../infrastructure/pdf/html-pdf.js';
 import { createAppError } from '../../shared/errors/app-error.js';
 import { esResultadoEconomico } from './motor.contract.js';

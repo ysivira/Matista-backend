@@ -1,9 +1,20 @@
 /**
- * Compone las rutas y los controles de acceso de ADMIN.
+ * ============================================================
+ * MATISTA | RUTAS ADMINISTRATIVAS
+ * ============================================================
+ *
+ * Archivo: admin.routes.js
+ * Módulo: Administración
+ *
+ * Responsabilidad:
+ * Componer routers administrativos con política de origen,
+ * sesión, rol y dependencias inicializadas de forma diferida.
+ *
+ * ============================================================
  */
 
 /*
- * Router agregador de SPEC-03 ADMIN: comparte infraestructura AUTH entre los
+ * Router agregador de ADMIN: comparte infraestructura AUTH entre los
  * slices y conserva un unico fallback despues de todas las rutas conocidas.
  */
 import { Router } from 'express';

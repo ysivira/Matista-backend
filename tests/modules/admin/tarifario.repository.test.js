@@ -1,3 +1,17 @@
+/**
+ * ============================================================
+ * MATISTA | PRUEBAS SQL DEL TARIFARIO
+ * ============================================================
+ *
+ * Archivo: tarifario.repository.test.js
+ * Módulo: Pruebas administrativas
+ *
+ * Responsabilidad:
+ * Capturar filtros, parámetros y proyecciones de planes,
+ * versiones y snapshots sin conectarse a una base real.
+ *
+ * ============================================================
+ */
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 

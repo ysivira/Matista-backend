@@ -1,3 +1,17 @@
+/**
+ * ============================================================
+ * MATISTA | INTEGRACIÓN DE TRAZABILIDAD TARIFARIA
+ * ============================================================
+ *
+ * Archivo: tarifario.trazabilidad.integration.test.js
+ * Módulo: Pruebas administrativas
+ *
+ * Responsabilidad:
+ * Comprobar resumen y deshacer desde eventos reales de fixtures
+ * propios; la integración MySQL requiere RUN_DB_TESTS.
+ *
+ * ============================================================
+ */
 import 'dotenv/config';
 
 import assert from 'node:assert/strict';

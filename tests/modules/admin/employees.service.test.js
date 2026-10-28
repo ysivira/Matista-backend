@@ -1,3 +1,18 @@
+/**
+ * ============================================================
+ * MATISTA | PRUEBAS DE GESTIÓN DE EMPLEADOS
+ * ============================================================
+ *
+ * Archivo: employees.service.test.js
+ * Módulo: Pruebas administrativas
+ *
+ * Responsabilidad:
+ * Probar transiciones, correo verificado, último administrador,
+ * concurrencia, revocaciones y rollback con repositorio sintético.
+ *
+ * ============================================================
+ */
+
 // Pruebas unitarias del servicio ADMIN de empleados (SL-1) contra un
 // repositorio sintetico con el mismo contrato que las bolsas AUTH y ADMIN
 // (sin base de datos ni drivers). Comprueban la matriz de transiciones

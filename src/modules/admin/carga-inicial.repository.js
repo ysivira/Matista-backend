@@ -1,5 +1,16 @@
 /**
- * Consulta e inserta los datos necesarios para la carga inicial.
+ * ============================================================
+ * MATISTA | PERSISTENCIA DE CARGA INICIAL
+ * ============================================================
+ *
+ * Archivo: carga-inicial.repository.js
+ * Módulo: Administración
+ *
+ * Responsabilidad:
+ * Leer el catálogo SIGEC y el estado destino, e insertar planes,
+ * tarifas, aportes y política inicial en la conexión recibida.
+ *
+ * ============================================================
  */
 import mysql from 'mysql2/promise';
 import { loadSigecSourceConfig } from '../../infrastructure/database/config.js';

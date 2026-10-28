@@ -1,3 +1,17 @@
+/**
+ * ============================================================
+ * MATISTA | PLANTILLA DEL CATÁLOGO
+ * ============================================================
+ *
+ * Archivo: catalogo.plantilla.js
+ * Módulo: Catálogo compartido
+ *
+ * Responsabilidad:
+ * Renderizar filas, metadatos, notas y condiciones del catálogo
+ * con marca, estilos y paginación autónomos para impresión y PDF.
+ *
+ * ============================================================
+ */
 import { readFile } from 'node:fs/promises';
 import { html, pesos, fecha } from '../../../infrastructure/pdf/formato-documental.js';
 

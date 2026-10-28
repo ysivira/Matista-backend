@@ -1,3 +1,17 @@
+/**
+ * ============================================================
+ * MATISTA | INTEGRACIÓN DE CARGA INICIAL
+ * ============================================================
+ *
+ * Archivo: carga-inicial.integration.test.js
+ * Módulo: Pruebas administrativas
+ *
+ * Responsabilidad:
+ * Comprobar consistencia, idempotencia y rollback de la carga
+ * en MySQL; la ejecución real requiere RUN_DB_TESTS.
+ *
+ * ============================================================
+ */
 import 'dotenv/config';
 
 import assert from 'node:assert/strict';

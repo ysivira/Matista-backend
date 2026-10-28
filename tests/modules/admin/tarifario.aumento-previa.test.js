@@ -1,3 +1,17 @@
+/**
+ * ============================================================
+ * MATISTA | PRUEBAS DE PREVISUALIZACIÓN DE AUMENTOS
+ * ============================================================
+ *
+ * Archivo: tarifario.aumento-previa.test.js
+ * Módulo: Pruebas administrativas
+ *
+ * Responsabilidad:
+ * Comparar vista previa y aplicación definitiva, preservando
+ * redondeo, modalidad, orden y ausencia de escrituras en la previa.
+ *
+ * ============================================================
+ */
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 

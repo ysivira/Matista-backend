@@ -1,3 +1,17 @@
+/**
+ * ============================================================
+ * MATISTA | INTEGRACIÓN COMERCIAL
+ * ============================================================
+ *
+ * Archivo: asesor.integration.test.js
+ * Módulo: Pruebas comerciales
+ *
+ * Responsabilidad:
+ * Probar propiedad, preparación, emisión e historia mediante
+ * HTTP y MySQL reales; requiere habilitar RUN_DB_TESTS.
+ *
+ * ============================================================
+ */
 import 'dotenv/config';
 import assert from 'node:assert/strict';
 import { randomBytes, randomInt } from 'node:crypto';

@@ -1,5 +1,16 @@
 /**
- * Gestiona tarifas, versiones y cambios económicos con control de concurrencia.
+ * ============================================================
+ * MATISTA | SERVICIOS DEL TARIFARIO
+ * ============================================================
+ *
+ * Archivo: tarifario.service.js
+ * Módulo: Administración
+ *
+ * Responsabilidad:
+ * Gestionar consultas históricas y el ciclo de borradores, aumentos,
+ * edición, activación y deshacer con revisiones y auditoría.
+ *
+ * ============================================================
  */
 import { withConnection } from '../auth/auth.repository.js';
 import {
@@ -589,7 +600,11 @@ async function validarEdicionDeVersion(
 }
 
 /**
- * Calculo economico puro del aumento masivo: es la UNICA implementacion de
+ * ============================================================
+ * CALCULAR IMPORTES AUMENTO
+ * ============================================================
+ *
+ * Cálculo económico puro del aumento masivo: es la única implementación de
  * importes, usada por la previsualizacion y por la aplicacion definitiva.
  * El incremento de cada fila es el resultado HALF-UP de aplicarPorcentaje
  * (money.js) y el precio nuevo es precio + incremento exacto en centavos.
@@ -820,9 +835,9 @@ export async function previsualizarAumentoVersion(
 }
 
 /**
- * Cambia el precio de una tarifa individual del borrador (caso B). El
- * rollback no es necesario: la revision optimista garantiza que solo el
- * primero de dos escritores simultaneos gana; el segundo recibe 409.
+ * Cambia el precio de una tarifa individual del borrador (caso B).
+ * La revisión optimista y el bloqueo serializan escritores concurrentes;
+ * withConnection confirma o revierte la unidad transaccional completa.
  * @param {object} pool Pool MySQL compartido por ADMIN.
  * @param {{id: unknown, tarifaId: unknown}} parametros Segmentos HTTP.
  * @param {{precio: unknown, revision: unknown}} cuerpo Cuerpo de la peticion.
@@ -1423,7 +1438,11 @@ function ultimoCambioEconomico(eventos) {
 }
 
 /**
- * Deshace el ULTIMO cambio economico de un borrador en PREPARACION
+ * ============================================================
+ * DESHACER ULTIMO CAMBIO ECONOMICO
+ * ============================================================
+ *
+ * Deshace el último cambio económico de un borrador en PREPARACION
  * (edicion individual o aumento masivo): restaura los precios guardados
  * en la auditoria como valor_anterior, dentro de una unica transaccion,
  * con revision optimista y generando su propia auditoria (eventos con

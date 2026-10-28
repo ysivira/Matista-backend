@@ -1,4 +1,19 @@
 /**
+ * ============================================================
+ * MATISTA | FORMATOS DOCUMENTALES
+ * ============================================================
+ *
+ * Archivo: formato-documental.js
+ * Módulo: Infraestructura documental
+ *
+ * Responsabilidad:
+ * Escapar contenido HTML y presentar importes y fechas sin
+ * recalcular la economía del catálogo o del snapshot histórico.
+ *
+ * ============================================================
+ */
+
+/**
  * Escapa texto oficial o personal antes de incorporarlo al HTML, sin interpretar etiquetas recibidas.
  * @param {unknown} valor Texto o dato escalar; null y undefined se presentan vacíos.
  * @returns {string} Texto seguro para contenido y atributos HTML entre comillas.

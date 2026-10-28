@@ -1,5 +1,16 @@
 /**
- * Opera importes y porcentajes con precisión entera y redondeo HALF-UP.
+ * ============================================================
+ * MATISTA | ARITMÉTICA MONETARIA
+ * ============================================================
+ *
+ * Archivo: money.js
+ * Módulo: Utilidades compartidas
+ *
+ * Responsabilidad:
+ * Operar importes y porcentajes con enteros BigInt escalados,
+ * conversiones DECIMAL y redondeo HALF-UP.
+ *
+ * ============================================================
  */
 
 /*
@@ -30,6 +41,9 @@ const PATRON_DECIMAL = /^(-?)(\d+)(\.(\d+))?$/;
  * - Parametros: `valor` acepta string "123.45", "-7.5" o number finito.
  * - Retorna: objeto interno de calculo; nunca expone punto flotante.
  * - Error: ADMIN_VALIDACION si el valor no es un decimal finito.
+ *
+ * @param {string|number} valor - Decimal con signo opcional.
+ * @returns {{mantisa: bigint, escala: number, negativo: boolean}} Partes del decimal.
  */
 export function parseDecimal(valor) {
   if (typeof valor === 'number') {
@@ -58,6 +72,10 @@ export function parseDecimal(valor) {
  * - Parametros: numerador y denominador BigInt positivos.
  * - Retorna: BigInt del cociente redondeado HALF-UP.
  * - Error: ADMIN_VALIDACION si el denominador es cero.
+ *
+ * @param {bigint} numerador - Numerador absoluto.
+ * @param {bigint} denominador - Divisor absoluto.
+ * @returns {bigint} Cociente redondeado HALF-UP.
  */
 export function dividirHalfUp(numerador, denominador) {
   if (denominador === 0n) {
@@ -76,6 +94,9 @@ export function dividirHalfUp(numerador, denominador) {
  * - Parametros: `importe` string/number decimal.
  * - Retorna: BigInt de centavos (puede ser negativo).
  * - Error: ADMIN_VALIDACION si el formato es invalido.
+ *
+ * @param {string|number} importe - Importe decimal recibido.
+ * @returns {bigint} Centavos con signo y redondeo HALF-UP.
  */
 export function importeACentavos(importe) {
   const { mantisa, escala, negativo } = parseDecimal(importe);
@@ -92,6 +113,9 @@ export function importeACentavos(importe) {
  *
  * - Parametros: `centavos` BigInt con signo.
  * - Retorna: string tipo "-12.30" (formato DECIMAL(), listo para SQL).
+ *
+ * @param {bigint} centavos - Centavos con signo.
+ * @returns {string} Importe con dos decimales fijos.
  */
 export function centavosAImporte(centavos) {
   const negativo = centavos < 0n;
@@ -110,6 +134,9 @@ export function centavosAImporte(centavos) {
  * - Retorna: string "x.yy"; "x.yy0" entradas ya redondeadas se
  *   normalizan a dos decimales fijos.
  * - Error: ADMIN_VALIDACION si el formato es invalido.
+ *
+ * @param {string|number} importe - Importe decimal recibido.
+ * @returns {string} Importe con dos decimales y redondeo HALF-UP.
  */
 export function redondearImporte(importe) {
   return centavosAImporte(importeACentavos(importe));
@@ -124,6 +151,10 @@ export function redondearImporte(importe) {
  *   (porcentaje 7.00 significa 7%).
  * - Retorna: string importe "x.yy" con el resultado.
  * - Error: ADMIN_VALIDACION si alguno de los valores es invalido.
+ *
+ * @param {string|number} importe - Base monetaria decimal.
+ * @param {string|number} porcentaje - Porcentaje no negativo.
+ * @returns {string} Importe resultante con dos decimales.
  */
 export function aplicarPorcentaje(importe, porcentaje) {
   const centavosImporte = importeACentavos(importe);
@@ -149,6 +180,10 @@ export function aplicarPorcentaje(importe, porcentaje) {
  * - Parametros: `a` y `b` string/number decimal.
  * - Retorna: -1 si a < b, 0 si iguales, 1 si a > b.
  * - Error: ADMIN_VALIDACION si alguno es invalido.
+ *
+ * @param {string|number} a - Primer importe.
+ * @param {string|number} b - Segundo importe.
+ * @returns {number} Menos uno, cero o uno según los centavos comparados.
  */
 export function compararImportes(a, b) {
   const centavosA = importeACentavos(a);
@@ -166,6 +201,10 @@ export function compararImportes(a, b) {
  * - Parametros: `importe` valor a validar; opciones con `maximo`
  *   (string, por defecto 99999999.99) y `decimales` (2).
  * - Retorna: true si es valido para el esquema; false en caso contrario.
+ *
+ * @param {string|number} importe - Decimal que se valida.
+ * @param {object} [opciones] - Máximo y cantidad de decimales admitidos.
+ * @returns {boolean} Si el importe es no negativo y cumple los límites.
  */
 export function esImporteValido(importe, { maximo = '99999999.99', decimales = 2 } = {}) {
   let contenido;
@@ -187,6 +226,10 @@ export function esImporteValido(importe, { maximo = '99999999.99', decimales = 2
  *
  * - Parametros: `porcentaje` valor a validar; `maximo` por defecto 99.99.
  * - Retorna: true si es un porcentaje admisible; false en caso contrario.
+ *
+ * @param {string|number} porcentaje - Decimal que se valida.
+ * @param {object} [opciones] - Máximo decimal admitido.
+ * @returns {boolean} Si el porcentaje es no negativo y no supera el máximo.
  */
 export function esPorcentajeValido(porcentaje, { maximo = '99.99' } = {}) {
   let contenido;

@@ -1,3 +1,17 @@
+/**
+ * ============================================================
+ * MATISTA | FIXTURES DE CUENTA
+ * ============================================================
+ *
+ * Archivo: fixtures.js
+ * Módulo: Soporte de pruebas AUTH
+ *
+ * Responsabilidad:
+ * Construir contexto, repositorio en memoria y sesiones con
+ * secretos efímeros para pruebas sin servicios externos.
+ *
+ * ============================================================
+ */
 import { randomBytes } from 'node:crypto';
 import { hashPassword } from '../../src/infrastructure/security/password.js';
 import { signAccessToken } from '../../src/infrastructure/security/jwt.js';

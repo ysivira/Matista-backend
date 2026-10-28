@@ -1,5 +1,16 @@
 /**
- * Genera tokens temporales y sus hashes para persistencia segura.
+ * ============================================================
+ * MATISTA | TOKENS TEMPORALES
+ * ============================================================
+ *
+ * Archivo: token.js
+ * Módulo: Infraestructura de seguridad
+ *
+ * Responsabilidad:
+ * Generar tokens aleatorios y hashes SHA-256 para verificar
+ * correos o restablecer contraseñas con vencimiento controlado.
+ *
+ * ============================================================
  */
 import { createHash, randomBytes } from 'node:crypto';
 import { loadSecurityConfig } from './config.js';
@@ -24,7 +35,7 @@ export function hashTemporaryToken(token) {
 }
 
 /**
- * Genera un token y su hash; solo el hash se debe persistir en la etapa C.
+ * Genera un token y su hash; el servicio AUTH persiste únicamente el hash.
  * @param {'VERIFICAR_EMAIL'|'RESET_PASSWORD'} type Propósito del token.
  * @param {object} config Configuración con duraciones aprobadas, en segundos.
  * @param {Date} now Instante de emisión sustituible en pruebas.

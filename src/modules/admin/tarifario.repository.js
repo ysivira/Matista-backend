@@ -1,5 +1,16 @@
 /**
- * Consulta tarifas y persiste versiones, revisiones y eventos del tarifario.
+ * ============================================================
+ * MATISTA | PERSISTENCIA DEL TARIFARIO
+ * ============================================================
+ *
+ * Archivo: tarifario.repository.js
+ * Módulo: Administración
+ *
+ * Responsabilidad:
+ * Consultar vigencia y tarifas, persistir versiones y precios,
+ * controlar revisiones y registrar eventos en la conexión recibida.
+ *
+ * ============================================================
  */
 /**
  * Lista el catalogo publico de planes activos en su orden persistido.

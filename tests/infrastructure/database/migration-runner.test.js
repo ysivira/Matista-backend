@@ -1,3 +1,17 @@
+/**
+ * ============================================================
+ * MATISTA | PRUEBAS DEL RUNNER SQL
+ * ============================================================
+ *
+ * Archivo: migration-runner.test.js
+ * Módulo: Pruebas de base de datos
+ *
+ * Responsabilidad:
+ * Probar validación de SQL y clasificación del historial,
+ * incluidos checksums y aplicaciones parciales, sin acceder a MySQL.
+ *
+ * ============================================================
+ */
 import assert from 'node:assert/strict';
 import test from 'node:test';
 

@@ -1,5 +1,19 @@
 /**
- * Ejecuta las migraciones de MATISTA con las protecciones del runner.
+ * ============================================================
+ * MATISTA | COMANDO DE MIGRACIONES
+ * ============================================================
+ *
+ * Archivo: migrate.js
+ * Módulo: Mantenimiento
+ *
+ * Responsabilidad:
+ * Invocar el runner con el directorio oficial de migraciones
+ * y comunicar las versiones aplicadas u omitidas.
+ *
+ * Consideraciones técnicas:
+ * - Ejecutarlo puede modificar el esquema y registrar checksums.
+ *
+ * ============================================================
  */
 import 'dotenv/config';
 import path from 'node:path';

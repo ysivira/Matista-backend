@@ -1,3 +1,18 @@
+/**
+ * ============================================================
+ * MATISTA | PDF DE TEXTO
+ * ============================================================
+ *
+ * Archivo: documento.js
+ * Módulo: Infraestructura documental
+ *
+ * Responsabilidad:
+ * Generar documentos PDF A4 de texto con codificación WinAnsi,
+ * ajuste de líneas, paginación y acentos de color por plan.
+ *
+ * ============================================================
+ */
+
 /** Convierte texto a WinAnsi de PDF, preservando acentos españoles y escapando delimitadores. */
 function textoPdf(valor) {
   return String(valor)

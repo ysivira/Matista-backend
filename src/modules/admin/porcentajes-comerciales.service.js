@@ -1,5 +1,16 @@
 /**
- * Gestiona los porcentajes comerciales y sus versiones.
+ * ============================================================
+ * MATISTA | SERVICIOS DE PORCENTAJES
+ * ============================================================
+ *
+ * Archivo: porcentajes-comerciales.service.js
+ * Módulo: Administración
+ *
+ * Responsabilidad:
+ * Validar, crear, versionar descripciones y cerrar porcentajes
+ * comerciales con auditoría dentro de la misma transacción.
+ *
+ * ============================================================
  */
 import { withConnection } from '../auth/auth.repository.js';
 import {

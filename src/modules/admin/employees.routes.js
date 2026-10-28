@@ -1,5 +1,16 @@
 /**
- * Expone la gestión HTTP del directorio de empleados.
+ * ============================================================
+ * MATISTA | RUTAS DEL DIRECTORIO
+ * ============================================================
+ *
+ * Archivo: employees.routes.js
+ * Módulo: Administración
+ *
+ * Responsabilidad:
+ * Exponer listado, detalle y cambios de estado o rol de empleados
+ * mediante servicios y una sesión ADMIN revalidada.
+ *
+ * ============================================================
  */
 
 /*

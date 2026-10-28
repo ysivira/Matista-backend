@@ -1,3 +1,17 @@
+/**
+ * ============================================================
+ * MATISTA | PRUEBAS DEL CONTRATO COMERCIAL
+ * ============================================================
+ *
+ * Archivo: asesor.unit.test.js
+ * Módulo: Pruebas comerciales
+ *
+ * Responsabilidad:
+ * Verificar validación declarativa, documentos, CSV y garantías
+ * de propiedad sin ejecutar integraciones de base de datos.
+ *
+ * ============================================================
+ */
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { validarPreparacion, validarCliente } from '../../../src/modules/asesor/asesor.validation.js';

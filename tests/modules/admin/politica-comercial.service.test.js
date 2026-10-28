@@ -1,3 +1,17 @@
+/**
+ * ============================================================
+ * MATISTA | PRUEBAS DEL CICLO DE POLÍTICAS
+ * ============================================================
+ *
+ * Archivo: politica-comercial.service.test.js
+ * Módulo: Pruebas administrativas
+ *
+ * Responsabilidad:
+ * Probar activación, programación, recuperación y revisión de
+ * políticas con un pool simulado y snapshots independientes.
+ *
+ * ============================================================
+ */
 import assert from 'node:assert/strict';
 import test from 'node:test';
 

@@ -1,5 +1,16 @@
 /**
- * Valida filtros, importes, fechas y revisiones del tarifario.
+ * ============================================================
+ * MATISTA | VALIDADORES DEL TARIFARIO
+ * ============================================================
+ *
+ * Archivo: tarifario.validators.js
+ * Módulo: Administración
+ *
+ * Responsabilidad:
+ * Validar filtros, identificadores, fechas con zona, importes,
+ * porcentajes, revisiones y motivos de descarte del tarifario.
+ *
+ * ============================================================
  */
 import { errorValidacion } from './admin.errors.js';
 import { compararImportes, esImporteValido, esPorcentajeValido } from './admin.money.js';
@@ -197,8 +208,8 @@ export function validarPrecioEdicion(precioValor) {
 }
 
 /**
- * Valida el porcentaje de aumento masivo contra DECIMAL(5,2) de la
- * migracion 007: positivo, hasta dos decimales, tope 999.99.
+ * Valida el porcentaje de aumento masivo: positivo y dentro del
+ * máximo 99.99 admitido por esPorcentajeValido.
  * @param {unknown} porcentajeValor Campo `porcentaje` del cuerpo HTTP.
  * @returns {string} Representacion textual para el detalle de auditoria.
  * @throws {Error} ADMIN_VALIDACION cuando excede la columna o es invalido.

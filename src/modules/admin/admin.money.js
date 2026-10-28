@@ -1,5 +1,16 @@
 /**
- * Adapta la aritmética monetaria exacta a las operaciones de ADMIN.
+ * ============================================================
+ * MATISTA | COMPATIBILIDAD MONETARIA ADMIN
+ * ============================================================
+ *
+ * Archivo: admin.money.js
+ * Módulo: Administración
+ *
+ * Responsabilidad:
+ * Reexportar las utilidades monetarias compartidas conservando
+ * los nombres y la identidad de la interfaz pública de ADMIN.
+ *
+ * ============================================================
  */
 
 /*

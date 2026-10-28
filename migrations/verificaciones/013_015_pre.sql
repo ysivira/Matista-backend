@@ -1,3 +1,16 @@
+-- ============================================================
+-- MATISTA | COMPROBACIONES PREVIAS DEL CICLO TARIFARIO
+-- ============================================================
+--
+-- Archivo: 013_015_pre.sql
+-- Módulo: Verificación de migraciones
+--
+-- Responsabilidad:
+-- Consultar compatibilidad de estados, fechas y dependencias
+-- antes de migrar el ciclo tarifario, sin modificar datos.
+--
+-- ============================================================
+
 -- Verificaciones PREVIAS a 013/014/015 (solo lectura, sin DDL ni DML).
 -- Ejecutar contra la base objetivo antes de correr las migraciones:
 --   mysql -h<host> -P<puerto> -u<usuario> -p <base> < migrations/verificaciones/013_015_pre.sql

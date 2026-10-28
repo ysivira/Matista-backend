@@ -1,5 +1,16 @@
 /**
- * Exige un origen confiable en las solicitudes protegidas.
+ * ============================================================
+ * MATISTA | CONTROL DE ORIGEN
+ * ============================================================
+ *
+ * Archivo: require-trusted-origin.js
+ * Módulo: Middleware compartido
+ *
+ * Responsabilidad:
+ * Exigir coincidencia exacta de Origin en operaciones mutables,
+ * sin utilizar Host o Referer como fuentes alternativas.
+ *
+ * ============================================================
  */
 import { createAppError } from '../errors/app-error.js';
 

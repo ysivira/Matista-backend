@@ -1,5 +1,16 @@
 /**
- * Gestiona clientes propios y sus revisiones.
+ * ============================================================
+ * MATISTA | SERVICIOS DE CLIENTES
+ * ============================================================
+ *
+ * Archivo: clientes.service.js
+ * Módulo: Asesor
+ *
+ * Responsabilidad:
+ * Consultar y guardar clientes propios con revisión optimista,
+ * auditoría y una proyección limitada para búsquedas de DNI ajeno.
+ *
+ * ============================================================
  */
 import { withConnection } from '../auth/auth.repository.js';
 import { createAppError } from '../../shared/errors/app-error.js';

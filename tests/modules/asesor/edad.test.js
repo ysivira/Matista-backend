@@ -1,3 +1,17 @@
+/**
+ * ============================================================
+ * MATISTA | PRUEBAS DE EDAD E HISTORIA
+ * ============================================================
+ *
+ * Archivo: edad.test.js
+ * Módulo: Pruebas comerciales
+ *
+ * Responsabilidad:
+ * Probar años cumplidos y fechas civiles, preservando edad de
+ * emisión y datos históricos al guardar identidad del cliente.
+ *
+ * ============================================================
+ */
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { calcularEdad, hoyUTC } from '../../../src/domain/comercial/edad.js';

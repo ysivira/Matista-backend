@@ -1,5 +1,16 @@
 /**
- * Persiste cuentas, correos, sesiones y tokens en unidades de trabajo.
+ * ============================================================
+ * MATISTA | PERSISTENCIA DE CUENTAS
+ * ============================================================
+ *
+ * Archivo: auth.repository.js
+ * Módulo: Autenticación
+ *
+ * Responsabilidad:
+ * Persistir empleados, correos, sesiones, hashes de tokens y
+ * auditoría mediante conexiones y transacciones explícitas.
+ *
+ * ============================================================
  */
 import { createAppError } from '../../shared/errors/app-error.js';
 import { PROFILE_FIELDS } from './auth.constants.js';

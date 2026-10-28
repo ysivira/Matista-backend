@@ -1,5 +1,16 @@
 /**
- * Adapta las solicitudes y respuestas HTTP de autenticación y perfil.
+ * ============================================================
+ * MATISTA | CONTROLADORES DE CUENTA
+ * ============================================================
+ *
+ * Archivo: auth.controller.js
+ * Módulo: Autenticación
+ *
+ * Responsabilidad:
+ * Adaptar datos validados a los servicios de cuenta y perfil,
+ * emitir o eliminar cookies y devolver respuestas públicas.
+ *
+ * ============================================================
  */
 import { matchedData } from 'express-validator';
 import * as service from './auth.service.js';

@@ -1,4 +1,19 @@
 /**
+ * ============================================================
+ * MATISTA | FIXTURES DOCUMENTALES
+ * ============================================================
+ *
+ * Archivo: pdf.fixtures.js
+ * Módulo: Soporte de pruebas documentales
+ *
+ * Responsabilidad:
+ * Construir planes y cotizaciones sintéticos con texto estable,
+ * caracteres escapables y casos de paginación documental.
+ *
+ * ============================================================
+ */
+
+/**
  * Construye un plan sintético con texto estable y caracteres que deben escaparse.
  * @param {string} nombre Nombre del plan cuya identidad visual se comprueba.
  * @returns {object} Plan nuevo, independiente de bases de datos y datos personales reales.

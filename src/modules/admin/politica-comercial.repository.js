@@ -1,5 +1,16 @@
 /**
- * Persiste versiones y eventos de la política comercial.
+ * ============================================================
+ * MATISTA | PERSISTENCIA DE POLÍTICAS
+ * ============================================================
+ *
+ * Archivo: politica-comercial.repository.js
+ * Módulo: Administración
+ *
+ * Responsabilidad:
+ * Persistir versiones de política, porcentajes vinculados y
+ * eventos, conservando revisiones y snapshots de responsables.
+ *
+ * ============================================================
  */
 const CAMPOS_POLITICA = `
   p.id,

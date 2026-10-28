@@ -1,9 +1,20 @@
 /**
- * Registra eventos administrativos en la conexión de la operación.
+ * ============================================================
+ * MATISTA | AUDITORÍA DEL TARIFARIO
+ * ============================================================
+ *
+ * Archivo: admin.audit.js
+ * Módulo: Administración
+ *
+ * Responsabilidad:
+ * Registrar eventos permitidos de versiones en la misma conexión
+ * que la operación administrativa para compartir su transacción.
+ *
+ * ============================================================
  */
 
 /*
- * Auditoria transaccional compartida de SPEC-03 ADMIN.
+ * Auditoría transaccional compartida de ADMIN.
  * Los eventos VERSION_* del tarifario se escriben en la tabla
  * empleados_auditoria existente (infraestructura AUTH), respetando el
  * CHECK incorporado por la migracion 012. La fila se inserta con la
@@ -32,6 +43,10 @@ export const EVENTOS_VERSION = Object.freeze([
  * - Parametros: `versionId` identificador de tarifario_versiones;
  *   `estado` estado por el que pasa la version.
  * - Retorna: string determinista, apto para valor_anterior/valor_nuevo.
+ *
+ * @param {string|number} versionId - Identificador de versión.
+ * @param {string} estado - Estado registrado.
+ * @returns {string} Etiqueta de versión para auditoría.
  */
 export function etiquetaVersion(versionId, estado) {
   return `version#${versionId}:${estado}`;
@@ -50,6 +65,14 @@ export function etiquetaVersion(versionId, estado) {
  * - Errores: ADMIN_VALIDACION ante evento desconocido (evita chocar el
  *   CHECK en runtime); el error original de la base si falla el INSERT,
  *   que abortara la operacion en curso (auditoria obligatoria).
+ *
+ * @param {object} connection - Conexión transaccional de la operación.
+ * @param {string} evento - Evento de la lista EVENTOS_VERSION.
+ * @param {string} actorLegajo - Responsable real de la operación.
+ * @param {string|null} valorAnterior - Etiqueta previa.
+ * @param {string|null} valorNuevo - Etiqueta resultante.
+ * @param {string} fechaLocalizada - Fecha UTC de la auditoría.
+ * @returns {Promise<void>} Finaliza al insertar el evento.
  */
 export async function registrarAuditoriaVersion(
   connection,

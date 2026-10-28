@@ -1,5 +1,16 @@
 /**
- * Consulta y actualiza empleados mediante sentencias parametrizadas.
+ * ============================================================
+ * MATISTA | PERSISTENCIA DEL DIRECTORIO
+ * ============================================================
+ *
+ * Archivo: employees.repository.js
+ * Módulo: Administración
+ *
+ * Responsabilidad:
+ * Consultar perfiles públicos y actualizar estado o rol de
+ * empleados, con bloqueos para proteger el último ADMIN activo.
+ *
+ * ============================================================
  */
 
 /*

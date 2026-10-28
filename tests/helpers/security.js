@@ -1,3 +1,17 @@
+/**
+ * ============================================================
+ * MATISTA | SEGURIDAD AISLADA DE PRUEBA
+ * ============================================================
+ *
+ * Archivo: security.js
+ * Módulo: Soporte de pruebas
+ *
+ * Responsabilidad:
+ * Generar configuración de seguridad con secretos efímeros,
+ * sin depender de credenciales del entorno de ejecución.
+ *
+ * ============================================================
+ */
 import { randomBytes } from 'node:crypto';
 import { loadSecurityConfig } from '../../src/infrastructure/security/config.js';
 

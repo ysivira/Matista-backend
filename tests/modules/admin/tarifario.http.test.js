@@ -1,3 +1,17 @@
+/**
+ * ============================================================
+ * MATISTA | CONTRATOS HTTP ADMINISTRATIVOS
+ * ============================================================
+ *
+ * Archivo: tarifario.http.test.js
+ * Módulo: Pruebas administrativas
+ *
+ * Responsabilidad:
+ * Ejercitar rutas, roles, CORS, versiones y políticas mediante
+ * HTTP local y pools sintéticos que capturan las operaciones SQL.
+ *
+ * ============================================================
+ */
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 

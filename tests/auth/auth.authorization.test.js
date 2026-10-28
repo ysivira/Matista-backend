@@ -1,3 +1,17 @@
+/**
+ * ============================================================
+ * MATISTA | PRUEBAS DE AUTORIZACIÓN AUTH
+ * ============================================================
+ *
+ * Archivo: auth.authorization.test.js
+ * Módulo: Pruebas de autenticación
+ *
+ * Responsabilidad:
+ * Verificar sesión y cuenta vigentes, revocaciones y cambios de
+ * credenciales concurrentes mediante dependencias aisladas.
+ *
+ * ============================================================
+ */
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { signAccessToken } from '../../src/infrastructure/security/jwt.js';

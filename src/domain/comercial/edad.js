@@ -1,10 +1,19 @@
 /**
- * Calcula y valida edades a partir de fechas civiles.
- */
-/**
- * Cálculo de edad a partir de la fecha de nacimiento del cliente (SPEC-UI-02).
+ * ============================================================
+ * MATISTA | EDAD CIVIL
+ * ============================================================
+ *
+ * Archivo: edad.js
+ * Módulo: Dominio comercial
+ *
+ * Responsabilidad:
+ * Calcular y validar edades desde fechas civiles con referencia UTC.
+ *
+ * Consideraciones técnicas:
  * La edad no es un atributo persistente del cliente: se deriva de su fecha real
  * y los snapshots de cotizaciones conservan la edad efectivamente utilizada.
+ *
+ * ============================================================
  */
 
 /** Convierte 'DD/MM/AAAA' o 'AAAA-MM-DD' en partes numéricas sin interpretar husos horarios. */

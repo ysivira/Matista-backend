@@ -1,5 +1,16 @@
 /**
- * Valida las entradas HTTP de autenticación y perfil.
+ * ============================================================
+ * MATISTA | VALIDADORES DE CUENTA
+ * ============================================================
+ *
+ * Archivo: auth.validators.js
+ * Módulo: Autenticación
+ *
+ * Responsabilidad:
+ * Construir validaciones por operación AUTH y rechazar campos
+ * desconocidos o actualizaciones de perfil vacías.
+ *
+ * ============================================================
  */
 import { body, checkExact } from 'express-validator';
 import { publicValidationMessage } from '../../shared/validators/validation-result.js';

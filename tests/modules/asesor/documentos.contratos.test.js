@@ -1,3 +1,17 @@
+/**
+ * ============================================================
+ * MATISTA | SENSIBILIDAD DE CONTRATOS DOCUMENTALES
+ * ============================================================
+ *
+ * Archivo: documentos.contratos.test.js
+ * Módulo: Pruebas documentales
+ *
+ * Responsabilidad:
+ * Probar que el comparador admite formato CSS neutro y rechaza
+ * mutaciones de selectores, valores, orden y fragmentos HTML.
+ *
+ * ============================================================
+ */
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFile } from 'node:fs/promises';

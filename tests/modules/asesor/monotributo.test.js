@@ -1,3 +1,17 @@
+/**
+ * ============================================================
+ * MATISTA | PRUEBAS DE APORTES DE MONOTRIBUTO
+ * ============================================================
+ *
+ * Archivo: monotributo.test.js
+ * Módulo: Pruebas comerciales
+ *
+ * Responsabilidad:
+ * Probar aportes independientes de adherentes y recotización
+ * sin alterar el origen; el PDF real exige RUN_PDF_TESTS.
+ *
+ * ============================================================
+ */
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { calcularCotizacion } from '../../../src/domain/comercial/cotizacion.engine.js';

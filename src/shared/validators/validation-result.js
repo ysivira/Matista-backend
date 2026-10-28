@@ -1,5 +1,16 @@
 /**
- * Convierte los errores de validación en respuestas públicas uniformes.
+ * ============================================================
+ * MATISTA | RESULTADOS DE VALIDACIÓN
+ * ============================================================
+ *
+ * Archivo: validation-result.js
+ * Módulo: Validadores compartidos
+ *
+ * Responsabilidad:
+ * Publicar únicamente mensajes marcados por el servidor y
+ * convertir validaciones fallidas en errores HTTP uniformes.
+ *
+ * ============================================================
  */
 import { validationResult } from 'express-validator';
 import { createAppError } from '../errors/app-error.js';

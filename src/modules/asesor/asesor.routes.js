@@ -1,5 +1,16 @@
 /**
- * Compone las rutas del asesor con autenticación y autorización.
+ * ============================================================
+ * MATISTA | RUTAS DEL ASESOR
+ * ============================================================
+ *
+ * Archivo: asesor.routes.js
+ * Módulo: Asesor
+ *
+ * Responsabilidad:
+ * Exponer operaciones de clientes y cotizaciones bajo sesión
+ * ASESOR y reutilizar las consultas administrativas autorizadas.
+ *
+ * ============================================================
  */
 import { Router } from 'express';
 import cookieParser from 'cookie-parser';

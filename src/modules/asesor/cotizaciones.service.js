@@ -1,5 +1,20 @@
 /**
- * Prepara, calcula y consulta cotizaciones autorizadas del asesor.
+ * ============================================================
+ * MATISTA | SERVICIOS DE COTIZACIONES
+ * ============================================================
+ *
+ * Archivo: cotizaciones.service.js
+ * Módulo: Asesor
+ *
+ * Responsabilidad:
+ * Preparar, calcular, emitir y consultar cotizaciones propias
+ * con control de revisión, referencias vigentes y huella de cálculo.
+ *
+ * Consideraciones técnicas:
+ * - Las recotizaciones no reescriben la cotización de origen.
+ * - Las emisiones históricas se presentan desde su snapshot.
+ *
+ * ============================================================
  */
 import { withConnection } from '../auth/auth.repository.js';
 import { createAppError } from '../../shared/errors/app-error.js';
@@ -93,6 +108,8 @@ async function prepararEnConexion(c, actor, entrada) {
 
 /**
  * Calcula una vista previa autorizada sin persistir clientes, borradores, resultados ni auditorías.
+ * @param {object} pool - Pool MySQL de la operación.
+ * @param {string} actor - Legajo del asesor autenticado.
  * @param {object} datos Entradas declarativas del mismo contrato de preparación.
  * @returns {Promise<object>} Resultado real del motor; no sirve como confirmación de emisión.
  */
@@ -363,8 +380,15 @@ function huellaCalculo(resultado, entrada) {
 }
 
 /**
+ * ============================================================
+ * EMITIR PREPARACION
+ * ============================================================
+ *
  * Emite con recálculo autoritativo, número único, vigencia de 15 días y auditoría en una
  * transacción.
+ * @param {object} pool - Pool MySQL de la operación.
+ * @param {string} actor - Legajo del asesor autenticado.
+ * @param {string} id - Identificador de la preparación propia.
  * @param {object} datos Revisión y huella de la previsualización; jamás importes del navegador.
  * @returns {Promise<object>} Cotización emitida; un reintento conserva la misma emisión.
  */

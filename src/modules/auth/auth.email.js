@@ -1,5 +1,16 @@
 /**
- * Prepara los avisos de cuenta y los delega al servicio de correo.
+ * ============================================================
+ * MATISTA | AVISOS DE CUENTA
+ * ============================================================
+ *
+ * Archivo: auth.email.js
+ * Módulo: Autenticación
+ *
+ * Responsabilidad:
+ * Preparar avisos de verificación, recuperación y cambio de
+ * correo con enlaces de acción y delegar su envío SMTP.
+ *
+ * ============================================================
  */
 import { getEmailTransport, sendEmail } from '../../infrastructure/email/email.service.js';
 import { buildAuthEmail, MATISTA_LOGO_ATTACHMENT } from './auth.email.template.js';

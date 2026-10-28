@@ -1,3 +1,16 @@
+-- ============================================================
+-- MATISTA | COMPROBACIONES DE DESCARTE
+-- ============================================================
+--
+-- Archivo: 017_descarte_post.sql
+-- Módulo: Verificación de migraciones
+--
+-- Responsabilidad:
+-- Consultar evento DESCARTE, estado CANCELADA y guardas de
+-- exclusividad posteriores a la migración, sin modificar datos.
+--
+-- ============================================================
+
 -- Verificaciones de la 017 (solo lectura, sin DDL ni DML).
 -- Ejecutar contra la base objetivo DESPUES de aplicar
 -- migrations/017_descarte_versiones.sql (procedimiento en el informe de

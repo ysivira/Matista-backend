@@ -1,3 +1,21 @@
+/**
+ * ============================================================
+ * MATISTA | PLANTILLA DE CORREOS DE CUENTA
+ * ============================================================
+ *
+ * Archivo: auth.email.template.js
+ * Módulo: Autenticación
+ *
+ * Responsabilidad:
+ * Componer los cuatro avisos HTML AUTH con marca embebida por
+ * CID, contenido dinámico escapado y enlaces según su propósito.
+ *
+ * Consideraciones técnicas:
+ * - El token se codifica en el fragmento del enlace de acción.
+ * - El aviso de cambio confirmado no ofrece un botón de acción.
+ *
+ * ============================================================
+ */
 import { fileURLToPath } from 'node:url';
 
 /**

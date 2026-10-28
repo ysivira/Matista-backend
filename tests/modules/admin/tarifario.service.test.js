@@ -1,3 +1,17 @@
+/**
+ * ============================================================
+ * MATISTA | PRUEBAS DE SERVICIOS DEL TARIFARIO
+ * ============================================================
+ *
+ * Archivo: tarifario.service.test.js
+ * Módulo: Pruebas administrativas
+ *
+ * Responsabilidad:
+ * Probar consultas y ciclo completo de versiones, incluidas
+ * revisiones, redondeo, auditoría y deshacer con dobles aislados.
+ *
+ * ============================================================
+ */
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 

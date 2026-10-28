@@ -1,3 +1,17 @@
+/**
+ * ============================================================
+ * MATISTA | CONTRATOS DOCUMENTALES DE PRUEBA
+ * ============================================================
+ *
+ * Archivo: documentos.contratos.js
+ * Módulo: Soporte de pruebas documentales
+ *
+ * Responsabilidad:
+ * Comparar contenido HTML, CSS y JavaScript conservando orden,
+ * espacios significativos y sensibilidad ante cambios semánticos.
+ *
+ * ============================================================
+ */
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { Script } from 'node:vm';

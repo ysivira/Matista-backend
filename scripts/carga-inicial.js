@@ -1,5 +1,19 @@
 /**
- * Carga inicial de MATISTA: argumentos, ejecución y resumen de resultados.
+ * ============================================================
+ * MATISTA | CARGA INICIAL
+ * ============================================================
+ *
+ * Archivo: carga-inicial.js
+ * Módulo: Mantenimiento
+ *
+ * Responsabilidad:
+ * Leer la fuente SIGEC, ejecutar la carga inicial de MATISTA
+ * con actor explícito y presentar el resumen de la operación.
+ *
+ * Consideraciones técnicas:
+ * - Este script realiza escrituras; no es un diagnóstico de lectura.
+ *
+ * ============================================================
  */
 import 'dotenv/config';
 import { createDatabasePool } from '../src/infrastructure/database/connection.js';
