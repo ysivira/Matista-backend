@@ -27,6 +27,9 @@ export function createDatabasePool(config = loadDatabaseConfig()) {
     database: config.database,
     user: config.user,
     password: config.password,
+    ssl: process.env.DB_SSL === 'true'
+      ? { minVersion: 'TLSv1.2', rejectUnauthorized: true }
+      : undefined,
     connectionLimit: config.connectionLimit,
     waitForConnections: true,
     queueLimit: 0,
