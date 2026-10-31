@@ -39,7 +39,7 @@ function parseInteger(value, name, { min, max }) {
 }
 
 /**
- * Resuelve el nombre de base de datos autorizado para el entorno dado.
+ * Resuelve el nombre principal de base de datos autorizado para el entorno dado.
  * @param {string} nodeEnv Valor de NODE_ENV (development, test o production).
  * @returns {string} Nombre de base correspondiente.
  * @throws {Error} Si el entorno no está reconocido.
@@ -55,7 +55,8 @@ export function expectedDatabaseFor(nodeEnv) {
 /**
  * Lee y valida la configuración completa de MySQL desde variables de entorno.
  * La coherencia NODE_ENV/DB_NAME es obligatoria para evitar apuntar la
- * aplicación o las migraciones a una base no autorizada.
+ * aplicación o las migraciones a una base no autorizada. Solo la aplicación
+ * admite también production/matista_dev por el nombre histórico de la base alojada.
  * @param {object} env Entorno del proceso (por defecto process.env).
  * @param {object} [options] Con purpose='migration' restringe las bases permitidas.
  * @returns {object} Configuración congelada del pool (host, puerto, base, credenciales y límite).
@@ -65,7 +66,11 @@ export function loadDatabaseConfig(env = process.env, { purpose = 'application' 
   const nodeEnv = requireValue(env, 'NODE_ENV');
   const database = requireValue(env, 'DB_NAME');
   const expectedDatabase = expectedDatabaseFor(nodeEnv);
-  if (database !== expectedDatabase) {
+  const productionApplicationAlias =
+    purpose === 'application' &&
+    nodeEnv === 'production' &&
+    database === 'matista_dev';
+  if (database !== expectedDatabase && !productionApplicationAlias) {
     throw new Error(
       `DB_NAME=${database} no corresponde a NODE_ENV=${nodeEnv}; ` +
         `se esperaba ${expectedDatabase}.`

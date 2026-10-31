@@ -168,9 +168,11 @@ No publicar secretos generados, credenciales locales, enlaces con tokens ni dire
 |---|---|
 | `development` | `matista_dev` |
 | `test` | `matista_test` |
-| `production` | `matista_db` |
+| `production` | `matista_db` o `matista_dev` (solo `purpose: 'application'`) |
 
-El runner local de migraciones **rechaza producción**: sólo permite `matista_dev` y `matista_test`. Las 30 migraciones numeradas definen AUTH (001–005), catálogo/versiones/políticas y auditoría (006–023), y clientes/cotizaciones/guardas/identidad (024–030). El runner conserva checksums en `schema_migrations` y detecta inconsistencias; no editar SQL ya aplicado para hacer coincidir un entorno.
+La excepción `production/matista_dev` permite usar el nombre histórico de la base alojada en Aiven únicamente para la aplicación (`purpose: 'application'`, valor predeterminado). No cambia `NODE_ENV`, TLS, la política de seguridad ni las demás validaciones. No habilita ese destino para migraciones ni pruebas: las pruebas de persistencia siguen exigiendo `test/matista_test`. El nombre de la base no garantiza aislamiento; revisar también el servidor y los permisos para no compartir accidentalmente datos entre desarrollo y producción.
+
+El runner local de migraciones **rechaza producción**, incluso con `DB_NAME=matista_dev`: sólo permite las combinaciones `development/matista_dev` y `test/matista_test`. Las 30 migraciones numeradas definen AUTH (001–005), catálogo/versiones/políticas y auditoría (006–023), y clientes/cotizaciones/guardas/identidad (024–030). El runner conserva checksums en `schema_migrations` y detecta inconsistencias; no editar SQL ya aplicado para hacer coincidir un entorno.
 
 ### Preparación de una instalación nueva, por un operador autorizado
 

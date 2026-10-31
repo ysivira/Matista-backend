@@ -83,6 +83,16 @@ test('el runner solo admite las bases locales aprobadas', () => {
   );
 });
 
+test('el runner rechaza production/matista_dev aunque la aplicacion admita ese nombre', () => {
+  assert.throws(
+    () => assertMigrationTarget({
+      nodeEnv: 'production',
+      database: 'matista_dev',
+    }),
+    /solo admite development\/matista_dev o test\/matista_test/,
+  );
+});
+
 test('clasifica migraciones pendientes y aplicadas sin deriva', () => {
   const pending = assessMigrationState([migration], [], []);
   const applied = assessMigrationState(
