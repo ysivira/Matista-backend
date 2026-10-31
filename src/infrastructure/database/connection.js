@@ -13,6 +13,8 @@
  * ============================================================
  */
 import mysql from 'mysql2/promise';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { loadDatabaseConfig } from './config.js';
 
 /**
@@ -28,7 +30,13 @@ export function createDatabasePool(config = loadDatabaseConfig()) {
     user: config.user,
     password: config.password,
     ssl: process.env.DB_SSL === 'true'
-      ? { minVersion: 'TLSv1.2', rejectUnauthorized: true }
+      ? {
+          ca: readFileSync(
+            fileURLToPath(new URL('../../../certs/aiven-ca.pem', import.meta.url))
+          ),
+          minVersion: 'TLSv1.2',
+          rejectUnauthorized: true
+        }
       : undefined,
     connectionLimit: config.connectionLimit,
     waitForConnections: true,
