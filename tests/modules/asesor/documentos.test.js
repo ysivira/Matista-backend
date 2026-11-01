@@ -22,6 +22,9 @@ import { cotizacionHtml, cotizacionPdf } from '../../../src/modules/asesor/docum
 import { calcularCotizacion } from '../../../src/domain/comercial/cotizacion.engine.js';
 import { REGLAS_COMERCIALES } from '../../../src/domain/comercial/reglas.confirmadas.js';
 
+// Las utilidades locales de Poppler no deben heredar las bibliotecas de Chromium para Amazon Linux.
+const entornoHerramientasPdf = { ...process.env };
+
 /** Crea una emisión sintética con economía del motor y texto oficial recibido, sin escribir en MySQL. */
 function emision(plan = { nombre: 'RUBÍ', condiciones_generales: 'Texto oficial\n\nSegundo párrafo & <literal>.' }) {
   const solicitud = { version_contrato: 1, referencias: { tarifa_version_id: '1', politica_id: '2' },
@@ -78,10 +81,10 @@ test('Chrome real: cuatro catálogos completos y continuación legible de condic
   for (const plan of audit.planes) {
     const q = emision(plan), archivo = join(temporal, `plan-${plan.id}.pdf`);
     await writeFile(archivo, await cotizacionPdf(q));
-    const paginas = Number(execFileSync('pdfinfo', [archivo], { encoding: 'utf8' }).match(/Pages:\s+(\d+)/)[1]);
+    const paginas = Number(execFileSync('pdfinfo', [archivo], { encoding: 'utf8', env: entornoHerramientasPdf }).match(/Pages:\s+(\d+)/)[1]);
     assert.ok(paginas >= 2);
-    const primera = execFileSync('pdftotext', ['-f', '1', '-l', '1', archivo, '-'], { encoding: 'utf8' });
-    const siguientes = execFileSync('pdftotext', ['-f', '2', archivo, '-'], { encoding: 'utf8' }).replace(/\s+/g, ' ');
+    const primera = execFileSync('pdftotext', ['-f', '1', '-l', '1', archivo, '-'], { encoding: 'utf8', env: entornoHerramientasPdf });
+    const siguientes = execFileSync('pdftotext', ['-f', '2', archivo, '-'], { encoding: 'utf8', env: entornoHerramientasPdf }).replace(/\s+/g, ' ');
     assert.ok(primera.includes('199.926,44')); assert.ok(primera.includes('73,56'));
     assert.ok(!primera.includes('Beneficio TDC'));
     assert.ok(siguientes.includes('Condiciones generales'));
@@ -90,7 +93,7 @@ test('Chrome real: cuatro catálogos completos y continuación legible de condic
   }
   const archivo = join(temporal, 'condiciones-extensas.pdf');
   await writeFile(archivo, await cotizacionPdf(emision({ nombre: 'Extenso sintético', condiciones_generales: 'Párrafo extenso que no puede omitirse.\n'.repeat(150) })));
-  assert.ok(Number(execFileSync('pdfinfo', [archivo], { encoding: 'utf8' }).match(/Pages:\s+(\d+)/)[1]) > 2);
-  const texto = execFileSync('pdftotext', [archivo, '-'], { encoding: 'utf8' });
+  assert.ok(Number(execFileSync('pdfinfo', [archivo], { encoding: 'utf8', env: entornoHerramientasPdf }).match(/Pages:\s+(\d+)/)[1]) > 2);
+  const texto = execFileSync('pdftotext', [archivo, '-'], { encoding: 'utf8', env: entornoHerramientasPdf });
   assert.equal((texto.match(/Párrafo extenso que no puede omitirse\./g) ?? []).length, 150);
 });

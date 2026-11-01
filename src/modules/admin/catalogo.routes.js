@@ -55,10 +55,11 @@ export function createCatalogoRouter({ env, context } = {}) {
     if (!plan) throw createAppError('CATALOGO_NO_ENCONTRADO', 'El plan no está disponible.', 404);
     const documento = await documentoCatalogoHtml(plan, 'plan', req.params.formato === 'impresion');
     if (req.params.formato === 'impresion') return res.type('html').send(documento);
+    const pdf = await imprimirHtmlPdf(documento);
     return res
       .attachment('matista-detalle-plan.pdf')
       .type('application/pdf')
-      .send(await imprimirHtmlPdf(documento));
+      .send(pdf);
   });
   /** Documenta precios reales vigentes; no aplica aportes ni descuentos. */
   router.get('/listas/:planId/:tipoIngreso/:formato', async (req, res) => {
@@ -73,10 +74,11 @@ export function createCatalogoRouter({ env, context } = {}) {
       req.params.formato === 'impresion'
     );
     if (req.params.formato === 'impresion') return res.type('html').send(documento);
+    const pdf = await imprimirHtmlPdf(documento);
     return res
       .attachment('matista-lista-precios.pdf')
       .type('application/pdf')
-      .send(await imprimirHtmlPdf(documento));
+      .send(pdf);
   });
   /** Consulta política y aportes publicados mediante los contratos existentes. */
   router.get('/condiciones', async (req, res) =>

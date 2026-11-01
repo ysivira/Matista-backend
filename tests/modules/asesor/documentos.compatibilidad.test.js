@@ -33,6 +33,8 @@ const referencia = JSON.parse(await readFile(new URL('../../fixtures/pdf/referen
 const contratos = JSON.parse(await readFile(new URL('../../fixtures/pdf/referencia-contratos.json', import.meta.url), 'utf8'));
 const historia = JSON.parse(await readFile(new URL('../../fixtures/pdf/referencia-html-historica.json', import.meta.url), 'utf8'));
 const logoHistorico = await readFile(new URL('../../../src/infrastructure/pdf/assets/logo-matista.png', import.meta.url));
+// Poppler usa las bibliotecas del host, no las de Amazon Linux que Chromium configura al extraerse.
+const entornoHerramientasPdf = { ...process.env };
 
 /**
  * Invoca únicamente los contratos documentales públicos según el caso de referencia.
@@ -229,10 +231,10 @@ test('REFACTOR11 PDF real: páginas y contenido de cotizaciones y catálogo', { 
       assert.equal(pdf.subarray(0, 5).toString(), '%PDF-');
       const archivo = path.join(temporal, caso.id + '.pdf');
       await writeFile(archivo, pdf, { mode: 0o600 });
-      const info = execFileSync('pdfinfo', [archivo], { encoding: 'utf8' });
+      const info = execFileSync('pdfinfo', [archivo], { encoding: 'utf8', env: entornoHerramientasPdf });
       assert.equal(Number(info.match(/Pages:\s+(\d+)/)[1]), referencia.casos[caso.id].paginas, caso.id);
       assert.match(info, /Page size:.*A4/);
-      const texto = execFileSync('pdftotext', ['-layout', archivo, '-'], { encoding: 'utf8' });
+      const texto = execFileSync('pdftotext', ['-layout', archivo, '-'], { encoding: 'utf8', env: entornoHerramientasPdf });
       if (caso.documento === 'cotizacion') {
         assert.ok(texto.includes(caso.id === 'cotizacion-beneficios-iva-tramos' ? '151.164,00' : '199.926,44'), caso.id);
       }

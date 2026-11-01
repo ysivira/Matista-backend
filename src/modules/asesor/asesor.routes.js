@@ -198,10 +198,11 @@ export function createAsesorRouter({ env, context } = {}) {
       req.auth.user.legajo,
       req.params.id
     );
+    const pdf = await cotizacionPdf(cotizacion, contexto);
     res
       .attachment('matista-cotizacion.pdf')
       .type('application/pdf')
-      .send(await cotizacionPdf(cotizacion, contexto));
+      .send(pdf);
   });
   /** Hace explícito el esquema pendiente sin filtrar SQL ni confundirlo con un fallo económico. */
   router.use((error, req, res, next) => {
