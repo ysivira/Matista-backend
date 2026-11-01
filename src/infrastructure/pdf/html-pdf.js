@@ -18,7 +18,7 @@
  */
 import { spawn } from 'node:child_process';
 import { mkdtemp, writeFile, rm } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { constants, tmpdir } from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { createAppError } from '../../shared/errors/app-error.js';
@@ -29,8 +29,48 @@ const CODIGOS_TECNICOS = new Set([
   'CHROME_EXIT', 'DEVTOOLS_TIMEOUT', 'IMPRESION_TIMEOUT'
 ]);
 
-/** Registra solo valores técnicos controlados: nunca HTML, rutas, mensajes, stderr ni datos de sesión. */
-function registrarFallo(error, etapa, navegador, chrome) {
+const LIMITE_STDERR_ARRANQUE = 8192;
+const PATRONES_ARRANQUE = [
+  ['BIBLIOTECA_AUSENTE', /error while loading shared libraries|cannot open shared object file/i],
+  ['SIMBOLO_INCOMPATIBLE', /symbol lookup error|version [`'][^\n]{0,120}not found/i],
+  ['CHECK_FALLIDO', /check failed|fatal:/i],
+  ['MEMORIA_COMPARTIDA', /\/dev\/shm|shared_memory|shared memory/i],
+  ['GRAFICOS', /ANGLE|SwiftShader|Vulkan|EGL|GPU process|gpu_init/i],
+  ['SANDBOX', /sandbox|seccomp|prctl/i],
+  ['CRASHPAD', /crashpad|crash reporter/i],
+  ['FUENTES', /fontconfig|fonts\.conf/i],
+  ['PERMISO_DENEGADO', /permission denied|operation not permitted/i],
+  ['SISTEMA_SOLO_LECTURA', /read-only file system/i],
+  ['SIN_ESPACIO', /no space left on device/i],
+  ['MEMORIA_AGOTADA', /out of memory|cannot allocate memory/i]
+];
+const BIBLIOTECAS_ARRANQUE = [
+  'libnspr4.so', 'libnss3.so', 'libnssutil3.so', 'libexpat.so.1', 'libc.so.6',
+  'libgcc_s.so.1', 'libEGL.so', 'libGLESv2.so', 'libvulkan.so.1', 'libvk_swiftshader.so'
+];
+
+/** Conserva códigos y señales conocidos del sistema, nunca cadenas arbitrarias del error. */
+function resultadoProceso(code, signal) {
+  return {
+    salida: Number.isInteger(code) ? code : null,
+    senal: typeof signal === 'string' && Object.hasOwn(constants.signals, signal) ? signal : null
+  };
+}
+
+/** Clasifica solo la cola acotada de arranque; no publica fragmentos de texto libre del navegador. */
+function diagnosticarArranque(diagnostico) {
+  const texto = diagnostico.stderr.toString('utf8');
+  return {
+    categorias: PATRONES_ARRANQUE.filter(([, patron]) => patron.test(texto)).map(([codigo]) => codigo),
+    bibliotecas: BIBLIOTECAS_ARRANQUE.filter(nombre => texto.includes(nombre)),
+    bytesConservados: diagnostico.stderr.length,
+    truncado: diagnostico.truncado
+  };
+}
+
+/** Registra solo valores técnicos controlados: nunca HTML, rutas, mensajes, stderr crudo ni secretos. */
+function registrarFallo(error, etapa, navegador, chrome, diagnostico) {
+  const resultado = diagnostico.close ?? diagnostico.exit ?? resultadoProceso(chrome?.exitCode, chrome?.signalCode);
   console.error('[matista] fallo de generación PDF', {
     etapa,
     navegador,
@@ -38,9 +78,11 @@ function registrarFallo(error, etapa, navegador, chrome) {
     node: process.versions.node,
     plataforma: process.platform,
     arquitectura: process.arch,
-    salida: Number.isInteger(chrome?.exitCode) ? chrome.exitCode : null,
-    senal: ['SIGTERM', 'SIGKILL', 'SIGABRT', 'SIGSEGV'].includes(chrome?.signalCode)
-      ? chrome.signalCode : null
+    ...resultado,
+    ...(diagnostico.exit || diagnostico.close ? {
+      proceso: { exit: diagnostico.exit, close: diagnostico.close }
+    } : {}),
+    ...(diagnostico.stderr.length ? { stderrArranque: diagnosticarArranque(diagnostico) } : {})
   });
 }
 
@@ -56,6 +98,7 @@ export async function imprimirHtmlPdf(html, { errorDesbordamiento } = {}) {
   const vercel = process.env.VERCEL === '1';
   const navegador = process.env.CHROME_BIN ? 'CHROME_BIN' : vercel ? 'chromium' : 'google-chrome';
   let temporal, chrome, socket;
+  const diagnostico = { exit: null, close: null, stderr: Buffer.alloc(0), truncado: false };
   let etapa = 'runtime';
   try {
     if (typeof WebSocket !== 'function')
@@ -98,20 +141,37 @@ export async function imprimirHtmlPdf(html, { errorDesbordamiento } = {}) {
       { stdio: ['ignore', 'ignore', 'pipe'] }
     );
     const endpoint = await new Promise((resolve, reject) => {
-      let salida = '';
-      const timer = setTimeout(() => reject(Object.assign(new Error('Chrome timeout'), { code: 'CHROME_TIMEOUT' })), 15000);
+      let arranqueCompleto = false;
+      // close permite drenar stderr tras exit; la espera sigue acotada aunque close no llegue.
+      const timer = setTimeout(() => reject(Object.assign(new Error('Chrome timeout'), {
+        code: diagnostico.exit ? 'CHROME_EXIT' : 'CHROME_TIMEOUT'
+      })), 15000);
       chrome.once('error', error => {
         clearTimeout(timer);
         reject(error);
       });
-      chrome.once('exit', () => {
-        clearTimeout(timer);
-        reject(Object.assign(new Error('Chrome terminó'), { code: 'CHROME_EXIT' }));
+      chrome.once('exit', (code, signal) => {
+        diagnostico.exit = resultadoProceso(code, signal);
+      });
+      chrome.once('close', (code, signal) => {
+        diagnostico.close = resultadoProceso(code, signal);
+        if (!arranqueCompleto) {
+          clearTimeout(timer);
+          reject(Object.assign(new Error('Chrome terminó'), { code: 'CHROME_EXIT' }));
+        }
       });
       chrome.stderr.on('data', chunk => {
-        salida += chunk;
-        const match = salida.match(/DevTools listening on (ws:\/\/[^\s]+)/);
-        if (match) {
+        // Nunca capturar mensajes posteriores a DevTools, cuando podría cargarse contenido privado.
+        if (arranqueCompleto) return;
+        const datos = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+        const longitud = diagnostico.stderr.length + datos.length;
+        diagnostico.truncado ||= longitud > LIMITE_STDERR_ARRANQUE;
+        diagnostico.stderr = datos.length >= LIMITE_STDERR_ARRANQUE
+          ? Buffer.from(datos.subarray(-LIMITE_STDERR_ARRANQUE))
+          : Buffer.concat([diagnostico.stderr.subarray(Math.max(0, longitud - LIMITE_STDERR_ARRANQUE)), datos]);
+        const match = diagnostico.stderr.toString('utf8').match(/DevTools listening on (ws:\/\/[^\s]+)/);
+        if (match && !diagnostico.exit && !diagnostico.close) {
+          arranqueCompleto = true;
           clearTimeout(timer);
           resolve(match[1]);
         }
@@ -203,7 +263,7 @@ export async function imprimirHtmlPdf(html, { errorDesbordamiento } = {}) {
     return Buffer.from(data, 'base64');
   } catch (error) {
     if (errorDesbordamiento && error === errorDesbordamiento) throw error;
-    registrarFallo(error, etapa, navegador, chrome);
+    registrarFallo(error, etapa, navegador, chrome, diagnostico);
     throw createAppError(
       'PDF_NO_DISPONIBLE',
       'No se pudo preparar el PDF. Intenta nuevamente o utiliza Imprimir.',
@@ -212,7 +272,7 @@ export async function imprimirHtmlPdf(html, { errorDesbordamiento } = {}) {
   } finally {
     try {
       socket?.close();
-      if (chrome?.pid && chrome.exitCode == null && chrome.signalCode == null) {
+      if (chrome?.pid && !diagnostico.exit && !diagnostico.close && chrome.exitCode == null && chrome.signalCode == null) {
         await new Promise(resolve => {
           const timer = setTimeout(() => { chrome.kill('SIGKILL'); resolve(); }, 2000);
           chrome.once('exit', () => {
@@ -223,13 +283,13 @@ export async function imprimirHtmlPdf(html, { errorDesbordamiento } = {}) {
         });
       }
     } catch (error) {
-      registrarFallo(error, 'cerrar_navegador', navegador, chrome);
+      registrarFallo(error, 'cerrar_navegador', navegador, chrome, diagnostico);
     }
     try {
       // Solo se elimina el directorio privado de esta operación, no el binario compartido de Chromium.
       if (temporal) await rm(temporal, { recursive: true, force: true, maxRetries: 3 });
     } catch (error) {
-      registrarFallo(error, 'limpiar_temporal', navegador, chrome);
+      registrarFallo(error, 'limpiar_temporal', navegador, chrome, diagnostico);
     }
   }
 }
