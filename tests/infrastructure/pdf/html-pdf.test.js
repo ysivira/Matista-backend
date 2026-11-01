@@ -143,6 +143,7 @@ test('PDF local respeta CHROME_BIN sin argumentos de sandbox serverless', async 
   assert.equal(estado.ejecuciones[0][0], process.env.CHROME_BIN);
   assert.equal(estado.extracciones, 0);
   assert.ok(!estado.ejecuciones[0][1].includes('--no-sandbox'));
+  assert.ok(!estado.ejecuciones[0][1].includes('--disable-dev-shm-usage'));
 });
 
 test('PDF Vercel resuelve Chromium y conserva un único modo headless sin relajar seguridad web', async () => {
@@ -151,6 +152,13 @@ test('PDF Vercel resuelve Chromium y conserva un único modo headless sin relaja
   assert.equal(estado.extracciones, 1);
   assert.equal(estado.ejecuciones[0][0], '/tmp/opencode/chromium-prueba');
   const args = estado.ejecuciones[0][1];
+  assert.deepEqual(args, [
+    '--no-sandbox', '--no-zygote', '--disable-dev-shm-usage',
+    '--headless', '--disable-gpu', '--disable-background-networking', '--no-first-run',
+    '--no-default-browser-check', '--remote-debugging-address=127.0.0.1',
+    '--remote-debugging-port=0', '--user-data-dir=/tmp/opencode/matista-documento-prueba/perfil',
+    'about:blank'
+  ]);
   assert.ok(args.includes('--no-sandbox'));
   assert.ok(args.includes('--remote-debugging-address=127.0.0.1'));
   assert.deepEqual(args.filter(a => a.startsWith('--headless')), ['--headless']);
@@ -167,6 +175,7 @@ test('CHROME_BIN tiene prioridad también en Vercel, sin extraer otro ejecutable
   assert.equal(estado.ejecuciones[0][0], '/opt/chrome');
   assert.equal(estado.extracciones, 0);
   assert.ok(estado.ejecuciones[0][1].includes('--no-sandbox'));
+  assert.equal(estado.ejecuciones[0][1].filter(a => a === '--disable-dev-shm-usage').length, 1);
 });
 
 test('ENOENT devuelve 503 operacional y diagnóstico seguro sin HTML, rutas, mensajes ni stack', async () => {

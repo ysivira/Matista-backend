@@ -118,6 +118,8 @@ export async function imprimirHtmlPdf(html, { errorDesbordamiento } = {}) {
         argumento !== '--disable-web-security' &&
         argumento !== '--allow-running-insecure-content'
       );
+      // Vercel dispone de /tmp, pero no garantiza memoria compartida utilizable en /dev/shm.
+      argumentos.push('--disable-dev-shm-usage');
     }
     etapa = 'preparar_temporal';
     temporal = await mkdtemp(path.join(tmpdir(), 'matista-documento-'));
