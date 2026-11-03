@@ -113,13 +113,39 @@ test('las migraciones conservan los destinos development/matista_dev y test/mati
   }
 });
 
+test('acepta matista_local solo en development, para la aplicacion y las migraciones', () => {
+  for (const purpose of [undefined, { purpose: 'application' }, { purpose: 'migration' }]) {
+    const config = loadDatabaseConfig(environment({ DB_NAME: 'matista_local' }), purpose);
+    assert.equal(config.database, 'matista_local');
+    assert.equal(config.nodeEnv, 'development');
+  }
+});
+
+test('rechaza matista_local en production y test', () => {
+  for (const [nodeEnv, database] of [['production', 'matista_local'], ['test', 'matista_local']]) {
+    assert.throws(
+      () => loadDatabaseConfig(environment({ NODE_ENV: nodeEnv, DB_NAME: database })),
+      /no corresponde/,
+    );
+  }
+});
+
+test('matista_local rechaza MySQL remoto y admite solamente loopback', () => {
+  for (const host of ['localhost', '127.0.0.1', '::1']) {
+    assert.doesNotThrow(() => loadDatabaseConfig(environment({ DB_NAME: 'matista_local', DB_HOST: host })));
+  }
+  assert.throws(() => loadDatabaseConfig(environment({
+    DB_NAME: 'matista_local', DB_HOST: 'remote.invalid',
+  })), /loopback local/);
+});
+
 test('las migraciones locales rechazan matista_db', () => {
   assert.throws(
     () => loadDatabaseConfig(environment({
       NODE_ENV: 'production',
       DB_NAME: 'matista_db',
     }), { purpose: 'migration' }),
-    /solo pueden ejecutarse sobre matista_dev o matista_test/,
+    /solo pueden ejecutarse sobre matista_dev, matista_test o matista_local/,
   );
 });
 

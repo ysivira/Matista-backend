@@ -67,20 +67,42 @@ test('el runner solo admite las bases locales aprobadas', () => {
     nodeEnv: 'test',
     database: 'matista_test',
   }));
+  assert.doesNotThrow(() => assertMigrationTarget({
+    nodeEnv: 'development',
+    database: 'matista_local',
+    host: '127.0.0.1',
+  }));
   assert.throws(
     () => assertMigrationTarget({
       nodeEnv: 'production',
       database: 'matista_db',
     }),
-    /solo admite development\/matista_dev o test\/matista_test/,
+    /solo admite development\/matista_dev, test\/matista_test o development\/matista_local/,
   );
   assert.throws(
     () => assertMigrationTarget({
       nodeEnv: 'test',
       database: 'sigec_test',
     }),
-    /solo admite development\/matista_dev o test\/matista_test/,
+    /solo admite development\/matista_dev, test\/matista_test o development\/matista_local/,
   );
+  assert.throws(
+    () => assertMigrationTarget({
+      nodeEnv: 'test',
+      database: 'matista_local',
+    }),
+    /solo development\/matista_local/,
+  );
+  assert.throws(
+    () => assertMigrationTarget({
+      nodeEnv: 'production',
+      database: 'matista_local',
+    }),
+    /solo development\/matista_local/,
+  );
+  assert.throws(() => assertMigrationTarget({
+    nodeEnv: 'development', database: 'matista_local', host: 'remote.invalid',
+  }), /loopback local/);
 });
 
 test('el runner rechaza production/matista_dev aunque la aplicacion admita ese nombre', () => {
@@ -89,7 +111,7 @@ test('el runner rechaza production/matista_dev aunque la aplicacion admita ese n
       nodeEnv: 'production',
       database: 'matista_dev',
     }),
-    /solo admite development\/matista_dev o test\/matista_test/,
+    /solo admite development\/matista_dev, test\/matista_test o development\/matista_local/,
   );
 });
 

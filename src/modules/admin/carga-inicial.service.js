@@ -36,8 +36,8 @@ import {
 } from './carga-inicial.repository.js';
 
 // Valores de politica_comercial aprobados para E2 (autorizacion, seccion 3.5).
-// Definidos en el repositorio junto al acceso de escritura del catalogo.
-const POLITICA_INICIAL = Object.freeze({
+// Compartidos con la instalación autónoma para no duplicar parámetros.
+export const POLITICA_INICIAL = Object.freeze({
   porcentaje_aporte_reconocido: '7.00',
   tope_sueldo_bruto: '4800000.00',
   joven_porcentaje: '26.00',
