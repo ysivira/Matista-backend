@@ -12,6 +12,8 @@ import { createDatabasePool } from '../../../src/infrastructure/database/connect
 import { loadSecurityConfig } from '../../../src/infrastructure/security/config.js';
 import { hashPassword, verifyPassword } from '../../../src/infrastructure/security/password.js';
 import { ejecutarCargaAutonoma } from '../../../src/modules/admin/instalacion.service.js';
+import { POLITICA_INICIAL } from '../../../src/modules/admin/carga-inicial.service.js';
+import { PORCENTAJES_COMERCIALES_INICIALES } from '../../../src/modules/admin/carga-inicial.repository.js';
 import { ADMIN_DEMO } from '../../../src/modules/admin/admin-demo.service.js';
 import * as repository from '../../../src/modules/auth/auth.repository.js';
 
@@ -21,13 +23,16 @@ const habilitada = process.env.RUN_INSTALL_DB_TESTS === '1';
 const tablasCatalogo = [
   'planes', 'tarifario_versiones', 'tarifas', 'monotributo_aportes',
   'politica_comercial', 'porcentajes_comerciales', 'empleados',
-  'empleados_correos', 'empleados_auditoria', 'schema_migrations'
+  'empleados_correos', 'empleados_auditoria', 'schema_migrations', 'politica_comercial_eventos'
+];
+const tablasOperativas = [
+  'clientes', 'cotizaciones', 'miembros_cotizacion', 'asesor_auditoria', 'auth_sesiones', 'auth_tokens'
 ];
 
 /** Compara contenidos completos sin imprimir datos personales, hashes o credenciales. */
-async function fingerprint(pool) {
+async function fingerprint(pool, tablas = tablasCatalogo) {
   const hash = createHash('sha256');
-  for (const tabla of tablasCatalogo) {
+  for (const tabla of tablas) {
     const [rows] = await pool.query(`SELECT * FROM ${tabla} ORDER BY 1`);
     hash.update(JSON.stringify(rows));
   }
@@ -111,22 +116,50 @@ test('instalación autónoma sobre MySQL local descartable (CA-01 a CA-11)', {
     }
   });
 
-  await t.test('CA-02/03/04: carga autónoma 4/160/12/1/9 sin SIGEC', async () => {
+  await t.test('CA-02/03/04: catálogo E2 sin SIGEC; conserva políticas publicadas por ADMIN', async () => {
+    const [[previo]] = await pool.query('SELECT COUNT(*) AS n FROM planes');
+    const before = previo.n ? await fingerprint(pool) : null;
     cli('carga-autonoma');
-    const expected = [4, 1, 160, 12, 1, 9];
-    for (const [i, tabla] of tablasCatalogo.slice(0, 6).entries()) {
+    if (before !== null) assert.equal(await fingerprint(pool), before, 'No restablece la política E2');
+    const expected = [4, 1, 160, 12];
+    for (const [i, tabla] of tablasCatalogo.slice(0, 4).entries()) {
       const [[fila]] = await pool.query(`SELECT COUNT(*) AS n FROM ${tabla}`);
       assert.equal(fila.n, expected[i], tabla);
     }
-    const [[politica]] = await pool.query("SELECT id FROM politica_comercial WHERE estado='VIGENTE'");
-    const [[catalogo]] = await pool.query(
-      'SELECT COUNT(*) AS n FROM porcentajes_comerciales WHERE politica_comercial_id = ? AND vigente_hasta IS NULL',
-      [politica.id]
+    // La política E2 puede ser HISTORICA: no confundir filas históricas con duplicados.
+    const [[inicial]] = await pool.query('SELECT * FROM politica_comercial ORDER BY id LIMIT 1');
+    assert.ok(inicial, 'Existe la política inicial');
+    for (const [campo, valor] of Object.entries(POLITICA_INICIAL)) {
+      if (valor === null) assert.equal(inicial[campo], null, `Parámetro E2 conservado: ${campo}`);
+      else assert.equal(Number(inicial[campo]), Number(valor), `Parámetro E2 conservado: ${campo}`);
+    }
+    assert.equal(inicial.iva_voluntario_pct, null, 'El IVA no se inventa en el seed E2');
+    assert.equal(inicial.aporte_adherente, null);
+    const [descuentosIniciales] = await pool.execute(
+      'SELECT porcentaje FROM porcentajes_comerciales WHERE politica_comercial_id = ? ORDER BY porcentaje DESC',
+      [inicial.id]
     );
-    assert.equal(catalogo.n, 9);
-    for (const tabla of ['clientes', 'cotizaciones', 'miembros_cotizacion']) {
-      const [[fila]] = await pool.query(`SELECT COUNT(*) AS n FROM ${tabla}`);
-      assert.equal(fila.n, 0, 'La instalación no incluye datos operativos');
+    assert.deepEqual(descuentosIniciales.map(d => Number(d.porcentaje)),
+      PORCENTAJES_COMERCIALES_INICIALES.map(Number));
+    const [vigentes] = await pool.query("SELECT id FROM politica_comercial WHERE estado='VIGENTE'");
+    assert.equal(vigentes.length, 1, 'Una sola política vigente, no necesariamente una sola versión');
+    const [[catalogo]] = await pool.execute(
+      'SELECT COUNT(*) AS n FROM porcentajes_comerciales WHERE politica_comercial_id = ? AND vigente_hasta IS NULL',
+      [vigentes[0].id]
+    );
+    assert.ok(catalogo.n > 0, 'La política vigente conserva su propio catálogo configurable');
+    if (Number(vigentes[0].id) === Number(inicial.id)) {
+      assert.equal(inicial.estado, 'VIGENTE');
+      assert.equal(catalogo.n, PORCENTAJES_COMERCIALES_INICIALES.length);
+    } else {
+      assert.equal(inicial.estado, 'HISTORICA');
+      assert.ok(inicial.vigente_hasta, 'La versión inicial conserva su cierre histórico');
+    }
+    if (before === null) {
+      for (const tabla of tablasOperativas) {
+        const [[fila]] = await pool.query(`SELECT COUNT(*) AS n FROM ${tabla}`);
+        assert.equal(fila.n, 0, 'La instalación no incluye datos operativos');
+      }
     }
   });
 
@@ -147,8 +180,9 @@ test('instalación autónoma sobre MySQL local descartable (CA-01 a CA-11)', {
     assert.equal(await fingerprint(pool), before);
   });
 
-  await t.test('CA-06/10: login, catálogo, alta de asesor y cotización HTTP real sin contaminar el seed', async () => {
+  await t.test('CA-06/10: login, catálogo, alta de asesor y cotización HTTP real sin contaminar el seed', async st => {
     const before = await fingerprint(pool);
+    const operativasBefore = await fingerprint(pool, tablasOperativas);
     const c = await pool.getConnection();
     await c.beginTransaction();
     // Fixtures bajo una transacción exterior: SQL y servicios reales; los commits
@@ -193,7 +227,7 @@ test('instalación autónoma sobre MySQL local descartable (CA-01 a CA-11)', {
       assert.equal(planes.status, 200); assert.equal(planes.body.planes.length, 4);
       const condiciones = await api('/api/catalogo/condiciones', 'GET', undefined, admin.cookie);
       assert.equal(condiciones.status, 200);
-      assert.equal(condiciones.body.politica.porcentajes_comerciales.length, 9);
+      assert.ok(condiciones.body.politica.porcentajes_comerciales.length > 0);
       const lista = await api('/api/catalogo/tarifario/planes/1/Obligatorio', 'GET', undefined, admin.cookie);
       assert.equal(lista.status, 200); assert.equal(lista.body.tarifas.length, 20);
       // Se preserva la separación de roles: ADMIN no cotiza.
@@ -225,26 +259,81 @@ test('instalación autónoma sobre MySQL local descartable (CA-01 a CA-11)', {
         ...entrada, modalidad: 'Monotributo', aportes: { categoria: 'A', adherentes: 1 }
       }, asesor.cookie);
       assert.equal(mono.status, 200);
-      const voluntario = await api('/api/asesor/cotizaciones/previsualizacion', 'POST', {
-        ...entrada, modalidad: 'Voluntario', aportes: {}
-      }, asesor.cookie);
-      assert.equal(voluntario.status, 422, 'No se inventa el IVA faltante');
-      const borrador = await api('/api/asesor/cotizaciones', 'POST', entrada, asesor.cookie);
+      const entradaVoluntario = { ...entrada, modalidad: 'Voluntario', aportes: {} };
+      async function verificarVoluntario(politica) {
+        const respuesta = await api('/api/asesor/cotizaciones/previsualizacion', 'POST', entradaVoluntario, asesor.cookie);
+        if (politica.iva_voluntario_pct == null) {
+          assert.equal(respuesta.status, 422, 'Sin IVA publicado, no se inventa una tasa');
+          assert.equal(respuesta.body.error.code, 'COTIZACION_REGLA');
+          assert.match(respuesta.body.error.message, /IVA Voluntario/);
+          return;
+        }
+        assert.equal(respuesta.status, 200, 'Con IVA publicado, Voluntario está disponible');
+        const resultado = respuesta.body.resultado;
+        assert.equal(String(resultado.referencias.politica_id), String(politica.id));
+        const centavos = valor => BigInt(String(valor).replace('.', ''));
+        const desglose = resultado.tramos[0].desglose;
+        const deducciones = ['descuento_joven', 'descuento_comercial', 'descuento_tdc',
+          'descuento_afinidad', 'aporte_base', 'aporte_adherentes'];
+        const subtotal = centavos(desglose.precio_base) -
+          deducciones.reduce((total, campo) => total + centavos(desglose[campo]), 0n);
+        const ivaEsperado = (subtotal * centavos(politica.iva_voluntario_pct) + 5000n) / 10000n;
+        assert.equal(centavos(desglose.iva), ivaEsperado, 'IVA configurable con HALF-UP a centavos');
+        assert.equal(centavos(resultado.total), subtotal + ivaEsperado);
+        assert.equal(Number(resultado.impuestos[0].porcentaje), Number(politica.iva_voluntario_pct));
+        assert.equal(centavos(resultado.impuestos[0].importe), ivaEsperado);
+      }
+      let politica = condiciones.body.politica;
+      await st.test('Voluntario respeta la política realmente instalada', () => verificarVoluntario(politica));
+
+      // Ambos estados se prueban siempre mediante ADMIN real, dentro del fixture
+      // reversible. No se modifica ni reconstruye la política histórica del seed.
+      await st.test('sin IVA publicado rechaza Voluntario', async () => {
+        if (politica.iva_voluntario_pct != null) {
+          const sinIva = await api(`/api/admin/politica-comercial/${politica.id}`, 'PUT', {
+            iva_voluntario_pct: null, activacion: { modo: 'INMEDIATA' }
+          }, admin.cookie);
+          assert.equal(sinIva.status, 200);
+          politica = sinIva.body;
+        }
+        await verificarVoluntario(politica);
+      });
+      await st.test('ADMIN publica IVA 10,50 % y aporte adherente sin alterar otros parámetros', async () => {
+        const publicada = await api(`/api/admin/politica-comercial/${politica.id}`, 'PUT', {
+          iva_voluntario_pct: '10.50', aporte_adherente: '23892.00', activacion: { modo: 'INMEDIATA' }
+        }, admin.cookie);
+        assert.equal(publicada.status, 200);
+        const anterior = await api(`/api/admin/politica-comercial/${politica.id}`, 'GET', undefined, admin.cookie);
+        assert.equal(anterior.status, 200);
+        assert.equal(anterior.body.estado, 'HISTORICA');
+        assert.ok(anterior.body.vigente_hasta);
+        const nueva = publicada.body;
+        assert.equal(nueva.estado, 'VIGENTE');
+        assert.equal(String(nueva.version_base_id), String(politica.id));
+        assert.equal(nueva.iva_voluntario_pct, '10.50');
+        assert.equal(nueva.aporte_adherente, '23892.00');
+        for (const campo of [...Object.keys(POLITICA_INICIAL), 'porcentajes_comerciales']) {
+          assert.deepEqual(nueva[campo], politica[campo], `Parámetro vigente conservado: ${campo}`);
+        }
+        politica = nueva;
+        await verificarVoluntario(politica);
+      });
+      const borrador = await api('/api/asesor/cotizaciones', 'POST', entradaVoluntario, asesor.cookie);
       assert.equal(borrador.status, 201);
       const calculo = await api(`/api/asesor/cotizaciones/${borrador.body.id}/calculo`, 'POST', {}, asesor.cookie);
       assert.equal(calculo.status, 200);
+      assert.equal(calculo.body.resultado.impuestos[0].porcentaje, '10.50');
+      assert.equal(String(calculo.body.resultado.referencias.politica_id), String(politica.id));
       const emitida = await api(`/api/asesor/cotizaciones/${borrador.body.id}/emision`, 'POST', {
         revision: calculo.body.revision, huella: calculo.body.huella
       }, asesor.cookie);
       assert.equal(emitida.status, 200); assert.equal(emitida.body.estado, 'EMITIDA');
+      assert.deepEqual(emitida.body.resultado, calculo.body.resultado);
     } finally {
       await new Promise(resolve => server.close(resolve));
       await c.rollback(); c.release();
     }
     assert.equal(await fingerprint(pool), before, 'El fixture se revierte sin tocar el catálogo');
-    for (const tabla of ['clientes', 'cotizaciones', 'auth_sesiones']) {
-      const [[fila]] = await pool.query(`SELECT COUNT(*) AS n FROM ${tabla}`);
-      assert.equal(fila.n, 0, 'Sin residuos operativos de la aceptación');
-    }
+    assert.equal(await fingerprint(pool, tablasOperativas), operativasBefore, 'Sin residuos ni cambios en datos operativos previos');
   });
 });

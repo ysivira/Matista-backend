@@ -285,11 +285,40 @@ Verificar:
 
 1. `npm run db:check` informa `matista_local`; `http://localhost:3000/api/health` responde `status: ok` (salud HTTP, no prueba SMTP/PDF).
 2. Abrir `http://localhost:5173/login`, acceder con el ADMIN demo y consultar planes, las listas y los 9 porcentajes de la política comercial. Recargar la página debe conservar la sesión.
-3. ADMIN **no puede cotizar**: registrar un ASESOR de prueba, verificar su correo vía SMTP local y activarlo desde el directorio ADMIN. Entrar como ese ASESOR y crear un cliente sintético para cotizar en **Obligatorio o Monotributo**. No forman parte del seed. Para Voluntario, configurar primero el IVA aprobado; no sustituirlo por un dato arbitrario.
+3. ADMIN **no puede cotizar**: registrar un ASESOR de prueba, verificar su correo vía SMTP local y activarlo desde el directorio ADMIN. Entrar como ese ASESOR y crear un cliente sintético para cotizar en **Obligatorio o Monotributo**. No forman parte del seed. Para Voluntario, completar primero la configuración comercial siguiente.
 4. Preparar, calcular y emitir; consultar el resultado. Descargar PDF si Chrome está disponible. Ninguna etapa exige SIGEC.
 5. Repetir los comandos de ADMIN/catálogo: deben informar que ya existen sin duplicar ni resetear datos.
 
 El clon autónomo necesita todavía configuración privada local, una cuenta MySQL y `npm ci`: no se distribuyen secretos, usuarios MySQL ni un despliegue productivo listo para publicar.
+
+### Configuración comercial posterior a la instalación
+
+El catálogo inicial E2 permanece **intacto**: su política deja `iva_voluntario_pct` y `aporte_adherente` en NULL. Estos parámetros se configuran después mediante el mecanismo de políticas comerciales existente, sin editar el seed, ejecutar SQL manual ni definir variables de entorno paralelas.
+
+Con backend y frontend conectados exclusivamente a `matista_local`:
+
+1. Ingresar en `http://localhost:5173/login` con el ADMIN de demostración: **`admin@matista.test` / `admin2026*`**. Cuenta conocida de uso exclusivamente local, nunca producción.
+2. Abrir **Configuración comercial → Nueva política**, partiendo de la versión VIGENTE.
+3. Configurar **IVA Voluntario = 10,50 %** (`iva_voluntario_pct: "10.50"`) y **Aporte adherente = $23.892,00** (`aporte_adherente: "23892.00"`). Usar el separador decimal admitido por el navegador; en JSON se utiliza punto, sin separador de miles.
+4. Conservar los demás parámetros y los porcentajes comerciales. Elegir **Activar inmediatamente**, pulsar **Guardar** y confirmar la operación.
+5. Comprobar que la nueva versión esté **VIGENTE** y que la anterior figure como **HISTÓRICA** en **Historial**, conservando sus valores originales. En una instalación inicial será normalmente #1 → #2; no asumir esos IDs si ya existen otras versiones.
+6. Ingresar como un ASESOR verificado y activado, crear un cliente sintético y preparar/calcular una cotización **Voluntario**. Revisar el IVA del 10,50 % en el desglose y emitirla si se desea completar el recorrido.
+
+Estos valores de demostración fueron verificados en la política #12 de la aplicación existente; **el profesor no necesita acceder a esa base ni a SIGEC**: dispone de los valores y los publica localmente desde ADMIN. Permanecen configurables en futuras políticas; no son constantes del motor ni una configuración paralela. El campo `aporte_adherente` se conserva como parámetro administrativo histórico: el motor vigente de Monotributo usa `aporte_monotributo` también por adherente registrado.
+
+Referencia del endpoint autenticado que utiliza la interfaz: `PUT /api/admin/politica-comercial/:id`, donde `:id` es la política VIGENTE consultada, con cuerpo parcial:
+
+```json
+{
+  "iva_voluntario_pct": "10.50",
+  "aporte_adherente": "23892.00",
+  "activacion": { "modo": "INMEDIATA" }
+}
+```
+
+El servicio conserva los campos omitidos y versiona/audita la publicación. Si ambos valores ya están configurados, no es necesario publicarlos otra vez. Repetir `db:carga-autonoma` no los restablece ni modifica el contenido histórico E2.
+
+Verificación realizada en `matista_local` con la política #2: RUBÍ, titular de 36 años, sin descuentos; base **$204.986,58**, IVA **$21.523,59**, total **$226.510,17**, redondeado a centavos. Pasaron previsualización, cálculo y emisión por HTTP; los datos operativos sintéticos se revirtieron.
 
 ## Pruebas
 
@@ -322,11 +351,13 @@ NODE_ENV=development DB_HOST=127.0.0.1 DB_NAME=matista_local DB_SSL=false npm ru
 
 Requiere una base local dedicada (creada por el operador), nunca borra ni recrea bases. En la primera ejecución sobre catálogo vacío verifica rollback real tras insertar las 160 tarifas; al repetirse omite ese caso para no limpiar información existente. Los comandos de aprovisionamiento sí quedan confirmados. Los fixtures HTTP posteriores (sesiones, asesor, cliente y emisión) utilizan SQL y servicios reales bajo una transacción exterior que se revierte al finalizar. No envía correo externo: el transporte de pruebas captura la verificación en memoria. La suite comprueba rechazo de producción/host remoto **antes de conectar** y compara huellas de todos los campos antes/después de repetir la instalación.
 
+`test:install` admite tanto el estado inicial sin IVA como una política posterior publicada por ADMIN: exige una sola VIGENTE, **no una sola versión**, valida el contenido E2 histórico y respeta el catálogo de descuentos de la versión actual. Comprueba el comportamiento de Voluntario según el IVA realmente instalado y ejercita ambos estados mediante publicaciones ADMIN **temporales dentro del fixture reversible**: sin IVA → rechazo 422; IVA 10,50 % y aporte adherente 23892.00 → cálculo/emisión correctos. Al finalizar revierte las políticas temporales, sus eventos y los datos operativos; conserva las versiones y parámetros que había antes de la prueba. MySQL puede consumir IDs autoincrementales durante el fixture: no se exige numeración consecutiva ni se reinician secuencias.
+
 `RUN_PDF_TESTS=1` habilita casos opcionales de Chrome real en las pruebas de módulos; `npm run test:pdf` ejecuta las suites específicas de PDF. La aceptación autónoma no certifica Chrome ni entrega SMTP externa.
 
 En la implementación de instalación autónoma (2026-11-03, Node 24.20.0 y MySQL 8.4.11 local) se verificaron las 30 migraciones sobre `matista_local` inicialmente vacía, los conteos 4/160/12/1/9, bcrypt/login ADMIN, repetición/concurrencia sin cambios, rechazo de producción y cotización HTTP en Obligatorio/Monotributo. Se preservó el rechazo de Voluntario sin IVA configurado. No se modificaron `matista_dev`, `matista_test`, Aiven ni el despliegue público.
 
-**Pendientes de verificación manual:** recorrido en navegador, entrega SMTP externa, Chrome/PDF y repetir el procedimiento en un clon limpio con `npm ci`; las pruebas anteriores utilizaron las dependencias locales ya instaladas. Voluntario requiere además un IVA aprobado publicado por ADMIN. La revisión final previa al commit ejecuta la regresión sin opt-in MySQL, sin volver a modificar bases existentes.
+**Pendientes de verificación manual:** recorrido en navegador, entrega SMTP externa, Chrome/PDF y repetir el procedimiento en un clon limpio con `npm ci`; las pruebas anteriores utilizaron las dependencias locales ya instaladas. En una instalación nueva, completar la sección «Configuración comercial posterior a la instalación» para habilitar Voluntario. La regresión general mantiene desactivados los opt-in MySQL/PDF; la aceptación SQL/HTTP se ejecuta exclusivamente sobre `matista_local`.
 
 ## Seguridad y operación
 
