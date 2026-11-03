@@ -36,7 +36,7 @@ Confirmar el correo **no activa la cuenta**: la aprobación corresponde a ADMIN.
 - Versionado de políticas comerciales, vigencia inmediata o programada, historial, recuperación y cancelación de pendientes.
 - Consulta y descarga de documentos de catálogo/listas, con autorización.
 
-El catálogo se inicializa mediante una carga controlada desde SIGEC. **No existe un CRUD general de planes ni de listas independientes del ciclo de versiones.** El scheduler activa políticas comerciales; no equivale a una activación automática de versiones tarifarias.
+El catálogo se inicializa autónomamente desde datos comerciales verificados incluidos en el repositorio. La importación desde SIGEC se conserva solo por compatibilidad; **no es requisito de instalación**. No existe un CRUD general de planes ni de listas independientes del ciclo de versiones. El scheduler activa políticas comerciales; no equivale a una activación automática de versiones tarifarias.
 
 ### ASESOR · Clientes y cotizaciones
 
@@ -67,8 +67,8 @@ JavaScript con ES Modules. Versiones siguientes verificadas en `package-lock.jso
 | express-rate-limit | 8.7.1 | Límites de solicitudes AUTH |
 | Nodemailer | 10.1.1 | Correo SMTP |
 
-- `engines.node` declara **Node.js >=20.19.0**. Para trabajar con ambos repositorios y el PDF, se recomienda **Node.js 24.x desde 24.15.0**, compatible con los requisitos de las herramientas frontend bloqueadas. No se fija una versión de npm en este repositorio.
-- MySQL compatible con el SQL del proyecto; el bootstrap utiliza `utf8mb4_0900_ai_ci`, propio de MySQL 8. No se verificó una versión concreta del servidor en esta revisión ni compatibilidad con MariaDB.
+- `engines.node` declara **Node.js 24.x**. Usar al menos **24.15.0** para ambos repositorios. No se fija una versión de npm.
+- **MySQL 8.0.16 o posterior**, con CHECK efectivos y collation `utf8mb4_0900_ai_ci`; MariaDB no está validado. La instalación se verificó en el MySQL local indicado en la sección de aceptación.
 - SMTP autorizado para enviar los enlaces de cuenta.
 - PDF: Google Chrome accesible como `google-chrome` o mediante `CHROME_BIN`; el adaptador usa Chrome headless y el `WebSocket` global de Node. El mínimo declarado en `engines` no constituye por sí solo una garantía de PDF en todos los runtimes.
 - Algunas pruebas opcionales de PDF requieren además `pdfinfo` y `pdftotext`.
@@ -149,6 +149,7 @@ La plantilla pública es [`.env.example`](.env.example). Copiarla sólo si no ex
 | `DB_NAME` | Debe coincidir con el entorno; tabla de la sección siguiente |
 | `DB_USER`, `DB_PASSWORD` | Usuario obligatorio y contraseña definida; completar fuera de Git |
 | `DB_CONNECTION_LIMIT` | Predeterminado `10`, permitido entre 1 y 100 |
+| `DB_SSL` | Para la demostración local: `false`; no heredar configuración remota |
 | `JWT_SECRET` | Secreto privado aleatorio de al menos 32 bytes, base64url canónico sin relleno |
 | `JWT_ISSUER`, `JWT_AUDIENCE` | Predeterminados `matista-backend` / `matista-frontend` |
 | `PASSWORD_MIN_LENGTH` | Plantilla local `4`; producción exige al menos `10`; máximo bcrypt: 72 bytes UTF-8 |
@@ -158,7 +159,7 @@ La plantilla pública es [`.env.example`](.env.example). Copiarla sólo si no ex
 | `FRONTEND_ORIGIN` | Origen exacto, sin ruta ni barra final; local: `http://localhost:5173` |
 | `CHROME_BIN` | Opcional, ejecutable Chrome para PDF; no está incluido en la plantilla |
 
-Para la carga desde SIGEC se leen además `SIGEC_DB_HOST`, `SIGEC_DB_PORT`, `SIGEC_DB_DATABASE` (sólo `sigec_db`), `SIGEC_DB_USER`, `SIGEC_DB_PASSWORD` e `IMPORT_ACTOR_LEGAJO`. Estas variables **no están en `.env.example`** y deben configurarse privadamente sólo para la operación controlada. Usar una cuenta fuente con permisos de lectura.
+Solo para la importación heredada desde SIGEC se leen `SIGEC_DB_HOST`, `SIGEC_DB_PORT`, `SIGEC_DB_DATABASE` (solo `sigec_db`), `SIGEC_DB_USER`, `SIGEC_DB_PASSWORD` e `IMPORT_ACTOR_LEGAJO`. No definirlas para una instalación autónoma. `db:carga-autonoma` usa por defecto el legajo demo `900000001` como responsable; admite `IMPORT_ACTOR_LEGAJO` si se decide usar otro empleado existente en la base local.
 
 No publicar secretos generados, credenciales locales, enlaces con tokens ni direcciones temporales de túneles. La configuración de producción requiere HTTPS y una revisión del entorno; cambiar `NODE_ENV` no crea un despliegue.
 
@@ -166,50 +167,158 @@ No publicar secretos generados, credenciales locales, enlaces con tokens ni dire
 
 | Entorno | Base admitida por la aplicación |
 |---|---|
-| `development` | `matista_dev` |
+| `development` | `matista_dev` o `matista_local` (solo MySQL loopback) |
 | `test` | `matista_test` |
 | `production` | `matista_db` o `matista_dev` (solo `purpose: 'application'`) |
 
 La excepción `production/matista_dev` permite usar el nombre histórico de la base alojada en Aiven únicamente para la aplicación (`purpose: 'application'`, valor predeterminado). No cambia `NODE_ENV`, TLS, la política de seguridad ni las demás validaciones. No habilita ese destino para migraciones ni pruebas: las pruebas de persistencia siguen exigiendo `test/matista_test`. El nombre de la base no garantiza aislamiento; revisar también el servidor y los permisos para no compartir accidentalmente datos entre desarrollo y producción.
 
-El runner local de migraciones **rechaza producción**, incluso con `DB_NAME=matista_dev`: sólo permite las combinaciones `development/matista_dev` y `test/matista_test`. Las 30 migraciones numeradas definen AUTH (001–005), catálogo/versiones/políticas y auditoría (006–023), y clientes/cotizaciones/guardas/identidad (024–030). El runner conserva checksums en `schema_migrations` y detecta inconsistencias; no editar SQL ya aplicado para hacer coincidir un entorno.
+El runner **rechaza producción**, incluso con `DB_NAME=matista_dev`: admite `development/matista_dev`, `test/matista_test` y `development/matista_local`. Las 30 migraciones originales definen AUTH (001–005), catálogo/versiones/políticas/auditoría (006–023) y clientes/cotizaciones/guardas/identidad (024–030). Se reutilizan sin cambios y conservan checksums en `schema_migrations`.
 
-### Preparación de una instalación nueva, por un operador autorizado
+### Datos autónomos e idempotencia
 
-1. Revisar `database/bootstrap/000_create_local_databases.sql`: crea únicamente las bases locales de desarrollo/pruebas, no usuarios MySQL ni cuentas ADMIN. Su ejecución es manual y no la realiza ningún script npm.
-2. Configurar una cuenta MySQL con los permisos necesarios para cada operación, seleccionar el entorno/base correctos y verificar la conexión con `npm run db:check`.
-3. Revisar y respaldar el destino antes de `npm run db:migrate`. **Modifica esquema y registros de migración**; no es un diagnóstico inocuo ni una operación con reversión DDL global garantizada.
-4. Para el catálogo inicial, disponer de la fuente SIGEC autorizada y de un legajo existente en `empleados`. La carga requiere ese actor, aunque no necesariamente rol ADMIN.
-5. Sólo tras revisar fuente y destino, ejecutar `npm run db:carga-inicial`: lee planes/listas/aportes de `sigec_db`, valida la matriz aprobada y escribe el catálogo, versión inicial y políticas en MATISTA. Su idempotencia comprueba consistencia; no es un importador de fuentes arbitrarias ni un seed autónomo incluido en Git.
-6. Coordinar por separado el aprovisionamiento inicial del administrador. **No hay un script npm de creación del primer ADMIN ni credenciales de administrador predeterminadas**; el registro público crea cuentas pendientes y no permite autoasignar ese rol.
+[`database/seed/carga_inicial_autonoma.json`](database/seed/carga_inicial_autonoma.json) contiene únicamente 4 planes (prestaciones y condiciones incluidas), 160 tarifas iniciales y 12 aportes de monotributo. Se recuperaron de la versión histórica **CARGA_INICIAL** de `matista_dev`, no de sus versiones comerciales posteriores, y se cotejaron fila por fila contra las mismas tablas de `matista_test`. No se clonó ninguna base ni se copiaron usuarios, clientes, cotizaciones o auditorías. Procedencia e integridad: [README del catálogo](database/seed/README.md).
 
-La fuente SIGEC, los usuarios MySQL y los datos operativos no se distribuyen aquí. Por ello, un clon más `npm ci` no produce por sí solo un sistema comercial inicializado. No usar fixtures de prueba como un volcado de producción ni improvisar instrucciones SQL de promoción de cuentas.
+La política E2 proviene de `POLITICA_INICIAL` en `src/modules/admin/carga-inicial.service.js`; los 9 porcentajes, de `PORCENTAJES_COMERCIALES_INICIALES` en su repositorio. La carga autónoma reutiliza el validador E2 y sus escritores SQL; no abre conexiones SIGEC. Conserva IDs de planes y normaliza las etiquetas etarias con las reglas existentes.
+
+`db:admin-demo` y `db:carga-autonoma` admiten **únicamente `development/matista_local` con host `127.0.0.1`, `localhost` o `::1`**. Verifican la base efectiva y serializan inicializadores mediante un lock MySQL. Cada comando realiza una transacción con rollback ante errores. Las migraciones DDL **no** tienen rollback global: un error exige diagnóstico, no borrar tablas a ciegas.
+
+Repetir la inicialización no duplica registros ni restablece contraseñas cambiadas. Si encuentra cuentas conflictivas o un catálogo parcial, aborta sin repararlos ni sobrescribirlos. Si el catálogo ya fue configurado posteriormente por ADMIN, no vuelve a aplicar importes iniciales. La instalación se debe usar sobre una **base nueva**: no es un mecanismo de limpieza o reparación de entornos existentes.
+
+**Parámetros no inventados:** la política E2 deja `afinidad_pct`, `aporte_adherente` e `iva_voluntario_pct` sin configurar. Afinidad requiere aprobación/configuración antes de solicitarse; `aporte_adherente` es histórico y el motor nuevo de Monotributo utiliza `aporte_monotributo` también para cada adherente registrado. **Voluntario no puede calcularse hasta que ADMIN publique una política con el IVA aprobado**; no se usa cero ni un valor de prueba por defecto. Obligatorio y Monotributo funcionan con la carga inicial.
+
+### Compatibilidad con la importación anterior
+
+`npm run db:carga-inicial` sigue disponible para operaciones SIGEC autorizadas, con su fuente y actor explícitos. No forma parte de los pasos siguientes. El registro público sigue creando `ASESOR/PENDIENTE` y no asigna ADMIN; el único administrador conocido se crea explícitamente mediante el script local, nunca al arrancar la aplicación ni en producción.
 
 ## Instalación y ejecución
 
-Los comandos se documentan para una ejecución posterior en un entorno autorizado; no se ejecutaron al redactar este README.
+Procedimiento local para evaluación académica. Requiere Git, Node/npm compatibles, MySQL local y un operador autorizado para crear **una base nueva**. No modifica Aiven ni despliega a Vercel.
 
-Dentro de este repositorio, con Node/npm compatibles:
+### 1. Descargar e instalar dependencias
 
-```bash
-npm ci
-```
-
-Instala según `package-lock.json`; no sustituye la configuración ni la preparación de base/SMTP. Completadas esas etapas:
+En un directorio nuevo (no sobrescribir clones existentes):
 
 ```bash
-npm run dev
+git clone https://github.com/ysivira/Matista-backend.git
+git clone https://github.com/ysivira/Matista-frontend.git
 ```
 
-El script ejecuta `node --watch src/server.js`. Alternativa sin watcher:
+Usar revisiones que incluyan esta instalación; mientras no esté integrada, en backend seleccionar `git switch feat/spec-05-instalacion-autonoma` **una vez publicada esa rama**. No es necesario cambiar de rama en frontend. En cada repositorio ejecutar `npm ci`, que utiliza su `package-lock.json`.
+
+### 2. Preparar exclusivamente la base nueva
+
+Con una sesión **administrativa de MySQL local** (por ejemplo `sudo mysql` en Linux con auth_socket), revisar primero si existe `matista_local`. Si existe con información, **detenerse, no borrarla**. Para una instalación realmente nueva:
+
+```sql
+CREATE DATABASE matista_local
+  CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+```
+
+Crear una cuenta MySQL local dedicada si no existe (elegir la contraseña privadamente, no usar el marcador literal), y conceder permisos **solo sobre esa base**:
+
+```sql
+CREATE USER 'matista_local_app'@'localhost'
+  IDENTIFIED BY '<contraseña-local-elegida-privadamente>';
+GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, ALTER, INDEX, REFERENCES
+  ON matista_local.* TO 'matista_local_app'@'localhost';
+```
+
+Si se usa una cuenta ya existente, concederle los permisos sobre `matista_local` sin recrearla ni cambiar su contraseña. Ajustar el host del GRANT al de la cuenta MySQL real. La aplicación no necesita permisos globales ni acceso a otras bases. El bootstrap general `database/bootstrap/000_create_local_databases.sql` declara también bases dev/test; **no hace falta ejecutarlo para esta instalación aislada**.
+
+### 3. Configurar el backend privadamente
+
+Solo en un clon nuevo y si no hay `.env`, copiar `.env.example` a `.env`. Completar `DB_USER`/`DB_PASSWORD` de la cuenta anterior y generar un `JWT_SECRET` aleatorio (no versionarlo). Por ejemplo, generar 32 bytes con `node -e "console.log(require('node:crypto').randomBytes(32).toString('base64url'))"` y guardar el resultado únicamente en el entorno privado.
+
+Configuración local no secreta necesaria:
+
+```dotenv
+NODE_ENV=development
+PORT=3000
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_NAME=matista_local
+DB_USER=matista_local_app
+DB_SSL=false
+PASSWORD_MIN_LENGTH=4
+FRONTEND_ORIGIN=http://localhost:5173
+```
+
+Además: `DB_PASSWORD` definido, `JWT_SECRET` válido; `DB_CONNECTION_LIMIT`, `JWT_ISSUER` y `JWT_AUDIENCE` pueden conservar los valores de la plantilla. No definir `SIGEC_DB_*` ni `IMPORT_ACTOR_LEGAJO` para el caso estándar. No reutilizar variables de Aiven, Vercel ni secretos de producción. La demostración está pensada para MySQL en el mismo equipo; hosts remotos se rechazan.
+
+**SMTP es opcional para el login del ADMIN demo y las consultas de catálogo**. Se requiere configurar `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASSWORD` y `SMTP_FROM` para altas/verificación y recuperación de cuentas reales de la demostración. Usar un servidor SMTP propio de pruebas: no hay credenciales SIGEC necesarias. Para PDF, instalar Chrome local o definir `CHROME_BIN`; no se modifica la configuración Vercel.
+
+### 4. Migrar e inicializar
+
+Dentro del backend, comprobar que el destino es `matista_local`; para evitar heredar un `.env` con otra base, los comandos POSIX siguientes fijan explícitamente el destino:
 
 ```bash
-npm start
+NODE_ENV=development DB_HOST=127.0.0.1 DB_NAME=matista_local DB_SSL=false npm run db:check
+NODE_ENV=development DB_HOST=127.0.0.1 DB_NAME=matista_local DB_SSL=false npm run db:migrate
+NODE_ENV=development DB_HOST=127.0.0.1 DB_NAME=matista_local DB_SSL=false npm run db:admin-demo
+NODE_ENV=development DB_HOST=127.0.0.1 DB_NAME=matista_local DB_SSL=false npm run db:carga-autonoma
 ```
 
-**El arranque no es de sólo lectura:** inicializa el activador de políticas y puede activar pendientes vencidas en MySQL. Algunas consultas comerciales también resuelven activaciones vencidas. No arrancar contra datos de desarrollo/producción como si fuera una prueba aislada.
+El administrador se crea **antes** del catálogo porque su legajo identifica al responsable de la política/aportes mediante FK. No se necesita SMTP para este aprovisionamiento. Resultado: 30 migraciones, 4 planes, 1 versión inicial ACTIVA, 160 tarifas, 12 aportes, 1 política VIGENTE y 9 porcentajes, sin clientes ni cotizaciones.
 
-Con el servicio ya iniciado, `GET http://localhost:3000/api/health` comprueba HTTP, no disponibilidad integral de base, correo o PDF. Iniciar después el frontend y alinear su origen con `FRONTEND_ORIGIN`.
+**ADMIN exclusivamente de demostración:** correo `admin@matista.test`, contraseña `admin2026*`, legajo `900000001`, rol `ADMIN`, estado `ACTIVO`, correo `ACTUAL` y verificado. Contraseña almacenada con bcrypt costo 12. No exige cambio al iniciar sesión. **Estas credenciales conocidas NO deben utilizarse en producción ni exponerse en una instalación pública.** No se añaden a variables ni configuraciones de producción.
+
+### 5. Iniciar y verificar
+
+En el backend:
+
+```bash
+NODE_ENV=development DB_HOST=127.0.0.1 DB_NAME=matista_local DB_SSL=false npm run dev
+```
+
+Alternativa: `npm start` con el mismo entorno. **El arranque puede escribir** (activación de políticas pendientes); nunca iniciarlo contra una base ajena a esta demostración.
+
+En otra terminal, dentro de `Matista-frontend`, dejar `VITE_API_BASE_URL` vacía en su configuración local o ejecutar:
+
+```bash
+VITE_API_BASE_URL= npm run dev
+```
+
+Vite sirve `http://localhost:5173` y reenvía `/api` al backend local en 3000. No mezclar `localhost` y `127.0.0.1` al navegar ni cambiar de puerto sin alinear `FRONTEND_ORIGIN` y el proxy. No se necesitan cambios en el frontend para la instalación autónoma.
+
+Verificar:
+
+1. `npm run db:check` informa `matista_local`; `http://localhost:3000/api/health` responde `status: ok` (salud HTTP, no prueba SMTP/PDF).
+2. Abrir `http://localhost:5173/login`, acceder con el ADMIN demo y consultar planes, las listas y los 9 porcentajes de la política comercial. Recargar la página debe conservar la sesión.
+3. ADMIN **no puede cotizar**: registrar un ASESOR de prueba, verificar su correo vía SMTP local y activarlo desde el directorio ADMIN. Entrar como ese ASESOR y crear un cliente sintético para cotizar en **Obligatorio o Monotributo**. No forman parte del seed. Para Voluntario, completar primero la configuración comercial siguiente.
+4. Preparar, calcular y emitir; consultar el resultado. Descargar PDF si Chrome está disponible. Ninguna etapa exige SIGEC.
+5. Repetir los comandos de ADMIN/catálogo: deben informar que ya existen sin duplicar ni resetear datos.
+
+El clon autónomo necesita todavía configuración privada local, una cuenta MySQL y `npm ci`: no se distribuyen secretos, usuarios MySQL ni un despliegue productivo listo para publicar.
+
+### Configuración comercial posterior a la instalación
+
+El catálogo inicial E2 permanece **intacto**: su política deja `iva_voluntario_pct` y `aporte_adherente` en NULL. Estos parámetros se configuran después mediante el mecanismo de políticas comerciales existente, sin editar el seed, ejecutar SQL manual ni definir variables de entorno paralelas.
+
+Con backend y frontend conectados exclusivamente a `matista_local`:
+
+1. Ingresar en `http://localhost:5173/login` con el ADMIN de demostración: **`admin@matista.test` / `admin2026*`**. Cuenta conocida de uso exclusivamente local, nunca producción.
+2. Abrir **Configuración comercial → Nueva política**, partiendo de la versión VIGENTE.
+3. Configurar **IVA Voluntario = 10,50 %** (`iva_voluntario_pct: "10.50"`) y **Aporte adherente = $23.892,00** (`aporte_adherente: "23892.00"`). Usar el separador decimal admitido por el navegador; en JSON se utiliza punto, sin separador de miles.
+4. Conservar los demás parámetros y los porcentajes comerciales. Elegir **Activar inmediatamente**, pulsar **Guardar** y confirmar la operación.
+5. Comprobar que la nueva versión esté **VIGENTE** y que la anterior figure como **HISTÓRICA** en **Historial**, conservando sus valores originales. En una instalación inicial será normalmente #1 → #2; no asumir esos IDs si ya existen otras versiones.
+6. Ingresar como un ASESOR verificado y activado, crear un cliente sintético y preparar/calcular una cotización **Voluntario**. Revisar el IVA del 10,50 % en el desglose y emitirla si se desea completar el recorrido.
+
+Estos valores de demostración fueron verificados en la política #12 de la aplicación existente; **el profesor no necesita acceder a esa base ni a SIGEC**: dispone de los valores y los publica localmente desde ADMIN. Permanecen configurables en futuras políticas; no son constantes del motor ni una configuración paralela. El campo `aporte_adherente` se conserva como parámetro administrativo histórico: el motor vigente de Monotributo usa `aporte_monotributo` también por adherente registrado.
+
+Referencia del endpoint autenticado que utiliza la interfaz: `PUT /api/admin/politica-comercial/:id`, donde `:id` es la política VIGENTE consultada, con cuerpo parcial:
+
+```json
+{
+  "iva_voluntario_pct": "10.50",
+  "aporte_adherente": "23892.00",
+  "activacion": { "modo": "INMEDIATA" }
+}
+```
+
+El servicio conserva los campos omitidos y versiona/audita la publicación. Si ambos valores ya están configurados, no es necesario publicarlos otra vez. Repetir `db:carga-autonoma` no los restablece ni modifica el contenido histórico E2.
+
+Verificación realizada en `matista_local` con la política #2: RUBÍ, titular de 36 años, sin descuentos; base **$204.986,58**, IVA **$21.523,59**, total **$226.510,17**, redondeado a centavos. Pasaron previsualización, cálculo y emisión por HTTP; los datos operativos sintéticos se revirtieron.
 
 ## Pruebas
 
@@ -222,22 +331,33 @@ Se usa el ejecutor nativo `node:test`, con concurrencia 1 en los scripts. Hay pr
 | `npm run test:auth` | Repositorio con dobles, servicios, autorización y HTTP AUTH; no sustituye la suite SQL |
 | `npm run test:db` | Activa `RUN_DB_TESTS=1` para el esquema MySQL |
 | `npm run test:auth:db` | Activa `RUN_AUTH_DB_TESTS=1` para persistencia AUTH real |
+| `npm run test:install` | Aceptación SQL/HTTP únicamente en `development/matista_local` loopback; migra/carga si está vacía y revierte los fixtures HTTP |
 
 Para una regresión con opt-in externos desactivados, revisar el entorno antes de invocar:
 
 ```bash
-RUN_DB_TESTS=0 RUN_AUTH_DB_TESTS=0 RUN_PDF_TESTS=0 npm test
-RUN_DB_TESTS=0 RUN_AUTH_DB_TESTS=0 RUN_PDF_TESTS=0 npm run test:auth-infra
-RUN_DB_TESTS=0 RUN_AUTH_DB_TESTS=0 RUN_PDF_TESTS=0 npm run test:auth
+RUN_DB_TESTS=0 RUN_AUTH_DB_TESTS=0 RUN_PDF_TESTS=0 RUN_INSTALL_DB_TESTS=0 npm test
+RUN_DB_TESTS=0 RUN_AUTH_DB_TESTS=0 RUN_PDF_TESTS=0 RUN_INSTALL_DB_TESTS=0 npm run test:auth-infra
+RUN_DB_TESTS=0 RUN_AUTH_DB_TESTS=0 RUN_PDF_TESTS=0 RUN_INSTALL_DB_TESTS=0 npm run test:auth
 ```
 
 Los ejemplos de variables prefijadas corresponden a shells POSIX. Algunos archivos cargan `.env`; las pruebas pueden crear listeners efímeros en loopback y temporales. No se presenta la ejecución como carente de todo efecto local.
 
-Las suites MySQL exigen `NODE_ENV=test` y `DB_NAME=matista_test`, además de esquema/datos previos según cada arnés. **Escriben, modifican o limpian datos**; algunas ADMIN requieren catálogo y acceso fuente SIGEC. Para habilitarlas se necesita una base de pruebas aislada y autorización explícita. El esquema solo no equivale a ejecutar todas las suites comerciales.
+Las suites MySQL históricas (`test:db`, `test:auth:db`, opt-in `RUN_DB_TESTS`) exigen `NODE_ENV=test` y `DB_NAME=matista_test`. Escriben/modifican/limpian datos; algunas ADMIN requieren SIGEC. **No ejecutarlas para esta aceptación**, que tiene su propia suite aislada:
 
-`RUN_PDF_TESTS=1` habilita casos opcionales de Chrome real en las pruebas de módulos; generan archivos temporales y algunas invocan utilidades PDF del sistema. No hay un script `test:pdf` independiente.
+```bash
+NODE_ENV=development DB_HOST=127.0.0.1 DB_NAME=matista_local DB_SSL=false npm run test:install
+```
 
-**SPEC-10 no ejecutó estas pruebas ni renueva resultados históricos.** Los comandos y alcances anteriores se comprobaron por lectura de scripts y arneses.
+Requiere una base local dedicada (creada por el operador), nunca borra ni recrea bases. En la primera ejecución sobre catálogo vacío verifica rollback real tras insertar las 160 tarifas; al repetirse omite ese caso para no limpiar información existente. Los comandos de aprovisionamiento sí quedan confirmados. Los fixtures HTTP posteriores (sesiones, asesor, cliente y emisión) utilizan SQL y servicios reales bajo una transacción exterior que se revierte al finalizar. No envía correo externo: el transporte de pruebas captura la verificación en memoria. La suite comprueba rechazo de producción/host remoto **antes de conectar** y compara huellas de todos los campos antes/después de repetir la instalación.
+
+`test:install` admite tanto el estado inicial sin IVA como una política posterior publicada por ADMIN: exige una sola VIGENTE, **no una sola versión**, valida el contenido E2 histórico y respeta el catálogo de descuentos de la versión actual. Comprueba el comportamiento de Voluntario según el IVA realmente instalado y ejercita ambos estados mediante publicaciones ADMIN **temporales dentro del fixture reversible**: sin IVA → rechazo 422; IVA 10,50 % y aporte adherente 23892.00 → cálculo/emisión correctos. Al finalizar revierte las políticas temporales, sus eventos y los datos operativos; conserva las versiones y parámetros que había antes de la prueba. MySQL puede consumir IDs autoincrementales durante el fixture: no se exige numeración consecutiva ni se reinician secuencias.
+
+`RUN_PDF_TESTS=1` habilita casos opcionales de Chrome real en las pruebas de módulos; `npm run test:pdf` ejecuta las suites específicas de PDF. La aceptación autónoma no certifica Chrome ni entrega SMTP externa.
+
+En la implementación de instalación autónoma (2026-11-03, Node 24.20.0 y MySQL 8.4.11 local) se verificaron las 30 migraciones sobre `matista_local` inicialmente vacía, los conteos 4/160/12/1/9, bcrypt/login ADMIN, repetición/concurrencia sin cambios, rechazo de producción y cotización HTTP en Obligatorio/Monotributo. Se preservó el rechazo de Voluntario sin IVA configurado. No se modificaron `matista_dev`, `matista_test`, Aiven ni el despliegue público.
+
+**Pendientes de verificación manual:** recorrido en navegador, entrega SMTP externa, Chrome/PDF y repetir el procedimiento en un clon limpio con `npm ci`; las pruebas anteriores utilizaron las dependencias locales ya instaladas. En una instalación nueva, completar la sección «Configuración comercial posterior a la instalación» para habilitar Voluntario. La regresión general mantiene desactivados los opt-in MySQL/PDF; la aceptación SQL/HTTP se ejecuta exclusivamente sobre `matista_local`.
 
 ## Seguridad y operación
 
@@ -251,4 +371,4 @@ Las suites MySQL exigen `NODE_ENV=test` y `DB_NAME=matista_test`, además de esq
 
 Estos controles no garantizan seguridad absoluta ni sustituyen una auditoría de despliegue y dependencias. No publicar copias de bases, datos personales o material comercial sin autorización. Revisar también el historial, la identidad pública de los commits y los derechos sobre textos/marca antes de abrir el repositorio.
 
-El funcionamiento local o mediante **túnel de VS Code no constituye un despliegue permanente de producción**. No se incluyen URLs temporales, cuentas de demostración reales, capturas ni métricas no verificadas.
+El funcionamiento local o mediante **túnel de VS Code no constituye un despliegue permanente de producción**. La única cuenta conocida distribuida es la demo local explícita; nunca usarla en una instalación pública.

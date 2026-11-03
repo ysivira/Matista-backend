@@ -18,13 +18,14 @@
  */
 
 /*
- * Solo admite las bases matista_dev y matista_test; rechaza DROP, USE,
+ * Solo admite las bases locales autorizadas; rechaza DROP, USE,
  * usuarios, permisos y toda sentencia fuera de la tabla objetivo declarada.
  */
 
 import { createHash } from 'node:crypto';
 import { readdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
+import { assertLocalInstallationTarget } from './local-installation.js';
 
 const MIGRATION_FILE_PATTERN = /^(\d{3})_([a-z0-9_]+)\.sql$/;
 const TARGET_TABLE_PATTERN = /^-- matista:target-table ([a-z0-9_]+)$/m;
@@ -37,9 +38,13 @@ const CREATE_TABLE_PATTERN = /^CREATE\s+TABLE\b/i;
 // DROP solo se prohibe salvo cuando es un DROP CHECK (ajuste de restricciones declarativas).
 const FORBIDDEN_SQL_PATTERN =
   /\b(USE|DROP(?!\s+CHECK)|CREATE\s+DATABASE|ALTER\s+USER|CREATE\s+USER|GRANT|REVOKE)\b/i;
-const LOCAL_MIGRATION_TARGETS = new Map([
-  ['development', 'matista_dev'],
-  ['test', 'matista_test']
+// Objetivos de migracion local autorizados (NODE_ENV/database).
+const LOCAL_MIGRATION_TARGETS = new Set([
+  'development/matista_dev',
+  'test/matista_test',
+  // Instalacion autonoma local: development/matista_local inicializa bases
+  // nuevas de demostracion; production y test siguen prohibidos.
+  'development/matista_local'
 ]);
 const SCHEMA_MIGRATIONS_SQL = `
   CREATE TABLE IF NOT EXISTS schema_migrations (
@@ -70,15 +75,19 @@ export class MigrationStateError extends Error {
 }
 
 /**
- * Garantiza que las migraciones apunten a la base autorizada del entorno.
+ * Garantiza que las migraciones apunten a un destino local autorizado.
  * @param {object} config Configuración de base de datos con nodeEnv y database.
  * @returns {void}
- * @throws {Error} Si el entorno no es development/matista_dev o test/matista_test.
+ * @throws {Error} Si el objetivo no es un destino local autorizado.
  */
 export function assertMigrationTarget(config) {
-  const expectedDatabase = LOCAL_MIGRATION_TARGETS.get(config.nodeEnv);
-  if (!expectedDatabase || config.database !== expectedDatabase) {
-    throw new Error('El runner solo admite development/matista_dev o test/matista_test.');
+  if (config.database === 'matista_local') assertLocalInstallationTarget(config);
+  const objetivo = `${config.nodeEnv}/${config.database}`;
+  if (!LOCAL_MIGRATION_TARGETS.has(objetivo)) {
+    throw new Error(
+      'El runner solo admite development/matista_dev, test/matista_test o ' +
+        'development/matista_local (instalación autónoma).'
+    );
   }
 }
 

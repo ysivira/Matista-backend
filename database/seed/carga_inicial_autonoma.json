@@ -1,0 +1,1214 @@
+{
+  "metadatos": {
+    "descripcion": "Catalogo comercial E2 verificado para la instalacion autonoma de MATISTA (reemplazo local de la fuente SIGEC).",
+    "valor_e2": "politica_comercial id=1 de la carga E2 y matriz 4 planes x Obligatorio/Voluntario x 20 rangos = 160 tarifas; 12 aportes de monotributo abiertos.",
+    "fuentes_verificadas": [
+      "matista_dev: tarifario_versiones tipo CARGA_INICIAL id=1 (observacion: Carga inicial controlada desde SIGEC (E2): planes activos y tarifas validadas; 10 registros excluidos por criterio estructural (6 inactivas, 2 de planes inactivos, 2 monotributo).)",
+      "cotejo identico contra matista_test: planes, 160 tarifas y 12 aportes coinciden fila por fila (2026-11-03)"
+    ],
+    "politica_comercial": "Los valores de la politica comercial inicial y los 9 porcentajes comerciales aprobados NO se extraen de bases: viven en el codigo aprobado (src/modules/admin/carga-inicial.service.js POLITICA_INICIAL y carga-inicial.repository.js PORCENTAJES_COMERCIALES_INICIALES).",
+    "advertencia": "No editar importes a mano: cualquier dato nuevo exige una verificacion con el negocio."
+  },
+  "planes": [
+    {
+      "id": 1,
+      "nombre": "RUBÍ",
+      "activa": 1,
+      "detalles": "Análisis de Laboratorio| SC-ST-SL|NO\nCirugía de Ojos Excimer Láser (1 año de permanencia)| 50% CT-CL|NO\nConsultas – Consultorio | SC-ST-SL|NO\nConsultas – Domicilio| CC-ST-SL|NO\nFonoaudiología| SC-CT (40 Sesiones)|NO\nInternaciones Clínicas y/o Quirúrgicas| SC-ST-SL|NO\nInternaciones Psiquiátricas| SC-CT (30 días)|NO\nKinesiología – Fisiatría| SC-CT (25 sesiones)|NO\nMaterial Descartable Internación | 100%|NO\nMaternidad | 100%|NO\nMedicamentos Ambulatorios| 40%|NO\nMedicamentos en Internación| 100%|NO\nMedicamentos Oncológicos (según P.M.O.)| 100%|NO\nOdontología General| SC-ST-SL|NO\nOrtesis Nacionales (según P.M.O.)| 50%|NO\nPlan Materno Infantil| 100%|NO\nPrácticas Médicas de Diagnóstico y Tratamiento| SC-ST-SL|NO\nPrótesis Nacionales (según P.M.O.)| 100%|NO\nPsicología – Psiquiatría| CC-CT (30 sesiones)|NO\nTipo de Habitación| Compartida|NO\nTipo de Habitación Maternal| Compartida|NO\nUnidad de Terapia Intensiva| SC-ST-SL|NO",
+      "condiciones_generales": "Cobertura: BRASIL.\n\nReferencias: SC (Sin Cargo) | ST (Sin Tope) | SL (Sin Límite) | CC (Con Cargo) | CT (Con Tope) | CL (Con Límite) | NA (No Acumulable)"
+    },
+    {
+      "id": 2,
+      "nombre": "ESMERALDA",
+      "activa": 1,
+      "detalles": "Análisis de Laboratorio | SC-ST-SL | CT-CL \n Cirugía de Ojos Excimer Láser (1 año de permanencia) | 100% |CT-CL \n  Consultas - Consultorio | SC-ST-SL | CT-CL\n Consultas Domicilio | CC-ST-SL | CT-CL\n Escleroterapia | SC-CT (8 sesiones por única vez) |CT.CL \n Fonoaudiología | SC-CT (48 Sesiones) | CT-CL\n Internaciones Clínicas y/o Quirúrgicas | SC-ST-SL | CT-CL\n Internaciones Psiquiátricas | SC-CT (60 días) | NO\n Kinesiología - Fisiatría | SC-CT (30 sesiones) | CT-CL\n Material Descartable Internación | 100% | CT-CL\n Maternidad | 100% | CT-CL\n Medicamentos Ambulatorios | 40% | NO \n Medicamentos en Internación | 100% | CT-CL\n Medicamentos Oncológicos (según P.M.O.) | 100% | NO\n Odontología General | SC-ST-SL | CT(por año NA) \n Odontología – Prótesis | 50% | CT-CL · NA · 1 año de permanencia \n Ortodoncia (de 8 a 18 años por única vez) | Por Reintegro | CT-CL (por año NA) \n Ortesis Nacionales (según P.M.O.) | 50% | CT-CL\n Plan Materno Infantil | 100% | CT-CL\n Prácticas Médicas de Diagnóstico y Tratamiento | SC-ST-SL | CT-CL\n Prótesis Nacionales (según P.M.O.) | 100% | NO \n Psicología - Psiquiatría | CC-CT (30 sesiones) | CT-CL (60 sesiones) \n Tipo de Habitación | Individual | CT-CL\n Tipo de Habitación Maternal | Individual | CT-CL\n Unidad de Terapia Intensiva | SC-ST-SL | CT-CL",
+      "condiciones_generales": "Cobertura: Países Limítrofes.\n\nReferencias: SC (Sin Cargo) | ST (Sin Tope) | SL (Sin Límite) | CC (Con Cargo) | CT (Con Tope) | CL (Con Límite) | NA (No Acumulable)"
+    },
+    {
+      "id": 3,
+      "nombre": "ZAFIRO",
+      "activa": 1,
+      "detalles": "Análisis de Laboratorio | SC-ST-SL | CT-CL \n Cirugía de Ojos Excimer Láser (1 año de permanencia) | CT-CL |CT-CL \n  Consultas - Consultorio | SC-ST-SL | CT-CL\n Consultas Domicilio | CC-ST-SL | CT-CL\n Cirugía Estética (2 años de permanencia)| CT-CL (1 cada 4 años aniversario) | CT-CL  \n  Escleroterapia | SC-CT (8 sesiones por año aniversario) |CT-CL (por año aniversario) \n Fonoaudiología | SC-CT (56 Sesiones) | CT-CL\n Internaciones Clínicas y/o Quirúrgicas | SC-ST-SL | CT-CL\n Acompañante en Internación (hasta 17 años inclusive) | 100% |CT-CL \n Acompañante en Internación (mayores de 18 años con autorización expresa de Auditoria Médica | SC-CT-CL (3 días por año) | CT-CL  \n Internaciones Psiquiátricas | SC-CT (60 sesiones) | NO\n  Kinesiología - Fisiatría | SC-CT (40 sesiones) | CT-CL\n Material Descartable Internación | 100% | CT-CL\n Maternidad | 100% | CT-CL\n Medicamentos Ambulatorios | 40% | NO \n Medicamentos en Internación | 100% | CT-CL\n Medicamentos Oncológicos (según P.M.O.) | 100% | NO\n Odontología General | SC-ST-SL | CT (por año NA) \n Odontología –Blanqueamiento Dental | Por Reintegro| CT (1 cada 4 años) \n Odontología – Implantes (1 año de permanencia) | Por Reintegro | CT (por año NA) \n Odontología – Prótesis | 70% | CT-CL · NA · 1 año de permanencia \n Ortodoncia (de 8 a 18 años por única vez) | Por Reintegro | CT-CL (por año NA) \n Ortesis Nacionales (según P.M.O.) | 50% | CT-CL\n  Plan Materno Infantil | 100% | CT-CL\n Prácticas Médicas de Diagnóstico y Tratamiento | SC-ST-SL | CT-CL\n Prótesis Nacionales (según P.M.O.) | 100% | NO \n Psicología - Psiquiatría | CC-CT (30 sesiones) | CT-CL (60 sesiones) \n Servicio de Asistencia al Viajero. Cobertura Internacional | CT-CL |NO\n Tipo de Habitación | Individual | CT-CL\n Tipo de Habitación Maternal | Individual | CT-CL\n  Unidad de Terapia Intensiva | SC-ST-SL | CT-CL",
+      "condiciones_generales": "Servicio de Asistencia al Viajero. Cobertura Internacional. Tratado de Schengen.\n\nReferencias: SC (Sin Cargo) | ST (Sin Tope) | SL (Sin Límite) | CC (Con Cargo) | CT (Con Tope) | CL (Con Límite) | NA (No Acumulable)"
+    },
+    {
+      "id": 4,
+      "nombre": "DIAMANTE",
+      "activa": 1,
+      "detalles": "Análisis de Laboratorio | SC-ST-SL | CT-CL \n Cirugía de Ojos Excimer Láser (1 año de permanencia) | CT-CL |CT-CL \n  Consultas - Consultorio | SC-ST-SL | CT-CL\n Consultas Domicilio | CC-ST-SL | CT-CL\n Cirugía Estética (1 años de permanencia)| CT-CL (1 cada 3 años aniversario) | CT-CL  \n  Escleroterapia | SC-CT (8 sesiones por año aniversario) |CT-CL (por año aniversario) \n Fonoaudiología | SC-CT (60 Sesiones) | CT-CL\n Internaciones Clínicas y/o Quirúrgicas | SC-ST-SL | CT-CL\n Acompañante en Internación (hasta 17 años inclusive) | 100% |CT-CL \n Acompañante en Internación (mayores de 18 años con autorización expresa de Auditoria Médica |SC-CT-CL (7 días por año) | CT-CL  \n Internaciones Psiquiátricas | SC-CT (60 sesiones) | NO\n  Kinesiología - Fisiatría | SC-CT (40 sesiones) | CT-CL\n Material Descartable Internación | 100% | CT-CL\n Maternidad | 100% | CT-CL\n Medicamentos Ambulatorios | 40% | NO \n Medicamentos en Internación | 100% | CT-CL\n Medicamentos Oncológicos (según P.M.O.) | 100% | NO\n Odontología General | SC-ST-SL | CT (por año NA) \n Odontología –Blanqueamiento Dental (1 cada 2 años) | Por Reintegro| CT (por año NA) \n Odontología – Implantes (1 año de permanencia) | Por Reintegro | CT (por año NA) \n Odontología – Prótesis | 100% | CT-CL · NA · 1 año de permanencia \n Ortodoncia (de 8 a 25 años por única vez) De 26 años en adelante con 1 año de permanencia | Por Reintegro | CT-CL (por año NA) \n Ortesis Nacionales (según P.M.O.) | 50% | CT-CL\n  Plan Materno Infantil | 100% | CT-CL\n Prácticas Médicas de Diagnóstico y Tratamiento | SC-ST-SL | CT-CL\n Prótesis Nacionales (según P.M.O.) | 100% | NO \n Psicología - Psiquiatría | CC-CT (30 sesiones) |NO \n Servicio de Asistencia al Viajero. Cobertura Internacional | CT-CL |NO\n Tipo de Habitación | Individual | CT-CL\n Tipo de Habitación Maternal | Individual | CT-CL\n  Unidad de Terapia Intensiva | SC-ST-SL | CT-CL",
+      "condiciones_generales": "Servicio de Asistencia al Viajero. Cobertura Internacional. Tratado de Schengen. BENEFICIOS ADICIONALES: Asistencia al hogar, Reintegro por sepelio, Cobertura por fallecimiento.\n\nReferencias: SC (Sin Cargo) | ST (Sin Tope) | SL (Sin Límite) | CC (Con Cargo) | CT (Con Tope) | CL (Con Límite) | NA (No Acumulable)"
+    }
+  ],
+  "tarifas": [
+    {
+      "plan_id": 1,
+      "tipo_ingreso": "Obligatorio",
+      "rango_clave": "0-25",
+      "rango_nota": null,
+      "precio": "172025.40"
+    },
+    {
+      "plan_id": 1,
+      "tipo_ingreso": "Obligatorio",
+      "rango_clave": "26-35",
+      "rango_nota": null,
+      "precio": "172025.75"
+    },
+    {
+      "plan_id": 1,
+      "tipo_ingreso": "Obligatorio",
+      "rango_clave": "36-40",
+      "rango_nota": null,
+      "precio": "191506.81"
+    },
+    {
+      "plan_id": 1,
+      "tipo_ingreso": "Obligatorio",
+      "rango_clave": "41-50",
+      "rango_nota": null,
+      "precio": "199093.52"
+    },
+    {
+      "plan_id": 1,
+      "tipo_ingreso": "Obligatorio",
+      "rango_clave": "51-60",
+      "rango_nota": null,
+      "precio": "297590.39"
+    },
+    {
+      "plan_id": 1,
+      "tipo_ingreso": "Obligatorio",
+      "rango_clave": "61-65",
+      "rango_nota": null,
+      "precio": "516075.30"
+    },
+    {
+      "plan_id": 1,
+      "tipo_ingreso": "Obligatorio",
+      "rango_clave": "66+",
+      "rango_nota": null,
+      "precio": "516075.30"
+    },
+    {
+      "plan_id": 1,
+      "tipo_ingreso": "Obligatorio",
+      "rango_clave": "FAMILIAR A CARGO",
+      "rango_nota": null,
+      "precio": "541879.30"
+    },
+    {
+      "plan_id": 1,
+      "tipo_ingreso": "Obligatorio",
+      "rango_clave": "HIJO 0-1",
+      "rango_nota": "(*)",
+      "precio": "91460.76"
+    },
+    {
+      "plan_id": 1,
+      "tipo_ingreso": "Obligatorio",
+      "rango_clave": "HIJO 2-20",
+      "rango_nota": null,
+      "precio": "73168.61"
+    },
+    {
+      "plan_id": 1,
+      "tipo_ingreso": "Obligatorio",
+      "rango_clave": "HIJO 21-29",
+      "rango_nota": null,
+      "precio": "180626.69"
+    },
+    {
+      "plan_id": 1,
+      "tipo_ingreso": "Obligatorio",
+      "rango_clave": "HIJO 30-39",
+      "rango_nota": null,
+      "precio": "201083.56"
+    },
+    {
+      "plan_id": 1,
+      "tipo_ingreso": "Obligatorio",
+      "rango_clave": "HIJO 40-49",
+      "rango_nota": null,
+      "precio": "209046.27"
+    },
+    {
+      "plan_id": 1,
+      "tipo_ingreso": "Obligatorio",
+      "rango_clave": "MAT 0-25",
+      "rango_nota": null,
+      "precio": "241867.98"
+    },
+    {
+      "plan_id": 1,
+      "tipo_ingreso": "Obligatorio",
+      "rango_clave": "MAT 26-35",
+      "rango_nota": null,
+      "precio": "326858.10"
+    },
+    {
+      "plan_id": 1,
+      "tipo_ingreso": "Obligatorio",
+      "rango_clave": "MAT 36-40",
+      "rango_nota": null,
+      "precio": "363875.92"
+    },
+    {
+      "plan_id": 1,
+      "tipo_ingreso": "Obligatorio",
+      "rango_clave": "MAT 41-50",
+      "rango_nota": null,
+      "precio": "378278.43"
+    },
+    {
+      "plan_id": 1,
+      "tipo_ingreso": "Obligatorio",
+      "rango_clave": "MAT 51-60",
+      "rango_nota": null,
+      "precio": "565443.97"
+    },
+    {
+      "plan_id": 1,
+      "tipo_ingreso": "Obligatorio",
+      "rango_clave": "MAT 61-65",
+      "rango_nota": null,
+      "precio": "980578.85"
+    },
+    {
+      "plan_id": 1,
+      "tipo_ingreso": "Obligatorio",
+      "rango_clave": "MAT 66-00",
+      "rango_nota": null,
+      "precio": "980543.74"
+    },
+    {
+      "plan_id": 1,
+      "tipo_ingreso": "Voluntario",
+      "rango_clave": "0-25",
+      "rango_nota": null,
+      "precio": "184134.32"
+    },
+    {
+      "plan_id": 1,
+      "tipo_ingreso": "Voluntario",
+      "rango_clave": "26-35",
+      "rango_nota": null,
+      "precio": "184134.32"
+    },
+    {
+      "plan_id": 1,
+      "tipo_ingreso": "Voluntario",
+      "rango_clave": "36-40",
+      "rango_nota": null,
+      "precio": "204986.58"
+    },
+    {
+      "plan_id": 1,
+      "tipo_ingreso": "Voluntario",
+      "rango_clave": "41-50",
+      "rango_nota": null,
+      "precio": "213107.68"
+    },
+    {
+      "plan_id": 1,
+      "tipo_ingreso": "Voluntario",
+      "rango_clave": "51-60",
+      "rango_nota": null,
+      "precio": "318538.12"
+    },
+    {
+      "plan_id": 1,
+      "tipo_ingreso": "Voluntario",
+      "rango_clave": "61-65",
+      "rango_nota": null,
+      "precio": "552401.23"
+    },
+    {
+      "plan_id": 1,
+      "tipo_ingreso": "Voluntario",
+      "rango_clave": "66+",
+      "rango_nota": null,
+      "precio": "552401.23"
+    },
+    {
+      "plan_id": 1,
+      "tipo_ingreso": "Voluntario",
+      "rango_clave": "FAMILIAR A CARGO",
+      "rango_nota": null,
+      "precio": "580021.99"
+    },
+    {
+      "plan_id": 1,
+      "tipo_ingreso": "Voluntario",
+      "rango_clave": "HIJO 0-1",
+      "rango_nota": "(*)",
+      "precio": "97898.48"
+    },
+    {
+      "plan_id": 1,
+      "tipo_ingreso": "Voluntario",
+      "rango_clave": "HIJO 2-20",
+      "rango_nota": null,
+      "precio": "78317.30"
+    },
+    {
+      "plan_id": 1,
+      "tipo_ingreso": "Voluntario",
+      "rango_clave": "HIJO 21-29",
+      "rango_nota": null,
+      "precio": "193339.99"
+    },
+    {
+      "plan_id": 1,
+      "tipo_ingreso": "Voluntario",
+      "rango_clave": "HIJO 30-39",
+      "rango_nota": null,
+      "precio": "215236.31"
+    },
+    {
+      "plan_id": 1,
+      "tipo_ingreso": "Voluntario",
+      "rango_clave": "HIJO 40-49",
+      "rango_nota": null,
+      "precio": "223760.50"
+    },
+    {
+      "plan_id": 1,
+      "tipo_ingreso": "Voluntario",
+      "rango_clave": "MAT 0-25",
+      "rango_nota": null,
+      "precio": "258892.98"
+    },
+    {
+      "plan_id": 1,
+      "tipo_ingreso": "Voluntario",
+      "rango_clave": "MAT 26-35",
+      "rango_nota": null,
+      "precio": "349842.20"
+    },
+    {
+      "plan_id": 1,
+      "tipo_ingreso": "Voluntario",
+      "rango_clave": "MAT 36-40",
+      "rango_nota": null,
+      "precio": "389460.17"
+    },
+    {
+      "plan_id": 1,
+      "tipo_ingreso": "Voluntario",
+      "rango_clave": "MAT 41-50",
+      "rango_nota": null,
+      "precio": "404903.95"
+    },
+    {
+      "plan_id": 1,
+      "tipo_ingreso": "Voluntario",
+      "rango_clave": "MAT 51-60",
+      "rango_nota": null,
+      "precio": "605201.73"
+    },
+    {
+      "plan_id": 1,
+      "tipo_ingreso": "Voluntario",
+      "rango_clave": "MAT 61-65",
+      "rango_nota": null,
+      "precio": "1049525.89"
+    },
+    {
+      "plan_id": 1,
+      "tipo_ingreso": "Voluntario",
+      "rango_clave": "MAT 66-00",
+      "rango_nota": null,
+      "precio": "1049563.81"
+    },
+    {
+      "plan_id": 2,
+      "tipo_ingreso": "Obligatorio",
+      "rango_clave": "0-25",
+      "rango_nota": null,
+      "precio": "221788.31"
+    },
+    {
+      "plan_id": 2,
+      "tipo_ingreso": "Obligatorio",
+      "rango_clave": "26-35",
+      "rango_nota": null,
+      "precio": "221788.31"
+    },
+    {
+      "plan_id": 2,
+      "tipo_ingreso": "Obligatorio",
+      "rango_clave": "36-40",
+      "rango_nota": null,
+      "precio": "278637.96"
+    },
+    {
+      "plan_id": 2,
+      "tipo_ingreso": "Obligatorio",
+      "rango_clave": "41-50",
+      "rango_nota": null,
+      "precio": "304541.12"
+    },
+    {
+      "plan_id": 2,
+      "tipo_ingreso": "Obligatorio",
+      "rango_clave": "51-60",
+      "rango_nota": null,
+      "precio": "436326.83"
+    },
+    {
+      "plan_id": 2,
+      "tipo_ingreso": "Obligatorio",
+      "rango_clave": "61-65",
+      "rango_nota": null,
+      "precio": "665365.86"
+    },
+    {
+      "plan_id": 2,
+      "tipo_ingreso": "Obligatorio",
+      "rango_clave": "66+",
+      "rango_nota": null,
+      "precio": "665365.86"
+    },
+    {
+      "plan_id": 2,
+      "tipo_ingreso": "Obligatorio",
+      "rango_clave": "FAMILIAR A CARGO",
+      "rango_nota": null,
+      "precio": "698635.63"
+    },
+    {
+      "plan_id": 2,
+      "tipo_ingreso": "Obligatorio",
+      "rango_clave": "HIJO 0-1",
+      "rango_nota": "(*)",
+      "precio": "120380.08"
+    },
+    {
+      "plan_id": 2,
+      "tipo_ingreso": "Obligatorio",
+      "rango_clave": "HIJO 2-20",
+      "rango_nota": null,
+      "precio": "78247.02"
+    },
+    {
+      "plan_id": 2,
+      "tipo_ingreso": "Obligatorio",
+      "rango_clave": "HIJO 21-29",
+      "rango_nota": null,
+      "precio": "232877.09"
+    },
+    {
+      "plan_id": 2,
+      "tipo_ingreso": "Obligatorio",
+      "rango_clave": "HIJO 30-39",
+      "rango_nota": null,
+      "precio": "292570.10"
+    },
+    {
+      "plan_id": 2,
+      "tipo_ingreso": "Obligatorio",
+      "rango_clave": "HIJO 40-49",
+      "rango_nota": null,
+      "precio": "319769.36"
+    },
+    {
+      "plan_id": 2,
+      "tipo_ingreso": "Obligatorio",
+      "rango_clave": "MAT 0-25",
+      "rango_nota": null,
+      "precio": "311835.29"
+    },
+    {
+      "plan_id": 2,
+      "tipo_ingreso": "Obligatorio",
+      "rango_clave": "MAT 26-35",
+      "rango_nota": null,
+      "precio": "421398.45"
+    },
+    {
+      "plan_id": 2,
+      "tipo_ingreso": "Obligatorio",
+      "rango_clave": "MAT 36-40",
+      "rango_nota": null,
+      "precio": "529412.28"
+    },
+    {
+      "plan_id": 2,
+      "tipo_ingreso": "Obligatorio",
+      "rango_clave": "MAT 41-50",
+      "rango_nota": null,
+      "precio": "578627.26"
+    },
+    {
+      "plan_id": 2,
+      "tipo_ingreso": "Obligatorio",
+      "rango_clave": "MAT 51-60",
+      "rango_nota": null,
+      "precio": "829021.08"
+    },
+    {
+      "plan_id": 2,
+      "tipo_ingreso": "Obligatorio",
+      "rango_clave": "MAT 61-65",
+      "rango_nota": null,
+      "precio": "1264193.81"
+    },
+    {
+      "plan_id": 2,
+      "tipo_ingreso": "Obligatorio",
+      "rango_clave": "MAT 66-00",
+      "rango_nota": null,
+      "precio": "1264193.81"
+    },
+    {
+      "plan_id": 2,
+      "tipo_ingreso": "Voluntario",
+      "rango_clave": "0-25",
+      "rango_nota": null,
+      "precio": "237399.75"
+    },
+    {
+      "plan_id": 2,
+      "tipo_ingreso": "Voluntario",
+      "rango_clave": "26-35",
+      "rango_nota": null,
+      "precio": "237399.75"
+    },
+    {
+      "plan_id": 2,
+      "tipo_ingreso": "Voluntario",
+      "rango_clave": "36-40",
+      "rango_nota": null,
+      "precio": "298250.92"
+    },
+    {
+      "plan_id": 2,
+      "tipo_ingreso": "Voluntario",
+      "rango_clave": "41-50",
+      "rango_nota": null,
+      "precio": "325977.66"
+    },
+    {
+      "plan_id": 2,
+      "tipo_ingreso": "Voluntario",
+      "rango_clave": "51-60",
+      "rango_nota": null,
+      "precio": "467038.45"
+    },
+    {
+      "plan_id": 2,
+      "tipo_ingreso": "Voluntario",
+      "rango_clave": "61-65",
+      "rango_nota": null,
+      "precio": "712199.44"
+    },
+    {
+      "plan_id": 2,
+      "tipo_ingreso": "Voluntario",
+      "rango_clave": "66+",
+      "rango_nota": null,
+      "precio": "712199.44"
+    },
+    {
+      "plan_id": 2,
+      "tipo_ingreso": "Voluntario",
+      "rango_clave": "FAMILIAR A CARGO",
+      "rango_nota": null,
+      "precio": "747810.72"
+    },
+    {
+      "plan_id": 2,
+      "tipo_ingreso": "Voluntario",
+      "rango_clave": "HIJO 0-1",
+      "rango_nota": "(*)",
+      "precio": "128852.37"
+    },
+    {
+      "plan_id": 2,
+      "tipo_ingreso": "Voluntario",
+      "rango_clave": "HIJO 2-20",
+      "rango_nota": null,
+      "precio": "83755.84"
+    },
+    {
+      "plan_id": 2,
+      "tipo_ingreso": "Voluntario",
+      "rango_clave": "HIJO 21-29",
+      "rango_nota": null,
+      "precio": "249269.91"
+    },
+    {
+      "plan_id": 2,
+      "tipo_ingreso": "Voluntario",
+      "rango_clave": "HIJO 30-39",
+      "rango_nota": null,
+      "precio": "313163.56"
+    },
+    {
+      "plan_id": 2,
+      "tipo_ingreso": "Voluntario",
+      "rango_clave": "HIJO 40-49",
+      "rango_nota": null,
+      "precio": "342278.64"
+    },
+    {
+      "plan_id": 2,
+      "tipo_ingreso": "Voluntario",
+      "rango_clave": "MAT 0-25",
+      "rango_nota": null,
+      "precio": "333785.09"
+    },
+    {
+      "plan_id": 2,
+      "tipo_ingreso": "Voluntario",
+      "rango_clave": "MAT 26-35",
+      "rango_nota": null,
+      "precio": "451060.42"
+    },
+    {
+      "plan_id": 2,
+      "tipo_ingreso": "Voluntario",
+      "rango_clave": "MAT 36-40",
+      "rango_nota": null,
+      "precio": "566677.51"
+    },
+    {
+      "plan_id": 2,
+      "tipo_ingreso": "Voluntario",
+      "rango_clave": "MAT 41-50",
+      "rango_nota": null,
+      "precio": "619357.98"
+    },
+    {
+      "plan_id": 2,
+      "tipo_ingreso": "Voluntario",
+      "rango_clave": "MAT 51-60",
+      "rango_nota": null,
+      "precio": "887375.20"
+    },
+    {
+      "plan_id": 2,
+      "tipo_ingreso": "Voluntario",
+      "rango_clave": "MAT 61-65",
+      "rango_nota": null,
+      "precio": "1353179.05"
+    },
+    {
+      "plan_id": 2,
+      "tipo_ingreso": "Voluntario",
+      "rango_clave": "MAT 66-00",
+      "rango_nota": null,
+      "precio": "1353179.05"
+    },
+    {
+      "plan_id": 3,
+      "tipo_ingreso": "Obligatorio",
+      "rango_clave": "0-25",
+      "rango_nota": null,
+      "precio": "311390.72"
+    },
+    {
+      "plan_id": 3,
+      "tipo_ingreso": "Obligatorio",
+      "rango_clave": "26-35",
+      "rango_nota": null,
+      "precio": "311390.72"
+    },
+    {
+      "plan_id": 3,
+      "tipo_ingreso": "Obligatorio",
+      "rango_clave": "36-40",
+      "rango_nota": null,
+      "precio": "391208.39"
+    },
+    {
+      "plan_id": 3,
+      "tipo_ingreso": "Obligatorio",
+      "rango_clave": "41-50",
+      "rango_nota": null,
+      "precio": "427576.26"
+    },
+    {
+      "plan_id": 3,
+      "tipo_ingreso": "Obligatorio",
+      "rango_clave": "51-60",
+      "rango_nota": null,
+      "precio": "612603.11"
+    },
+    {
+      "plan_id": 3,
+      "tipo_ingreso": "Obligatorio",
+      "rango_clave": "61-65",
+      "rango_nota": null,
+      "precio": "934173.14"
+    },
+    {
+      "plan_id": 3,
+      "tipo_ingreso": "Obligatorio",
+      "rango_clave": "66+",
+      "rango_nota": null,
+      "precio": "934173.14"
+    },
+    {
+      "plan_id": 3,
+      "tipo_ingreso": "Obligatorio",
+      "rango_clave": "FAMILIAR A CARGO",
+      "rango_nota": null,
+      "precio": "980882.73"
+    },
+    {
+      "plan_id": 3,
+      "tipo_ingreso": "Obligatorio",
+      "rango_clave": "HIJO 0-1",
+      "rango_nota": "(*)",
+      "precio": "169014.52"
+    },
+    {
+      "plan_id": 3,
+      "tipo_ingreso": "Obligatorio",
+      "rango_clave": "HIJO 2-20",
+      "rango_nota": null,
+      "precio": "109858.79"
+    },
+    {
+      "plan_id": 3,
+      "tipo_ingreso": "Obligatorio",
+      "rango_clave": "HIJO 21-29",
+      "rango_nota": null,
+      "precio": "326960.66"
+    },
+    {
+      "plan_id": 3,
+      "tipo_ingreso": "Obligatorio",
+      "rango_clave": "HIJO 30-39",
+      "rango_nota": null,
+      "precio": "410768.03"
+    },
+    {
+      "plan_id": 3,
+      "tipo_ingreso": "Obligatorio",
+      "rango_clave": "HIJO 40-49",
+      "rango_nota": null,
+      "precio": "448954.82"
+    },
+    {
+      "plan_id": 3,
+      "tipo_ingreso": "Obligatorio",
+      "rango_clave": "MAT 0-25",
+      "rango_nota": null,
+      "precio": "437815.29"
+    },
+    {
+      "plan_id": 3,
+      "tipo_ingreso": "Obligatorio",
+      "rango_clave": "MAT 26-35",
+      "rango_nota": null,
+      "precio": "591644.17"
+    },
+    {
+      "plan_id": 3,
+      "tipo_ingreso": "Obligatorio",
+      "rango_clave": "MAT 36-40",
+      "rango_nota": null,
+      "precio": "743296.12"
+    },
+    {
+      "plan_id": 3,
+      "tipo_ingreso": "Obligatorio",
+      "rango_clave": "MAT 41-50",
+      "rango_nota": null,
+      "precio": "812393.74"
+    },
+    {
+      "plan_id": 3,
+      "tipo_ingreso": "Obligatorio",
+      "rango_clave": "MAT 51-60",
+      "rango_nota": null,
+      "precio": "1163945.44"
+    },
+    {
+      "plan_id": 3,
+      "tipo_ingreso": "Obligatorio",
+      "rango_clave": "MAT 61-65",
+      "rango_nota": null,
+      "precio": "1774927.94"
+    },
+    {
+      "plan_id": 3,
+      "tipo_ingreso": "Obligatorio",
+      "rango_clave": "MAT 66-00",
+      "rango_nota": null,
+      "precio": "1774927.94"
+    },
+    {
+      "plan_id": 3,
+      "tipo_ingreso": "Voluntario",
+      "rango_clave": "0-25",
+      "rango_nota": null,
+      "precio": "333308.37"
+    },
+    {
+      "plan_id": 3,
+      "tipo_ingreso": "Voluntario",
+      "rango_clave": "26-35",
+      "rango_nota": null,
+      "precio": "333308.37"
+    },
+    {
+      "plan_id": 3,
+      "tipo_ingreso": "Voluntario",
+      "rango_clave": "36-40",
+      "rango_nota": null,
+      "precio": "418744.49"
+    },
+    {
+      "plan_id": 3,
+      "tipo_ingreso": "Voluntario",
+      "rango_clave": "41-50",
+      "rango_nota": null,
+      "precio": "457674.38"
+    },
+    {
+      "plan_id": 3,
+      "tipo_ingreso": "Voluntario",
+      "rango_clave": "51-60",
+      "rango_nota": null,
+      "precio": "655723.43"
+    },
+    {
+      "plan_id": 3,
+      "tipo_ingreso": "Voluntario",
+      "rango_clave": "61-65",
+      "rango_nota": null,
+      "precio": "999929.43"
+    },
+    {
+      "plan_id": 3,
+      "tipo_ingreso": "Voluntario",
+      "rango_clave": "66+",
+      "rango_nota": null,
+      "precio": "999929.43"
+    },
+    {
+      "plan_id": 3,
+      "tipo_ingreso": "Voluntario",
+      "rango_clave": "FAMILIAR A CARGO",
+      "rango_nota": null,
+      "precio": "1049926.65"
+    },
+    {
+      "plan_id": 3,
+      "tipo_ingreso": "Voluntario",
+      "rango_clave": "HIJO 0-1",
+      "rango_nota": "(*)",
+      "precio": "180910.44"
+    },
+    {
+      "plan_id": 3,
+      "tipo_ingreso": "Voluntario",
+      "rango_clave": "HIJO 2-20",
+      "rango_nota": null,
+      "precio": "117592.12"
+    },
+    {
+      "plan_id": 3,
+      "tipo_ingreso": "Voluntario",
+      "rango_clave": "HIJO 21-29",
+      "rango_nota": null,
+      "precio": "349976.42"
+    },
+    {
+      "plan_id": 3,
+      "tipo_ingreso": "Voluntario",
+      "rango_clave": "HIJO 30-39",
+      "rango_nota": null,
+      "precio": "439683.62"
+    },
+    {
+      "plan_id": 3,
+      "tipo_ingreso": "Voluntario",
+      "rango_clave": "HIJO 40-49",
+      "rango_nota": null,
+      "precio": "480557.11"
+    },
+    {
+      "plan_id": 3,
+      "tipo_ingreso": "Voluntario",
+      "rango_clave": "MAT 0-25",
+      "rango_nota": null,
+      "precio": "468630.55"
+    },
+    {
+      "plan_id": 3,
+      "tipo_ingreso": "Voluntario",
+      "rango_clave": "MAT 26-35",
+      "rango_nota": null,
+      "precio": "633286.21"
+    },
+    {
+      "plan_id": 3,
+      "tipo_ingreso": "Voluntario",
+      "rango_clave": "MAT 36-40",
+      "rango_nota": null,
+      "precio": "795615.27"
+    },
+    {
+      "plan_id": 3,
+      "tipo_ingreso": "Voluntario",
+      "rango_clave": "MAT 41-50",
+      "rango_nota": null,
+      "precio": "869580.36"
+    },
+    {
+      "plan_id": 3,
+      "tipo_ingreso": "Voluntario",
+      "rango_clave": "MAT 51-60",
+      "rango_nota": null,
+      "precio": "1245873.63"
+    },
+    {
+      "plan_id": 3,
+      "tipo_ingreso": "Voluntario",
+      "rango_clave": "MAT 61-65",
+      "rango_nota": null,
+      "precio": "1899863.54"
+    },
+    {
+      "plan_id": 3,
+      "tipo_ingreso": "Voluntario",
+      "rango_clave": "MAT 66-00",
+      "rango_nota": null,
+      "precio": "1899863.54"
+    },
+    {
+      "plan_id": 4,
+      "tipo_ingreso": "Obligatorio",
+      "rango_clave": "0-25",
+      "rango_nota": null,
+      "precio": "404808.93"
+    },
+    {
+      "plan_id": 4,
+      "tipo_ingreso": "Obligatorio",
+      "rango_clave": "26-35",
+      "rango_nota": null,
+      "precio": "404808.93"
+    },
+    {
+      "plan_id": 4,
+      "tipo_ingreso": "Obligatorio",
+      "rango_clave": "36-40",
+      "rango_nota": null,
+      "precio": "508571.18"
+    },
+    {
+      "plan_id": 4,
+      "tipo_ingreso": "Obligatorio",
+      "rango_clave": "41-50",
+      "rango_nota": null,
+      "precio": "555849.74"
+    },
+    {
+      "plan_id": 4,
+      "tipo_ingreso": "Obligatorio",
+      "rango_clave": "51-60",
+      "rango_nota": null,
+      "precio": "796384.83"
+    },
+    {
+      "plan_id": 4,
+      "tipo_ingreso": "Obligatorio",
+      "rango_clave": "61-65",
+      "rango_nota": null,
+      "precio": "1214425.92"
+    },
+    {
+      "plan_id": 4,
+      "tipo_ingreso": "Obligatorio",
+      "rango_clave": "66+",
+      "rango_nota": null,
+      "precio": "1214425.92"
+    },
+    {
+      "plan_id": 4,
+      "tipo_ingreso": "Obligatorio",
+      "rango_clave": "FAMILIAR A CARGO",
+      "rango_nota": null,
+      "precio": "1275146.93"
+    },
+    {
+      "plan_id": 4,
+      "tipo_ingreso": "Obligatorio",
+      "rango_clave": "HIJO 0-1",
+      "rango_nota": "(*)",
+      "precio": "219718.65"
+    },
+    {
+      "plan_id": 4,
+      "tipo_ingreso": "Obligatorio",
+      "rango_clave": "HIJO 2-20",
+      "rango_nota": null,
+      "precio": "142815.32"
+    },
+    {
+      "plan_id": 4,
+      "tipo_ingreso": "Obligatorio",
+      "rango_clave": "HIJO 21-29",
+      "rango_nota": null,
+      "precio": "425049.80"
+    },
+    {
+      "plan_id": 4,
+      "tipo_ingreso": "Obligatorio",
+      "rango_clave": "HIJO 30-39",
+      "rango_nota": null,
+      "precio": "533999.83"
+    },
+    {
+      "plan_id": 4,
+      "tipo_ingreso": "Obligatorio",
+      "rango_clave": "HIJO 40-49",
+      "rango_nota": null,
+      "precio": "583642.18"
+    },
+    {
+      "plan_id": 4,
+      "tipo_ingreso": "Obligatorio",
+      "rango_clave": "MAT 0-25",
+      "rango_nota": null,
+      "precio": "569160.96"
+    },
+    {
+      "plan_id": 4,
+      "tipo_ingreso": "Obligatorio",
+      "rango_clave": "MAT 26-35",
+      "rango_nota": null,
+      "precio": "769138.14"
+    },
+    {
+      "plan_id": 4,
+      "tipo_ingreso": "Obligatorio",
+      "rango_clave": "MAT 36-40",
+      "rango_nota": null,
+      "precio": "966285.57"
+    },
+    {
+      "plan_id": 4,
+      "tipo_ingreso": "Obligatorio",
+      "rango_clave": "MAT 41-50",
+      "rango_nota": null,
+      "precio": "1056113.15"
+    },
+    {
+      "plan_id": 4,
+      "tipo_ingreso": "Obligatorio",
+      "rango_clave": "MAT 51-60",
+      "rango_nota": null,
+      "precio": "1513130.82"
+    },
+    {
+      "plan_id": 4,
+      "tipo_ingreso": "Obligatorio",
+      "rango_clave": "MAT 61-65",
+      "rango_nota": null,
+      "precio": "2307409.07"
+    },
+    {
+      "plan_id": 4,
+      "tipo_ingreso": "Obligatorio",
+      "rango_clave": "MAT 66-00",
+      "rango_nota": null,
+      "precio": "2307409.07"
+    },
+    {
+      "plan_id": 4,
+      "tipo_ingreso": "Voluntario",
+      "rango_clave": "0-25",
+      "rango_nota": null,
+      "precio": "433302.49"
+    },
+    {
+      "plan_id": 4,
+      "tipo_ingreso": "Voluntario",
+      "rango_clave": "26-35",
+      "rango_nota": null,
+      "precio": "433302.49"
+    },
+    {
+      "plan_id": 4,
+      "tipo_ingreso": "Voluntario",
+      "rango_clave": "36-40",
+      "rango_nota": null,
+      "precio": "544368.82"
+    },
+    {
+      "plan_id": 4,
+      "tipo_ingreso": "Voluntario",
+      "rango_clave": "41-50",
+      "rango_nota": null,
+      "precio": "594975.01"
+    },
+    {
+      "plan_id": 4,
+      "tipo_ingreso": "Voluntario",
+      "rango_clave": "51-60",
+      "rango_nota": null,
+      "precio": "852440.19"
+    },
+    {
+      "plan_id": 4,
+      "tipo_ingreso": "Voluntario",
+      "rango_clave": "61-65",
+      "rango_nota": null,
+      "precio": "1299908.41"
+    },
+    {
+      "plan_id": 4,
+      "tipo_ingreso": "Voluntario",
+      "rango_clave": "66+",
+      "rango_nota": null,
+      "precio": "1299908.41"
+    },
+    {
+      "plan_id": 4,
+      "tipo_ingreso": "Voluntario",
+      "rango_clave": "FAMILIAR A CARGO",
+      "rango_nota": null,
+      "precio": "1364901.91"
+    },
+    {
+      "plan_id": 4,
+      "tipo_ingreso": "Voluntario",
+      "rango_clave": "HIJO 0-1",
+      "rango_nota": "(*)",
+      "precio": "235184.22"
+    },
+    {
+      "plan_id": 4,
+      "tipo_ingreso": "Voluntario",
+      "rango_clave": "HIJO 2-20",
+      "rango_nota": null,
+      "precio": "152868.11"
+    },
+    {
+      "plan_id": 4,
+      "tipo_ingreso": "Voluntario",
+      "rango_clave": "HIJO 21-29",
+      "rango_nota": null,
+      "precio": "454969.42"
+    },
+    {
+      "plan_id": 4,
+      "tipo_ingreso": "Voluntario",
+      "rango_clave": "HIJO 30-39",
+      "rango_nota": null,
+      "precio": "571588.31"
+    },
+    {
+      "plan_id": 4,
+      "tipo_ingreso": "Voluntario",
+      "rango_clave": "HIJO 40-49",
+      "rango_nota": null,
+      "precio": "624724.40"
+    },
+    {
+      "plan_id": 4,
+      "tipo_ingreso": "Voluntario",
+      "rango_clave": "MAT 0-25",
+      "rango_nota": null,
+      "precio": "609222.30"
+    },
+    {
+      "plan_id": 4,
+      "tipo_ingreso": "Voluntario",
+      "rango_clave": "MAT 26-35",
+      "rango_nota": null,
+      "precio": "823274.99"
+    },
+    {
+      "plan_id": 4,
+      "tipo_ingreso": "Voluntario",
+      "rango_clave": "MAT 36-40",
+      "rango_nota": null,
+      "precio": "1034300.57"
+    },
+    {
+      "plan_id": 4,
+      "tipo_ingreso": "Voluntario",
+      "rango_clave": "MAT 41-50",
+      "rango_nota": null,
+      "precio": "1130452.73"
+    },
+    {
+      "plan_id": 4,
+      "tipo_ingreso": "Voluntario",
+      "rango_clave": "MAT 51-60",
+      "rango_nota": null,
+      "precio": "1619636.67"
+    },
+    {
+      "plan_id": 4,
+      "tipo_ingreso": "Voluntario",
+      "rango_clave": "MAT 61-65",
+      "rango_nota": null,
+      "precio": "2469825.66"
+    },
+    {
+      "plan_id": 4,
+      "tipo_ingreso": "Voluntario",
+      "rango_clave": "MAT 66-00",
+      "rango_nota": null,
+      "precio": "2469825.66"
+    }
+  ],
+  "aportes_monotributo": [
+    {
+      "categoria": "A",
+      "aporte": "16353.97"
+    },
+    {
+      "categoria": "Adherente",
+      "aporte": "14208.87"
+    },
+    {
+      "categoria": "B",
+      "aporte": "16353.97"
+    },
+    {
+      "categoria": "C",
+      "aporte": "16353.97"
+    },
+    {
+      "categoria": "D",
+      "aporte": "19435.17"
+    },
+    {
+      "categoria": "E",
+      "aporte": "23701.42"
+    },
+    {
+      "categoria": "F",
+      "aporte": "27256.64"
+    },
+    {
+      "categoria": "G",
+      "aporte": "29389.76"
+    },
+    {
+      "categoria": "H",
+      "aporte": "35315.11"
+    },
+    {
+      "categoria": "I",
+      "aporte": "43610.62"
+    },
+    {
+      "categoria": "J",
+      "aporte": "48943.43"
+    },
+    {
+      "categoria": "K",
+      "aporte": "55935.36"
+    }
+  ]
+}

@@ -20,6 +20,12 @@ const DATABASE_BY_ENV = Object.freeze({
 
 const MIGRATION_DATABASES = new Set(['matista_dev', 'matista_test']);
 
+// Bases de instalacion local autonoma: una base vacia aparte de desarrollo y
+// pruebas, destinada a instalaciones nuevas de demostracion. Nunca es
+// aceptada en production ni test, y las migraciones la admiten para
+// inicializar un entorno desde cero.
+const DATABASES_INSTALACION = new Set(['matista_local']);
+
 /** Exige una variable de entorno presente y no vacía; recorta y devuelve su valor. */
 function requireValue(env, name) {
   const value = env[name];
@@ -56,7 +62,9 @@ export function expectedDatabaseFor(nodeEnv) {
  * Lee y valida la configuración completa de MySQL desde variables de entorno.
  * La coherencia NODE_ENV/DB_NAME es obligatoria para evitar apuntar la
  * aplicación o las migraciones a una base no autorizada. Solo la aplicación
- * admite también production/matista_dev por el nombre histórico de la base alojada.
+ * admite production/matista_dev por el nombre histórico de la base alojada.
+ * Aplicación y migraciones admiten development/matista_local para nuevas
+ * instalaciones autónomas en MySQL loopback.
  * @param {object} env Entorno del proceso (por defecto process.env).
  * @param {object} [options] Con purpose='migration' restringe las bases permitidas.
  * @returns {object} Configuración congelada del pool (host, puerto, base, credenciales y límite).
@@ -70,16 +78,24 @@ export function loadDatabaseConfig(env = process.env, { purpose = 'application' 
     purpose === 'application' &&
     nodeEnv === 'production' &&
     database === 'matista_dev';
-  if (database !== expectedDatabase && !productionApplicationAlias) {
+  // Alias de instalacion local: matista_local solo en development, para
+  // inicializar bases nuevas de demostracion sin tocar desarrollo/pruebas.
+  const developmentInstallAlias =
+    nodeEnv === 'development' && DATABASES_INSTALACION.has(database);
+  if (developmentInstallAlias &&
+    !['localhost', '127.0.0.1', '::1'].includes(env.DB_HOST?.trim() || '127.0.0.1')) {
+    throw new Error('matista_local solo admite un host MySQL loopback local.');
+  }
+  if (database !== expectedDatabase && !productionApplicationAlias && !developmentInstallAlias) {
     throw new Error(
       `DB_NAME=${database} no corresponde a NODE_ENV=${nodeEnv}; ` +
         `se esperaba ${expectedDatabase}.`
     );
   }
-  if (purpose === 'migration' && !MIGRATION_DATABASES.has(database)) {
+  if (purpose === 'migration' && !MIGRATION_DATABASES.has(database) && !DATABASES_INSTALACION.has(database)) {
     throw new Error(
-      `Las migraciones locales solo pueden ejecutarse sobre matista_dev o ` +
-        `matista_test; se recibio ${database}.`
+      `Las migraciones locales solo pueden ejecutarse sobre matista_dev, ` +
+        `matista_test o matista_local; se recibio ${database}.`
     );
   }
   const passwordDefined = Object.hasOwn(env, 'DB_PASSWORD') && typeof env.DB_PASSWORD === 'string';
