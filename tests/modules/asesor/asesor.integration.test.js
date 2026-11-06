@@ -409,4 +409,106 @@ test('ASESOR real: AUTH HTTP, propiedad, cálculo, emisión y trazabilidad hist�
     assert.equal(employee.estado, 'INACTIVO');
     observation.accepted('Una cookie antes válida recibe 401 en lectura y escritura; sesión ACCOUNT_DISABLED y cotización, miembros y auditoría sin cambios.');
   });
+
+  // SPEC-07: reutiliza identidades, HTTP, limpieza por propiedad y observador; no modifica políticas.
+  async function snapshotNegativo(observation, phase) {
+    return {
+      clientes: await observation.sql(pool, phase, 'SELECT c.*, CAST(c.updated_at AS CHAR) AS updated_at_exacto FROM clientes c WHERE c.asesor_legajo=? ORDER BY c.id', [owned[0]]),
+      cotizaciones: await observation.sql(pool, phase, 'SELECT q.*, CAST(q.created_at AS CHAR) AS created_at_exacto, CAST(q.updated_at AS CHAR) AS updated_at_exacto, CAST(q.emitida_at AS CHAR) AS emitida_at_exacto, CAST(q.vence_at AS CHAR) AS vence_at_exacto FROM cotizaciones q WHERE q.asesor_legajo=? ORDER BY q.id', [owned[0]]),
+      miembros: await observation.sql(pool, phase, 'SELECT m.* FROM miembros_cotizacion m JOIN cotizaciones q ON q.id=m.cotizacion_id WHERE q.asesor_legajo=? ORDER BY m.cotizacion_id,m.orden', [owned[0]]),
+      auditoria: await observation.sql(pool, phase, 'SELECT a.*, CAST(a.created_at AS CHAR) AS created_at_exacto FROM asesor_auditoria a WHERE a.actor_legajo=? ORDER BY a.id', [owned[0]]),
+    };
+  }
+  async function varianteNegativa(st, id, label, route, body, method, status, code) {
+    await st.test(`SPEC07 ${id}: ${label}`, async () => {
+      const observation = evidence(`${id}/${label}`);
+      const before = await snapshotNegativo(observation, 'antes');
+      const response = observation.http(method, `/api/asesor/${route}`, body, await api(route, body, method));
+      assert.equal(response.status, status);
+      assert.equal(response.body.error.code, code);
+      assert.deepEqual(await snapshotNegativo(observation, 'despues'), before);
+      observation.accepted('Código HTTP y error esperados; clientes, cotizaciones completas, miembros y auditoría propios idénticos antes/después.');
+    });
+  }
+  const obligatorioNegativo = () => ({ ...entrada, modalidad: 'Obligatorio', aportes: { sueldo_bruto: '1000000.00' } });
+  await t.test('SPEC07 CP-53: fuentes incompatibles y DECLARADO requieren rechazo explícito', async st => {
+    const observation = evidence('CP-53/preparacion');
+    const input = obligatorioNegativo();
+    const valid = observation.http('POST', '/api/asesor/cotizaciones/previsualizacion', input, await api('cotizaciones/previsualizacion', input));
+    assert.equal(valid.status, 200);
+    assert.equal(valid.body.resultado.aportes[0].importe, '70000.00');
+    await varianteNegativa(st, 'CP-53', 'ambas-fuentes', 'cotizaciones/previsualizacion',
+      { ...input, aportes: { sueldo_bruto: '1000000.00', aporte_personal: '30000.00' } }, 'POST', 400, 'ASESOR_VALIDACION');
+    await varianteNegativa(st, 'CP-53', 'declarado', 'cotizaciones/previsualizacion',
+      { ...input, aportes: { opcion_aporte: 'DECLARADO', aporte_obra_social: '30000.00' } }, 'POST', 422, 'COTIZACION_REGLA');
+  });
+  await t.test('SPEC07 CP-54: adherentes inválidos, saldo limitado y unitario ausente bloqueado', async st => {
+    const observation = evidence('CP-54/preparacion');
+    const input = { ...entrada, plan_id: '4', modalidad: 'Monotributo',
+      familia: { titular: { edad: 41, estado_civil: 'CASADO' }, miembros: [{ parentesco: 'CONYUGE', edad: 41 }, { parentesco: 'HIJO', edad: 12 }] },
+      aportes: { categoria: 'A', adherentes: 2 }, condiciones: { tramos: [], tdc: false, beneficios: { solicita_afinidad: false } } };
+    const policy = await observation.sql(pool, 'preparacion', "SELECT id, estado, revision, aporte_monotributo, aporte_adherente FROM politica_comercial WHERE estado='VIGENTE'");
+    assert.equal(policy.length, 1);
+    const valid = observation.http('POST', '/api/asesor/cotizaciones/previsualizacion', input, await api('cotizaciones/previsualizacion', input));
+    assert.equal(valid.status, 200);
+    assert.equal(valid.body.resultado.aportes[0].importe, policy[0].aporte_monotributo);
+    for (const [label, adherentes] of [['adherentes-negativos', -1], ['adherentes-fraccionarios', 1.5]]) {
+      await varianteNegativa(st, 'CP-54', label, 'cotizaciones/previsualizacion', { ...input, aportes: { categoria: 'A', adherentes } }, 'POST', 400, 'ASESOR_VALIDACION');
+    }
+    await st.test('SPEC07 CP-54: aportes-altos', async () => {
+      const observation = evidence('CP-54/aportes-altos');
+      const before = await snapshotNegativo(observation, 'antes');
+      const body = { ...input, aportes: { categoria: 'A', adherentes: 1000000 } };
+      const response = observation.http('POST', '/api/asesor/cotizaciones/previsualizacion', body, await api('cotizaciones/previsualizacion', body));
+      assert.equal(response.status, 200);
+      const result = response.body.resultado;
+      assert.equal(result.total, '0.00');
+      for (const tramo of result.tramos) assert.equal(tramo.total, '0.00');
+      const cents = value => BigInt(value.replace('.', ''));
+      assert.ok(result.aportes.every(a => cents(a.importe) >= 0n));
+      assert.equal(result.aportes.reduce((sum, a) => sum + cents(a.importe), 0n), cents(result.precio_base));
+      assert.deepEqual(await snapshotNegativo(observation, 'despues'), before);
+      observation.accepted('Aportes superiores al saldo se limitan al saldo disponible: total cero, sin importes negativos ni escrituras.');
+    });
+    const checks = await observation.sql(pool, 'bloqueo-unitario', "SELECT tc.CONSTRAINT_NAME, tc.ENFORCED, cc.CHECK_CLAUSE FROM information_schema.TABLE_CONSTRAINTS tc JOIN information_schema.CHECK_CONSTRAINTS cc ON cc.CONSTRAINT_SCHEMA=tc.CONSTRAINT_SCHEMA AND cc.CONSTRAINT_NAME=tc.CONSTRAINT_NAME WHERE tc.CONSTRAINT_SCHEMA=? AND tc.TABLE_NAME='politica_comercial' AND tc.CONSTRAINT_NAME='chk_politica_aporte_monotributo'", ['matista_test']);
+    assert.equal(checks.length, 1); assert.equal(checks[0].ENFORCED, 'YES'); assert.match(checks[0].CHECK_CLAUSE, /is not null/i);
+    const reason = 'BLOQUEADA: el CHECK real exige aporte_monotributo no nulo; no se autoriza deshabilitar restricciones ni simular una fila inválida como persistencia real.';
+    evidence('CP-54/unitario-ausente').record('blocked', { reason, constraint: checks[0] });
+    await st.test('SPEC07 CP-54: unitario-ausente', { skip: reason }, () => {});
+  });
+  await t.test('SPEC07 CP-58: PUT económico rechaza revisión anterior y estado EMITIDA', async st => {
+    const observation = evidence('CP-58/preparacion');
+    const input = obligatorioNegativo();
+    const draft = observation.http('POST', '/api/asesor/cotizaciones', input, await api('cotizaciones', input));
+    assert.equal(draft.status, 201);
+    const revised = { ...input, aportes: { sueldo_bruto: '1200000.00' }, revision: draft.body.revision };
+    const edited = observation.http('PUT', `/api/asesor/cotizaciones/${draft.body.id}`, revised, await api(`cotizaciones/${draft.body.id}`, revised, 'PUT'));
+    assert.equal(edited.status, 200); assert.equal(edited.body.revision, draft.body.revision + 1);
+    await varianteNegativa(st, 'CP-58', 'revision-anterior', `cotizaciones/${draft.body.id}`,
+      { ...input, revision: draft.body.revision }, 'PUT', 409, 'ASESOR_CONCURRENCIA');
+    const calculation = observation.http('POST', `/api/asesor/cotizaciones/${draft.body.id}/calculo`, {}, await api(`cotizaciones/${draft.body.id}/calculo`, {}));
+    assert.equal(calculation.status, 200);
+    const confirmation = { revision: calculation.body.revision, huella: calculation.body.huella };
+    const issued = observation.http('POST', `/api/asesor/cotizaciones/${draft.body.id}/emision`, confirmation, await api(`cotizaciones/${draft.body.id}/emision`, confirmation));
+    assert.equal(issued.status, 200); assert.equal(issued.body.estado, 'EMITIDA');
+    await varianteNegativa(st, 'CP-58', 'economico-sobre-emitida', `cotizaciones/${draft.body.id}`,
+      { ...input, revision: issued.body.revision }, 'PUT', 409, 'ASESOR_ESTADO');
+  });
+  await t.test('SPEC07 CP-59: emisión rechaza huella o revisión alteradas y cálculo rechaza total', async st => {
+    const observation = evidence('CP-59/preparacion');
+    const input = obligatorioNegativo();
+    const draft = observation.http('POST', '/api/asesor/cotizaciones', input, await api('cotizaciones', input));
+    assert.equal(draft.status, 201);
+    const calculation = observation.http('POST', `/api/asesor/cotizaciones/${draft.body.id}/calculo`, {}, await api(`cotizaciones/${draft.body.id}/calculo`, {}));
+    assert.equal(calculation.status, 200); assert.match(calculation.body.huella, /^[a-f0-9]{64}$/);
+    const confirmation = { revision: calculation.body.revision, huella: calculation.body.huella };
+    const altered = (confirmation.huella[0] === 'a' ? 'b' : 'a') + confirmation.huella.slice(1);
+    await varianteNegativa(st, 'CP-59', 'huella-alterada', `cotizaciones/${draft.body.id}/emision`,
+      { ...confirmation, huella: altered }, 'POST', 409, 'ASESOR_CONCURRENCIA');
+    await varianteNegativa(st, 'CP-59', 'revision-alterada', `cotizaciones/${draft.body.id}/emision`,
+      { ...confirmation, revision: confirmation.revision + 1 }, 'POST', 409, 'ASESOR_CONCURRENCIA');
+    await varianteNegativa(st, 'CP-59', 'total-en-calculo', `cotizaciones/${draft.body.id}/calculo`, { total: '1.00' }, 'POST', 400, 'ASESOR_VALIDACION');
+    const valid = observation.http('POST', `/api/asesor/cotizaciones/${draft.body.id}/emision`, confirmation, await api(`cotizaciones/${draft.body.id}/emision`, confirmation));
+    assert.equal(valid.status, 200); assert.equal(valid.body.estado, 'EMITIDA');
+  });
 });
