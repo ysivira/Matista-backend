@@ -25,6 +25,7 @@ import * as authRepository from '../../../src/modules/auth/auth.repository.js';
 import { emitirPreparacion } from '../../../src/modules/asesor/cotizaciones.service.js';
 import { guardarCliente } from '../../../src/modules/asesor/clientes.service.js';
 import { startTestServer } from '../../helpers/http.js';
+import { evidence, quotationSnapshot } from '../../helpers/evidence.js';
 
 const enabled = process.env.RUN_DB_TESTS === '1';
 
@@ -179,7 +180,23 @@ test('ASESOR real: AUTH HTTP, propiedad, cálculo, emisión y trazabilidad hist�
       assert.equal(fila.estado, 'BORRADOR');
       assert.equal((await c1.execute('SELECT COUNT(*) AS n FROM miembros_cotizacion WHERE cotizacion_id=?', [q.id]))[0][0].n, 2);
     } finally { c1.release(); c2.release(); }
-    assert.equal((await api(`cotizaciones/${q.id}`, undefined, 'GET', 1)).status, 404);
+    const observation = evidence('ESC-03');
+    const before = await quotationSnapshot(pool, observation, q.id, 'antes');
+    const calculation = await api(`cotizaciones/${q.id}/calculo`, {});
+    assert.equal(calculation.status, 200);
+    for (const [route, body, method] of [
+      [`cotizaciones/${q.id}`, undefined, 'GET'],
+      [`cotizaciones/${q.id}`, { ...entrada, revision: q.revision }, 'PUT'],
+      [`cotizaciones/${q.id}/contacto`, { revision: q.revision, contacto: { telefono: '3333333' } }, 'PATCH'],
+      [`cotizaciones/${q.id}/calculo`, {}, 'POST'],
+      [`cotizaciones/${q.id}/emision`, { revision: calculation.body.revision, huella: calculation.body.huella }, 'POST'],
+    ]) {
+      const denied = observation.http(method, `/api/asesor/${route}`, body, await api(route, body, method, 1));
+      assert.equal(denied.status, 404);
+      assert.equal(denied.body.error.code, 'ASESOR_NO_ENCONTRADO');
+    }
+    assert.deepEqual(await quotationSnapshot(pool, observation, q.id, 'despues'), before);
+    observation.accepted('Otro ASESOR no consulta, edita, calcula ni emite; cotización, miembros y auditoría permanecen idénticos.');
     assert.equal((await api('cotizaciones', entrada, 'POST', 1)).status, 404);
     assert.equal((await api('cotizaciones', { ...entrada, total: '123.45' })).status, 400);
     assert.equal((await api('cotizaciones', { ...entrada, condiciones: { ...entrada.condiciones, tramos: [{ porcentaje_id: '999999999', meses: 3 }] } })).status, 422);
@@ -199,12 +216,21 @@ test('ASESOR real: AUTH HTTP, propiedad, cálculo, emisión y trazabilidad hist�
     assert.equal((await api(`cotizaciones/${q.id}/pdf`, undefined, 'GET')).status, 409);
     const confirmacion = { revision: calculo.body.revision, huella: calculo.body.huella };
     assert.equal((await api(`cotizaciones/${q.id}/emision`, { ...confirmacion, huella: '0'.repeat(64) })).status, 409);
-    const emitida = await api(`cotizaciones/${q.id}/emision`, confirmacion);
+    const observation = evidence('ESC-05');
+    await quotationSnapshot(pool, observation, q.id, 'antes');
+    const emitida = observation.http('POST', `/api/asesor/cotizaciones/${q.id}/emision`, confirmacion,
+      await api(`cotizaciones/${q.id}/emision`, confirmacion));
     assert.equal(emitida.status, 200, JSON.stringify(emitida.body)); q = emitida.body;
     assert.equal(q.estado, 'EMITIDA'); assert.ok(q.numero); assert.deepEqual(q.resultado, calculo.body.resultado);
     assert.equal(new Date(q.vence_at) - new Date(q.emitida_at), 15 * 86400000);
-    const reintento = await api(`cotizaciones/${q.id}/emision`, confirmacion);
+    const first = await quotationSnapshot(pool, observation, q.id, 'primera-emision');
+    const reintento = observation.http('POST', `/api/asesor/cotizaciones/${q.id}/emision`, confirmacion,
+      await api(`cotizaciones/${q.id}/emision`, confirmacion));
     assert.equal(reintento.status, 200); assert.equal(reintento.body.numero, q.numero); assert.equal(reintento.body.revision, q.revision);
+    assert.deepEqual(await quotationSnapshot(pool, observation, q.id, 'reintento'), first);
+    const [count] = await observation.sql(pool, 'reintento', "SELECT COUNT(*) AS total FROM asesor_auditoria WHERE cotizacion_id=? AND evento='COTIZACION_EMITIDA'", [q.id]);
+    assert.equal(Number(count.total), 1);
+    observation.accepted('La segunda emisión conserva toda la fila, número y revisión; exactamente un evento COTIZACION_EMITIDA.');
     const pdf = await request(`/api/asesor/cotizaciones/${q.id}/pdf`, { headers: { cookie: cookies[0] }, responseType: 'buffer' });
     assert.equal(pdf.status, 200); assert.match(pdf.headers['content-type'], /application\/pdf/);
     assert.equal((await api(`cotizaciones/${q.id}`, { ...entrada, revision: q.revision }, 'PUT')).status, 409);
@@ -234,14 +260,25 @@ test('ASESOR real: AUTH HTTP, propiedad, cálculo, emisión y trazabilidad hist�
     q = original;
   });
   await t.test('dos ediciones concurrentes no sobrescriben una revisión confirmada', async () => {
+    const observation = evidence('ESC-04');
+    const before = await quotationSnapshot(pool, observation, q.id, 'antes');
     const revision = q.revision;
-    const resultados = await Promise.all([
-      api(`cotizaciones/${q.id}/contacto`, { revision, contacto: { telefono: '1111111' } }, 'PATCH'),
-      api(`cotizaciones/${q.id}/contacto`, { revision, contacto: { telefono: '2222222' } }, 'PATCH'),
-    ]);
+    const bodies = ['1111111', '2222222'].map(telefono => ({ revision, contacto: { telefono } }));
+    const resultados = await Promise.all(bodies.map(async body => observation.http('PATCH', `/api/asesor/cotizaciones/${q.id}/contacto`, body,
+      await api(`cotizaciones/${q.id}/contacto`, body, 'PATCH'))));
     assert.deepEqual(resultados.map(r => r.status).sort(), [200, 409]);
+    assert.equal(resultados.find(r => r.status === 409).body.error.code, 'ASESOR_CONCURRENCIA');
     q = (await api(`cotizaciones/${q.id}`, undefined, 'GET')).body;
     assert.equal(q.revision, revision + 1);
+    const after = await quotationSnapshot(pool, observation, q.id, 'despues');
+    const winner = bodies[resultados.findIndex(r => r.status === 200)].contacto;
+    const persistedContact = after.cotizaciones[0].contacto;
+    assert.deepEqual(typeof persistedContact === 'string' ? JSON.parse(persistedContact) : persistedContact, { email: null, direccion: null, ...winner });
+    assert.equal(after.cotizaciones[0].revision, revision + 1);
+    assert.equal(after.auditoria.length, before.auditoria.length + 1);
+    assert.equal(after.auditoria.at(-1).evento, 'CONTACTO_EDITADO');
+    assert.deepEqual(after.miembros, before.miembros);
+    observation.accepted('Una respuesta 200 y otra 409; MySQL conserva el contacto ganador, una revisión y una sola auditoría adicional.');
   });
   await t.test('cambio de nacimiento no recalcula emisión ni reemplaza la edad declarada de recotización', async () => {
     const emitida = (await api(`cotizaciones/${q.id}`, undefined, 'GET')).body;
@@ -301,17 +338,35 @@ test('ASESOR real: AUTH HTTP, propiedad, cálculo, emisión y trazabilidad hist�
     assert.deepEqual(resultados[0], resultados[1]);
   });
   await t.test('fallo de auditoría de emisión revierte número, estado y snapshot conjuntamente', async () => {
+    const observation = evidence('ESC-06');
     const borrador = await api('cotizaciones', { ...entrada, modalidad: 'Obligatorio', aportes: { sueldo_bruto: '1000000.00' } });
     const calculo = await api(`cotizaciones/${borrador.body.id}/calculo`, {});
+    assert.equal(borrador.status, 201); assert.equal(calculo.status, 200);
+    observation.http('POST', '/api/asesor/cotizaciones', { ...entrada, modalidad: 'Obligatorio', aportes: { sueldo_bruto: '1000000.00' } }, borrador);
+    observation.http('POST', `/api/asesor/cotizaciones/${borrador.body.id}/calculo`, {}, calculo);
+    const before = await quotationSnapshot(pool, observation, borrador.body.id, 'antes');
     const c = await pool.getConnection();
+    let updated = false, failedAudit = false;
     const fachada = { query: c.query.bind(c), beginTransaction: c.beginTransaction.bind(c), commit: c.commit.bind(c), rollback: c.rollback.bind(c), release() {},
       /** Falla después del UPDATE de emisión; el rollback debe conservar el borrador íntegro. */
-      execute(sql, valores) { if (sql.includes('INSERT INTO asesor_auditoria')) throw new Error('Fallo de auditoría de emisión'); return c.execute(sql, valores); } };
+      async execute(sql, valores) {
+        if (sql.includes('INSERT INTO asesor_auditoria')) {
+          assert.equal(updated, true); failedAudit = true;
+          observation.record('fault', { operation: 'emitirPreparacion', cotizacion_id: borrador.body.id, afterUpdate: updated, error: 'Fallo de auditoría de emisión' });
+          throw new Error('Fallo de auditoría de emisión');
+        }
+        const result = await c.execute(sql, valores);
+        if (sql.includes("SET estado='EMITIDA'")) { assert.equal(result[0].affectedRows, 1); updated = true; }
+        return result;
+      } };
     try {
       await assert.rejects(emitirPreparacion({ getConnection: async () => fachada }, owned[0], borrador.body.id, { revision: calculo.body.revision, huella: calculo.body.huella }), /Fallo de auditoría de emisión/);
       const detalle = (await api(`cotizaciones/${borrador.body.id}`, undefined, 'GET')).body;
       assert.equal(detalle.estado, 'BORRADOR'); assert.equal(detalle.numero, null); assert.equal(detalle.resultado, null); assert.equal(detalle.emitida_at, null);
       assert.equal(detalle.revision, borrador.body.revision); assert.ok(!detalle.eventos.some(e => e.evento === 'COTIZACION_EMITIDA'));
+      assert.equal(failedAudit, true);
+      assert.deepEqual(await quotationSnapshot(pool, observation, borrador.body.id, 'despues'), before);
+      observation.accepted('Fallo inyectado después de UPDATE efectivo y antes de auditoría; todas las columnas, miembros y auditoría coinciden antes/después desde otra conexión.');
     } finally { c.release(); }
   });
   await t.test('fallo de auditoría revierte alta de cliente sin residuo', async () => {
@@ -325,5 +380,33 @@ test('ASESOR real: AUTH HTTP, propiedad, cálculo, emisión y trazabilidad hist�
       await assert.rejects(guardarCliente({ getConnection: async () => fachada }, owned[0], { dni, nombres: 'Rollback', apellidos: 'Test', email: 'rollback@example.test', fecha_nacimiento: nacimiento }), /Fallo de auditoría/);
       assert.equal((await c.execute('SELECT COUNT(*) AS n FROM clientes WHERE dni=?', [dni]))[0][0].n, 0);
     } finally { c.release(); }
+  });
+  await t.test('asesor desactivado no consulta ni modifica recursos con su cookie anterior', async () => {
+    const observation = evidence('ESC-01');
+    const createdClient = await api('clientes', { dni: String(randomInt(10_000_000, 99_999_999)), nombres: 'Control', apellidos: 'Revocación', email: `revocacion-${sufijo}@example.test`, fecha_nacimiento: nacimiento }, 'POST', 1);
+    assert.equal(createdClient.status, 201);
+    const draft = await api('cotizaciones', { ...entrada, cliente_id: String(createdClient.body.id) }, 'POST', 1);
+    assert.equal(draft.status, 201);
+    const route = `cotizaciones/${draft.body.id}`;
+    assert.equal(observation.http('GET', `/api/asesor/${route}`, undefined, await api(route, undefined, 'GET', 1)).status, 200);
+    const before = await quotationSnapshot(pool, observation, draft.body.id, 'antes');
+    const sessions = phase => observation.sql(pool, phase, 'SELECT legajo, issued_at, expires_at, revoked_at, revocation_reason FROM auth_sesiones WHERE legajo=? ORDER BY issued_at, jti', [owned[1]]);
+    assert.ok((await sessions('antes')).some(row => row.revoked_at === null));
+    const path = `/api/admin/employees/${owned[1]}/estado`;
+    const disabled = observation.http('PATCH', path, { estado: 'INACTIVO' }, await request(path, {
+      method: 'PATCH', body: JSON.stringify({ estado: 'INACTIVO' }), headers: { origin: 'http://localhost:5173', cookie: cookies[2] },
+    }));
+    assert.equal(disabled.status, 200);
+    for (const [method, suffix, body] of [['GET', '', undefined], ['PATCH', '/contacto', { revision: draft.body.revision, contacto: { telefono: '4444444' } }]]) {
+      const denied = observation.http(method, `/api/asesor/${route}${suffix}`, body, await api(route + suffix, body, method, 1));
+      assert.equal(denied.status, 401); assert.equal(denied.body.error.code, 'SESSION_INVALID');
+    }
+    assert.deepEqual(await quotationSnapshot(pool, observation, draft.body.id, 'despues'), before);
+    const finalSessions = await sessions('despues');
+    assert.ok(finalSessions.length > 0);
+    assert.ok(finalSessions.every(row => row.revoked_at !== null && row.revocation_reason === 'ACCOUNT_DISABLED'));
+    const [employee] = await observation.sql(pool, 'despues', 'SELECT legajo, rol, estado FROM empleados WHERE legajo=?', [owned[1]]);
+    assert.equal(employee.estado, 'INACTIVO');
+    observation.accepted('Una cookie antes válida recibe 401 en lectura y escritura; sesión ACCOUNT_DISABLED y cotización, miembros y auditoría sin cambios.');
   });
 });

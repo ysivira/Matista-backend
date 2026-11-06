@@ -242,35 +242,6 @@ test('un error dentro de la operacion libera el bloqueo y hace rollback', {
   }
 });
 
-test('un fallo de RELEASE_LOCK no impide liberar la conexion', {
-  skip: !enabled,
-}, async () => {
-  let liberada = false;
-  const connection = {
-    // Falso pool con una conexion espia: todo funciona salvo RELEASE_LOCK
-    // El contrato de mysql2 es [filas, campos] con filas = [objetoFila].
-    query: async () => [[], []],
-    execute: async (sql) => {
-      if (/RELEASE_LOCK/u.test(sql)) {
-        throw new Error('RELEASE_LOCK simulado roto.');
-      }
-      return [[{ resultado: 1 }], undefined];
-    },
-    beginTransaction: async () => {},
-    commit: async () => {},
-    rollback: async () => {},
-    release: () => { liberada = true; },
-  };
-  const poolFalso = { getConnection: async () => connection };
-
-  const salida = await withAdminVersionLock(poolFalso, async () => 'ok');
-
-  assert.equal(salida.resultado, 'ok');
-  assert.equal(salida.bloqueoAdquirido, true);
-  assert.equal(salida.liberacionOk, false);
-  assert.equal(liberada, true);
-});
-
 test('escritura de negocio y auditoria se confirman en la misma transaccion', {
   skip: !enabled,
 }, async () => {

@@ -22,6 +22,9 @@ import { hashPassword, verifyPassword } from '../../src/infrastructure/security/
 import { verifyAccessToken } from '../../src/infrastructure/security/jwt.js';
 import * as repository from '../../src/modules/auth/auth.repository.js';
 import * as service from '../../src/modules/auth/auth.service.js';
+import { createApp } from '../../src/app.js';
+import { startTestServer } from '../helpers/http.js';
+import { evidence } from '../helpers/evidence.js';
 
 // Suite separada: no se incluye en test:auth ni en test:auth-infra. Requiere autorización humana previa.
 const enabled = process.env.RUN_AUTH_DB_TESTS === '1';
@@ -216,16 +219,37 @@ test('MySQL: reset concurrente modifica hash una vez y revoca sesiones', { skip:
 });
 
 /** Verifica lectura real del estado por request, persistencia de perfil y cierre individual de sesión. */
-test('MySQL: perfil persiste, logout es individual y cuenta desactivada no usa JWT anterior', { skip: !enabled }, async () => {
+test('MySQL: perfil persiste, logout es individual y cuenta desactivada no usa JWT anterior', { skip: !enabled }, async t => {
   const account = await activeAccount();
-  const second = await service.login({ email: account.data.email, password: '1234' }, context);
+  const observation = evidence('ESC-02');
+  const origin = 'http://localhost:5173';
+  const request = await startTestServer(t, createApp({ env: { NODE_ENV: 'test', FRONTEND_ORIGIN: origin }, authContext: context }));
+  const credentials = { email: account.data.email, password: '1234' };
+  const login = observation.http('POST', '/api/auth/login', credentials,
+    await request('/api/auth/login', { method: 'POST', headers: { origin }, body: JSON.stringify(credentials) }));
+  assert.equal(login.status, 200);
+  const cookie = login.headers['set-cookie'][0].split(';')[0];
+  const sessions = phase => observation.sql(pool, phase,
+    'SELECT legajo, issued_at, expires_at, revoked_at, revocation_reason FROM auth_sesiones WHERE legajo=? ORDER BY issued_at, jti', [account.data.legajo]);
+  const initial = await sessions('antes');
+  assert.equal(initial.length, 2);
+  assert.ok(initial.every(row => row.revoked_at === null));
   await service.editProfile(account.claims, { telefono: '11111111', segundo_nombre: null }, context);
   assert.equal((await service.getProfile(account.claims, context)).user.telefono, '11111111');
-  await service.logout(account.signed.token, context);
-  await assert.rejects(service.authenticateToken(account.signed.token, context), { code: 'SESSION_INVALID' });
-  assert.equal((await service.authenticateToken(second.token, context)).user.legajo, account.data.legajo);
+  const out = observation.http('POST', '/api/auth/logout', {},
+    await request('/api/auth/logout', { method: 'POST', headers: { origin, cookie }, body: '{}' }));
+  assert.equal(out.status, 204);
+  assert.match(out.headers['set-cookie'][0], /Expires=Thu, 01 Jan 1970/);
+  const replay = observation.http('GET', '/api/auth/me', undefined, await request('/api/auth/me', { headers: { cookie } }));
+  assert.equal(replay.status, 401);
+  assert.equal(replay.body.error.code, 'SESSION_INVALID');
+  const final = await sessions('despues');
+  assert.equal(final.filter(row => row.revoked_at !== null && row.revocation_reason === 'LOGOUT').length, 1);
+  assert.equal(final.filter(row => row.revoked_at === null).length, 1);
+  assert.equal((await service.authenticateToken(account.signed.token, context)).user.legajo, account.data.legajo);
+  observation.accepted('La cookie original recibe HTTP 401 tras logout; MySQL conserva una sesión LOGOUT y otra sesión válida.');
   await pool.execute("UPDATE empleados SET estado = 'INACTIVO' WHERE legajo = ?", [account.data.legajo]);
-  await assert.rejects(service.authenticateToken(second.token, context), { code: 'SESSION_INVALID' });
+  await assert.rejects(service.authenticateToken(account.signed.token, context), { code: 'SESSION_INVALID' });
 });
 
 /** Coordina login y cambio de estado con plazo acotado; libera barrera y espera operaciones aun ante fallos. */
