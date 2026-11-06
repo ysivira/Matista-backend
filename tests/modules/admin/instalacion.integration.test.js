@@ -283,7 +283,13 @@ test('instalación autónoma sobre MySQL local descartable (CA-01 a CA-11)', {
         assert.equal(Number(resultado.impuestos[0].porcentaje), Number(politica.iva_voluntario_pct));
         assert.equal(centavos(resultado.impuestos[0].importe), ivaEsperado);
       }
-      let politica = condiciones.body.politica;
+      // El catálogo presenta objetos; las publicaciones ADMIN devuelven valores.
+      const politicaAdmin = await api('/api/admin/politica-comercial', 'GET', undefined, admin.cookie);
+      assert.equal(politicaAdmin.status, 200);
+      assert.equal(String(politicaAdmin.body.id), String(condiciones.body.politica.id));
+      assert.deepEqual(condiciones.body.politica.porcentajes_comerciales.map(p => p.porcentaje),
+        politicaAdmin.body.porcentajes_comerciales, 'Catálogo y ADMIN conservan los mismos porcentajes');
+      let politica = politicaAdmin.body;
       await st.test('Voluntario respeta la política realmente instalada', () => verificarVoluntario(politica));
 
       // Ambos estados se prueban siempre mediante ADMIN real, dentro del fixture
